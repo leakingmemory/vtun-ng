@@ -101,9 +101,9 @@ int tcp_read(int fd, char *buf)
      len = ntohs(len);
      flen = len & VTUN_FSIZE_MASK;
 
-     if( flen > VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD ) {
+     if( flen > VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD ){
      	/* Oversized frame, drop it. */ 
-        while(flen) {
+        while( flen ){
 	   len = min(flen, VTUN_FRAME_SIZE);
            if( (len = read_n(fd, buf, len)) <= 0 )
 	      break;
@@ -112,7 +112,7 @@ int tcp_read(int fd, char *buf)
 	return VTUN_BAD_FRAME;
      }	
 
-     if( len & ~VTUN_FSIZE_MASK ) {
+     if( len & ~VTUN_FSIZE_MASK ){
 	/* Return flags */
 	return len;
      }

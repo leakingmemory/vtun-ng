@@ -1,3 +1,8 @@
+ver 2.1b5:
+	 Fixed local address substitution for TCP connection.
+	 Fast, optimized udp_read function.
+         Scripts update.
+
 ver 2.1b4:
          Bind UDP socket to the same address:port used for TCP connection. 
          Fixed NOBUFS error handling for UDP sockets.

@@ -169,7 +169,7 @@ int udp_session(struct vtun_host *host, time_t timeout)
 
      /* Write port of the new UDP socket */
      port = saddr.sin_port;
-     if( write_n(host->rmt_fd,&port,sizeof(short)) < 0 ){
+     if( write_n(host->rmt_fd,(char *)&port,sizeof(short)) < 0 ){
         syslog(LOG_ERR,"Can't write port number");
         return -1;
      }

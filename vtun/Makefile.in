@@ -25,7 +25,7 @@ YACC = @YACC@
 YACCFLAGS = -d
 
 LEX = @LEX@
-LEXFLAGS = 
+LEXFLAGS = -t 
 
 INSTALL = @INSTALL@
 
@@ -64,7 +64,7 @@ cfg_file.tab.o: cfg_file.y cfg_kwords.h config.h
 	$(CC) $(CFLAGS) $(DEFS) -c cfg_file.tab.c
 
 cfg_file.lex.o: cfg_file.l cfg_kwords.h config.h
-	$(LEX) $(LEXFLAGS) -ocfg_file.lex.c cfg_file.l
+	$(LEX) $(LEXFLAGS) cfg_file.l > cfg_file.lex.c 
 	$(CC) $(CFLAGS) $(DEFS) -c cfg_file.lex.c
 
 depend:

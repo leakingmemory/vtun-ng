@@ -232,11 +232,13 @@ int lfd_linker(void)
 	if( !len ){
 	   /* We are idle, lets check connection */
 	   if( lfd_host->flags & VTUN_KEEP_ALIVE ){
-	      proto_write(fd1, NULL, VTUN_ECHO_REQ);
 	      if( ++idle > 3 ){
 	         syslog(LOG_INFO,"Session %s network timeout", lfd_host->host);
 		 break;	
 	      }
+	      /* Send ECHO request */
+	      if( proto_write(fd1, NULL, VTUN_ECHO_REQ) < 0 )
+		 break;
 	   }
 	   continue;
 	}	   
@@ -257,12 +259,13 @@ int lfd_linker(void)
 		 continue;
 	      }
 	      if( fl==VTUN_ECHO_REQ ){
-		 /* Reply on echo request */
-	 	 proto_write(fd1, NULL, VTUN_ECHO_REP);
+		 /* Send ECHO reply */
+	 	 if( proto_write(fd1, NULL, VTUN_ECHO_REP) < 0 )
+		    break;
 		 continue;
 	      }
    	      if( fl==VTUN_ECHO_REP ){
-		 /* Just ignore echo reply */
+		 /* Just ignore ECHO reply */
 		 continue;
 	      }
 	      if( fl==VTUN_CONN_CLOSE ){

@@ -49,7 +49,7 @@ int  run_cmd(void *d, void *opt);
 void free_sopt(struct vtun_sopt *opt);
 
 /* Read exactly len bytes (Signal safe)*/
-extern inline int read_n(int fd, void *buf, int len)
+extern inline int read_n(int fd, char *buf, int len)
 {
 	register int t=0, w;
 
@@ -68,7 +68,7 @@ extern inline int read_n(int fd, void *buf, int len)
 }   
 
 /* Write exactly len bytes (Signal safe)*/
-extern inline int write_n(int fd, void *buf, int len)
+extern inline int write_n(int fd, char *buf, int len)
 {
 	register int t=0, w;
 

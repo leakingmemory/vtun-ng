@@ -9,6 +9,8 @@ i version=vtun.desc
 d none sbin 
 d none var 
 d none var/run 
+d none var/log/vtund 
+d none var/lock/vtund 
 d none man 
 d none man/man8
 d none etc

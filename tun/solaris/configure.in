@@ -18,7 +18,7 @@ dnl Process this file with autoconf to produce a configure script.
 dnl
 AC_INIT()
 
-AC_SUBST(DRV_DIR)
+AC_SUBST(PLATFORM)
 
 AC_ARG_ENABLE(debug,
    --enable-debug        Enable debuging,
@@ -30,15 +30,15 @@ AC_PROG_CC
 
 case `uname -m` in
 sun4u)
-	DRV_DIR="/usr/kernel/drv/sparcv9"
+	PLATFORM="sparcv9"
 	ARCH='v9'
 	;;
 ia64)
-	DRV_DIR="/usr/kernel/drv/ia64"
+	PLATFORM="ia64"
 	ARCH='ia64'
 	;;
 *)
-	DRV_DIR="/usr/kernel/drv"
+	PLATFORM=
 	ARCH='v8'
 	;;
 esac      

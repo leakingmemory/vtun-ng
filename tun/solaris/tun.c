@@ -44,6 +44,7 @@ static  int  tunprobe(dev_info_t *);
 static	int  tunattach(dev_info_t *, ddi_attach_cmd_t);
 static	int  tundetach(dev_info_t *, ddi_detach_cmd_t);
 static	int  tuninfo(dev_info_t *, ddi_info_cmd_t, void *, void **);
+static	int  tunidentify(dev_info_t *);
 static	int  tunopen(queue_t *, dev_t *, int, int, cred_t *);
 static	int  tunclose(queue_t *);
 static	int  tunwput(queue_t *wq, mblk_t *mb);
@@ -52,7 +53,7 @@ static	int  tunwsrv(queue_t *wq);
 static  void tun_frame(queue_t *wq, mblk_t *mpi, int q);
 
 static struct module_info tunminfo = {
-  125,		/* mi_idnum  - Module ID number	*/
+  500,		/* mi_idnum  - Module ID number	*/
   "tun",	/* mi_idname - Module name 	*/
   21,		/* mi_minpsz - Min packet size 	*/
   2048,		/* mi_maxpsz - Max packet size 	*/
@@ -109,14 +110,13 @@ static	struct dev_ops tun_ops = {
   DEVO_REV,		/* devo_rev */
   0,			/* devo_refcnt */
   tuninfo,		/* devo_getinfo */
-  nulldev,		/* devo_identify */
+  tunidentify,		/* devo_identify */
   tunprobe,		/* devo_probe */
   tunattach,		/* devo_attach */
   tundetach,		/* devo_detach */
   nodev,		/* devo_reset */
   &tun_cb_ops,		/* devo_cb_ops */
-  NULL,			/* devo_bus_ops */
-  ddi_power		/* devo_power */
+  NULL			/* devo_bus_ops */
 };
 
 static struct modldrv modldrv = {
@@ -126,7 +126,7 @@ static struct modldrv modldrv = {
 };
 
 static struct modlinkage modlinkage = {
-  MODREV_1, { &modldrv, NULL }
+  MODREV_1, &modldrv, NULL
 };
 
 /* TUN device pointer */
@@ -140,11 +140,13 @@ static struct tunstr *tun_str;
 
 int _init(void)
 {
+  int err;
   cmn_err(CE_CONT, "Universal TUN/TAP device driver ver %s "
 		   "(C) 1999-2000 Maxim Krasnyansky\n", TUN_VER);
 
-  DBG(CE_CONT,"tun: _init\n");
-  return mod_install(&modlinkage);
+  err = mod_install(&modlinkage);
+  DBG(CE_CONT,"tun: _init %d\n", err);
+  return err;
 }
 
 int _fini(void)
@@ -161,7 +163,7 @@ int _info(struct modinfo *modinfop)
 
 static int tunprobe(dev_info_t *dev)
 {
-  DBG(CE_CONT,"tun: tunprobe\n");
+  DBG(CE_NOTE,"tun: tunprobe\n");
   return DDI_PROBE_SUCCESS;
 }
 
@@ -220,6 +222,16 @@ static int tuninfo(dev_info_t *devi, ddi_info_cmd_t infocmd, void *arg, void **r
   }
   return DDI_FAILURE;
 }
+
+static int tunidentify(dev_info_t *dev)
+{
+  DBG(CE_CONT,"tun: tunidentify\n");
+
+  if (strcmp(ddi_get_name(dev), "tun") == 0)
+     return (DDI_IDENTIFIED);
+  return (DDI_NOT_IDENTIFIED);
+}
+
 
 static int tunopen(queue_t *rq, dev_t *dev, int flag, int sflag, cred_t *credp)
 {
@@ -345,7 +357,7 @@ static void tun_ioctl(queue_t *wq, mblk_t *mp)
      case TUNNEWPPA:
 	/* Allocate new PPA and assign control stream */
 
-        p = *(int *)mp->b_cont->b_rptr;
+        p = *(long *)mp->b_cont->b_rptr;
 	if( p < -1 || p > TUNMAXPPA){
            tuniocack(wq, mp, M_IOCNAK, 0, EINVAL);
 	   return;
@@ -374,7 +386,7 @@ static void tun_ioctl(queue_t *wq, mblk_t *mp)
 
      case TUNSETPPA:
 	/* Attach stream to a PPA */
-        p = *(int *)mp->b_cont->b_rptr;
+        p = *(long *)mp->b_cont->b_rptr;
 	if( p < 0 || p > TUNMAXPPA){
            tuniocack(wq, mp, M_IOCNAK, 0, EINVAL);
 	   return;

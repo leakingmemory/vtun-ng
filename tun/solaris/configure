@@ -1720,15 +1720,15 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 case `uname -m` in
 sun4u)
-	DRV_DIR="/usr/kernel/drv/sparcv9"
+	PLATFORM="sparcv9"
 	ARCH='v9'
 	;;
 ia64)
-	DRV_DIR="/usr/kernel/drv/ia64"
+	PLATFORM="ia64"
 	ARCH='ia64'
 	;;
 *)
-	DRV_DIR="/usr/kernel/drv"
+	PLATFORM=
 	ARCH='v8'
 	;;
 esac
@@ -2156,7 +2156,7 @@ s,@ECHO_T@,$ECHO_T,;t t
 s,@PATH_SEPARATOR@,$PATH_SEPARATOR,;t t
 s,@DEFS@,$DEFS,;t t
 s,@LIBS@,$LIBS,;t t
-s,@DRV_DIR@,$DRV_DIR,;t t
+s,@PLATFORM@,$PLATFORM,;t t
 s,@INSTALL_PROGRAM@,$INSTALL_PROGRAM,;t t
 s,@INSTALL_SCRIPT@,$INSTALL_SCRIPT,;t t
 s,@INSTALL_DATA@,$INSTALL_DATA,;t t

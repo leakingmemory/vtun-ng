@@ -75,16 +75,14 @@ This package is built with%{!?USE_SOCKS:out} SOCKS-support.
 %{?USE_SOCKS: --enable-socks}
 
 %build
-make %{?IsSuSE: LOCK_DIR=%{lock_dir} STAT_DIR=/var/log/vtunnel}
+%if %{IsSuSE}
+make LOCK_DIR=%{lock_dir} STAT_DIR=/var/log/vtunnel
+%else
+make
+%endif
 
 %install
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
-#deprecated - please check that this deletion does not harm SuSE build
-#install -d $RPM_BUILD_ROOT%{_sbindir}
-#install -d $RPM_BUILD_ROOT%{_mandir}/man8
-#install -d $RPM_BUILD_ROOT%{_mandir}/man5
-#install -d $RPM_BUILD_ROOT%{log_dir}
-#install -d $RPM_BUILD_ROOT%{lock_dir}
 install -d $RPM_BUILD_ROOT%{rc_dir}
  if [ x%{IsSuSE} = x1 ]; then
 install scripts/vtund.rc.suse $RPM_BUILD_ROOT%{rc_dir}/vtund

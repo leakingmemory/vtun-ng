@@ -70,44 +70,42 @@ int (*proto_read)(int fd, char *buf);
    
 int tunnel(struct vtun_host *host)
 {
-     int fd[2], null_fd, pid,opt;
+     int null_fd, pid, opt;
+     int fd[2]={-1, -1};
      char dev[12]="";
 
      /* Initialize device. */
+     if( host->dev )
+        strcpy(dev, host->dev); 
      switch( host->flags & VTUN_TYPE_MASK ){
 	case VTUN_TTY:
-	   if( (fd[0]=pty_alloc(dev)) < 0){
+	   if( (fd[0]=pty_alloc(dev)) < 0 ){
 	      syslog(LOG_ERR,"Can't allocate pseudo tty");
 	      return -1;
            }
 	   break;
 
 	case VTUN_PIPE:
-	   if( pipe_alloc(fd) < 0){
+	   if( pipe_alloc(fd) < 0 ){
  	      syslog(LOG_ERR,"Can't create pipe");
    	      return -1;
 	   }
 	   break;
 
 	case VTUN_ETHER:
-	   if( host->dev )
-	      strcpy(dev,host->dev); 
-	   if( (fd[0]=tap_alloc(dev)) < 0){
+	   if( (fd[0]=tap_alloc(dev)) < 0 ){
  	      syslog(LOG_ERR,"Can't allocate tap device");
    	      return -1;
 	   }
 	   break;
 
 	case VTUN_TUN:
-	   if( host->dev )
-	      strcpy(dev,host->dev); 
-	   if( (fd[0]=tun_alloc(dev)) < 0){
+	   if( (fd[0]=tun_alloc(dev)) < 0 ){
  	      syslog(LOG_ERR,"Can't allocate tun device");
    	      return -1;
 	   }
 	   break;
      }
-     host->sopt.dev = strdup(dev);
 
      /* Initialize protocol. */
      switch( host->flags & VTUN_PROT_MASK ){
@@ -126,6 +124,7 @@ int tunnel(struct vtun_host *host)
         case VTUN_UDP:
 	   if( (opt = udp_session(host, VTUN_TIMEOUT)) == -1){
 	      syslog(LOG_ERR,"Can't establish UDP session");
+	      close(fd[0]); close(fd[1]);
 	      return 0;
 	   } 	
 
@@ -138,6 +137,7 @@ int tunnel(struct vtun_host *host)
      switch( (pid=fork()) ){
 	case -1:
 	   syslog(LOG_ERR,"Couldn't fork()");
+	   close(fd[0]); close(fd[1]);
 	   return 0;
 	case 0:
      	   switch( host->flags & VTUN_TYPE_MASK ){
@@ -145,7 +145,7 @@ int tunnel(struct vtun_host *host)
 	         /* Open pty slave (becomes controlling terminal) */
 	         if( (fd[1] = open(dev, O_RDWR)) < 0){
 	            syslog(LOG_ERR,"Couldn't open slave pty");
-	            return -1;
+	            exit(0);
 	         }
 		 /* Fall through */
 	      case VTUN_PIPE:
@@ -202,6 +202,7 @@ int tunnel(struct vtun_host *host)
 	   	 break;
      	   }
 
+     	   host->sopt.dev = strdup(dev);
 	   host->loc_fd = fd[0];
 	   opt = linkfd(host);
 
@@ -209,11 +210,10 @@ int tunnel(struct vtun_host *host)
 	   llist_trav(&host->down,run_cmd, &host->sopt);
 
 	   set_title("%s closing", host->host);
-	   /* Close all fds */
-	   close(host->loc_fd);
-	   close(host->rmt_fd);
 
-           free_sopt(&host->sopt);
+	   /* Close all fds */
+	   close(host->loc_fd); close(host->rmt_fd);
+	   close(fd[0]); close(fd[1]);	
 
 	   return opt;
      }

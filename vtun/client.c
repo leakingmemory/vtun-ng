@@ -128,6 +128,7 @@ void client(struct vtun_host *host)
 	   }
 	}
 	close(s);
+	free_sopt(&host->sopt);
 	
 	/* If persist option is set, sleep and try to reconnect */
 	if( !client_term && vtun.persist > 0 ) 

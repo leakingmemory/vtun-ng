@@ -11,3 +11,6 @@
 #	[<whitespace>]<filename><whitespace><error message><end-of-line>
 #
 # comment lines begin with '#'
+# modified 02.01.16
+cvsnotify   cvsnotify could not be checked out!
+verifylog.pl verifylog.pl could not be checked out!

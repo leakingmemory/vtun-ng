@@ -134,17 +134,9 @@ int lock_host(struct vtun_host *host)
 			}
 			/* Give it a time(up to 5 secs) to terminate */
 			for (i = 0; i < 10 && !kill(pid, 0); i++) {
-#ifdef HAVE_NANOSLEEP
 				tm.tv_sec = 0;
 				tm.tv_nsec = 500000000;
 				nanosleep(&tm, NULL);
-#elif defined(HAVE_USLEEP)
-				usleep(5000000);
-#elif defined(HAVE_SLEEP)
-				sleep(5);
-#else
-#error No sleep function available
-#endif
 			}
 
 			/* Make sure it's dead */

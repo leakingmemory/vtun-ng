@@ -49,7 +49,7 @@
 #include <netinet/ip.h>
 #endif
 
-#ifdef HAVE_NETINET_UDP_H
+#ifdef HAVE_NETINET_TCP_H
 #include <netinet/udp.h>
 #endif
 

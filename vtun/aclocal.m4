@@ -22,7 +22,12 @@ AC_DEFUN( AC_SEARCH_HEADERS,
     AC_MSG_CHECKING("for $1") 
     ac_hdr_found=no
     for p in $2; do
-	AC_TEST_FILES($1, $p, 
+	if test -n "$p"; then
+	  dir="$p"
+	else
+	  dir="/usr/include"
+	fi
+	AC_TEST_FILES($1, $dir, 
 	    [ 
      	       ac_hdr_found=yes
 	       break
@@ -30,8 +35,10 @@ AC_DEFUN( AC_SEARCH_HEADERS,
 	)
     done 
     if test "$ac_hdr_found" = "yes" ; then
+	if test -n "$p"; then
 	CPPFLAGS="$CPPFLAGS -I$p"
-        AC_MSG_RESULT( [($p) yes] ) 
+	fi
+        AC_MSG_RESULT( [($dir) yes] ) 
 	ifelse([$3], , :,[$3])
     else
         AC_MSG_RESULT("no") 

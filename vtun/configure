@@ -1980,11 +1980,17 @@ echo "configure:1979: checking for LZO Library and Header files ... " >&5
     echo $ac_n "checking "for lzo1x.h"""... $ac_c" 1>&6
 echo "configure:1982: checking "for lzo1x.h"" >&5 
     ac_hdr_found=no
-    for p in $LZO_HDR_DIR /usr/include/lzo /usr/include /usr/local/include; do
-	
+    for p in $LZO_HDR_DIR /usr/include/lzo "" /usr/local/include; do
+#	echo "LEO: Dir:$p"
+	if test -n "$p"; then
+	  dir="$p"
+	else
+	  dir="/usr/include"
+	fi
+
     ac_file_found=yes
     for f in lzo1x.h; do
-	if test ! -f $p/$f; then
+	if test ! -f $dir/$f; then
     	   ac_file_found=no
 	   break;
 	fi
@@ -2002,10 +2008,12 @@ echo "configure:1982: checking "for lzo1x.h"" >&5
 
     done 
     if test "$ac_hdr_found" = "yes" ; then
+	if test -n "$p"; then
 	CPPFLAGS="$CPPFLAGS -I$p"
-        echo "$ac_t""($p) yes " 1>&6 
+	fi
+        echo "$ac_t""($dir) yes " 1>&6 
 	echo $ac_n "checking for lzo1x_decompress in -llzo""... $ac_c" 1>&6
-echo "configure:2009: checking for lzo1x_decompress in -llzo" >&5
+echo "configure:2016: checking for lzo1x_decompress in -llzo" >&5
 ac_lib_var=`echo lzo'_'lzo1x_decompress | sed 'y%./+-%__p_%'`
 if eval "test \"`echo '$''{'ac_cv_lib_$ac_lib_var'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
@@ -2013,7 +2021,7 @@ else
   ac_save_LIBS="$LIBS"
 LIBS="-llzo  $LIBS"
 cat > conftest.$ac_ext <<EOF
-#line 2017 "configure"
+#line 2024 "configure"
 #include "confdefs.h"
 /* Override any gcc2 internal prototype to avoid an error.  */
 /* We use char because int might match the return type of a gcc2
@@ -2024,7 +2032,7 @@ int main() {
 lzo1x_decompress()
 ; return 0; }
 EOF
-if { (eval echo configure:2028: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext}; then
+if { (eval echo configure:2035: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext}; then
   rm -rf conftest*
   eval "ac_cv_lib_$ac_lib_var=yes"
 else
@@ -2063,16 +2071,22 @@ fi
 if test "$SSL" = "yes"; then
    echo "$ac_t""" 1>&6
    echo "checking for md5 Library and Header files ... " 1>&6
-echo "configure:2067: checking for md5 Library and Header files ... " >&5
+echo "configure:2074: checking for md5 Library and Header files ... " >&5
    
-    echo $ac_n "checking "for md5.h"""... $ac_c" 1>&6
-echo "configure:2070: checking "for md5.h"" >&5 
+    echo $ac_n "checking "for openssl/md5.h"""... $ac_c" 1>&6
+echo "configure:2077: checking "for openssl/md5.h"" >&5 
     ac_hdr_found=no
-    for p in $MD5_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include /usr/include/crypto /usr/include/sys; do
+    for p in $SSL_HDR_DIR "" /usr/include/ssl /usr/local/include /usr/local/ssl/include; do
+#	echo "LEO: Dir:$p"
+	if test -n "$p"; then
+	  dir="$p"
+	else
+	  dir="/usr/include"
+	fi
 	
     ac_file_found=yes
-    for f in md5.h; do
-	if test ! -f $p/$f; then
+    for f in openssl/md5.h; do
+	if test ! -f $dir/$f; then
     	   ac_file_found=no
 	   break;
 	fi
@@ -2106,14 +2120,20 @@ if test "$SSL" = "yes"; then
    echo "checking for blowfish Library and Header files ... " 1>&6
 echo "configure:2108: checking for blowfish Library and Header files ... " >&5
    
-    echo $ac_n "checking "for blowfish.h"""... $ac_c" 1>&6
-echo "configure:2111: checking "for blowfish.h"" >&5 
+    echo $ac_n "checking "for openssl/blowfish.h"""... $ac_c" 1>&6
+echo "configure:2111: checking "for openssl/blowfish.h"" >&5 
     ac_hdr_found=no
-    for p in $BLOWFISH_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include  /usr/include/crypto; do
+    for p in $SSL_HDR_DIR "" /usr/include/ssl /usr/local/include /usr/local/ssl/include; do
+#	echo "LEO: Dir:$p"
+	if test -n "$p"; then
+	  dir="$p"
+	else
+	  dir="/usr/include"
+	fi
 	
     ac_file_found=yes
-    for f in blowfish.h; do
-	if test ! -f $p/$f; then
+    for f in openssl/blowfish.h; do
+	if test ! -f $dir/$f; then
     	   ac_file_found=no
 	   break;
 	fi
@@ -2371,7 +2391,7 @@ esac
 echo "$ac_t""" 1>&6
 
 
-REL=`echo '$Name$' | tr -d '$: \-' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+REL=`echo '' | tr -d '$: \-' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
 
 
 cat >> confdefs.h <<EOF

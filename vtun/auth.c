@@ -61,11 +61,11 @@
 /* Encryption and Decryption of the challenge key */
 #ifdef HAVE_SSL
 
-#include <md5.h>
-#include <blowfish.h>
+#include <openssl/md5.h>
+#include <openssl/blowfish.h>
 
 #ifndef __APPLE_CC__
-#include <rand.h>
+#include <openssl/rand.h>
 #endif  /* __APPLE_CC__ */
 
 void gen_chal(char *buf)

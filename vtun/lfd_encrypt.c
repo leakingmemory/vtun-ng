@@ -56,11 +56,11 @@
 #include <sys/types.h>
 
 /* OpenSSL includes */
-#include <md5.h>
-#include <blowfish.h>
+#include <openssl/md5.h>
+#include <openssl/blowfish.h>
 
 #ifndef __APPLE_CC__
-#include <rand.h>
+#include <openssl/rand.h>
 #endif  /* __APPLE_CC__ */
 
 #include "vtun.h"

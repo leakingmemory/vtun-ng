@@ -20,7 +20,7 @@
  *    Modifications for 2.3.99-pre5 kernel.
  */
 
-#define TUN_VER "1.3"
+#define TUN_VER "1.4"
 
 #include <linux/module.h>
 
@@ -56,28 +56,14 @@ static int debug=0;
 /* Net device open. */
 static int tun_net_open(struct net_device *dev)
 {
-#ifdef TUN_DEBUG  
-	struct tun_struct *tun = (struct tun_struct *)dev->priv;
-
-	DBG(KERN_INFO "%s: tun_net_open\n", tun->name);
-#endif
-
 	netif_start_queue(dev);
-
 	return 0;
 }
 
 /* Net device close. */
 static int tun_net_close(struct net_device *dev)
 {
-#ifdef TUN_DEBUG  
-	struct tun_struct *tun = (struct tun_struct *)dev->priv;
-
-	DBG(KERN_INFO "%s: tun_net_close\n", tun->name);
-#endif
-
 	netif_stop_queue(dev);
-
 	return 0;
 }
 
@@ -88,38 +74,46 @@ static int tun_net_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	DBG(KERN_INFO "%s: tun_net_xmit %d\n", tun->name, skb->len);
 
-	/* Queue frame */
-	skb_queue_tail(&tun->txq, skb);
-	if (skb_queue_len(&tun->txq) >= TUN_TXQ_SIZE)
-		netif_stop_queue(dev);
+	/* Drop packet if interface is not attached */
+	if (!tun->attached)
+		goto drop;
 
+	/* Queue packet */
+	if (!(tun->flags & TUN_ONE_QUEUE)) {
+		/* Normal queueing mode.
+		 * Packet scheduler handles dropping. */
+		if (skb_queue_len(&tun->readq) >= TUN_READQ_SIZE)
+			netif_stop_queue(dev);
+	} else {
+		/* Single queue mode.
+		 * Driver handles dropping itself. */
+		if (skb_queue_len(&tun->readq) >= dev->tx_queue_len)
+			goto drop;
+	}
+	skb_queue_tail(&tun->readq, skb);
+
+	/* Notify and wake up reader process */
 	if (tun->flags & TUN_FASYNC)
 		kill_fasync(&tun->fasync, SIGIO, POLL_IN);
-
-	/* Wake up process */ 
 	wake_up_interruptible(&tun->read_wait);
+	return 0;
 
+drop:
+	tun->stats.tx_dropped++;
+	kfree_skb(skb);
 	return 0;
 }
 
 static void tun_net_mclist(struct net_device *dev)
 {
-#ifdef TUN_DEBUG
-	struct tun_struct *tun = (struct tun_struct *)dev->priv;
-
-	DBG(KERN_INFO "%s: tun_net_mclist\n", tun->name);
-#endif
-
 	/* Nothing to do for multicast filters. 
-	 * We always accept all frames.
-	 */
+	 * We always accept all frames. */
 	return;
 }
 
 static struct net_device_stats *tun_net_stats(struct net_device *dev)
 {
 	struct tun_struct *tun = (struct tun_struct *)dev->priv;
-
 	return &tun->stats;
 }
 
@@ -173,11 +167,14 @@ static unsigned int tun_chr_poll(struct file *file, poll_table * wait)
 {  
 	struct tun_struct *tun = (struct tun_struct *)file->private_data;
 
+	if (!tun)
+		return -EBADFD;
+
 	DBG(KERN_INFO "%s: tun_chr_poll\n", tun->name);
 
 	poll_wait(file, &tun->read_wait, wait);
  
-	if (skb_queue_len(&tun->txq))
+	if (skb_queue_len(&tun->readq))
 		return POLLIN | POLLRDNORM;
 
 	return POLLOUT | POLLWRNORM;
@@ -238,10 +235,10 @@ static ssize_t tun_chr_write(struct file * file, const char * buf,
 {
 	struct tun_struct *tun = (struct tun_struct *)file->private_data;
 
-	DBG(KERN_INFO "%s: tun_chr_write %d\n", tun->name, count);
+	if (!tun)
+		return -EBADFD;
 
-	if (!(tun->flags & TUN_IFF_SET))
-		return -EBUSY;
+	DBG(KERN_INFO "%s: tun_chr_write %d\n", tun->name, count);
 
 	if (verify_area(VERIFY_READ, buf, count))
 		return -EFAULT;
@@ -292,14 +289,17 @@ static ssize_t tun_chr_read(struct file * file, char * buf,
 	struct sk_buff *skb;
 	ssize_t ret = 0;
 
+	if( !tun )
+		return -EBADFD;
+
 	DBG(KERN_INFO "%s: tun_chr_read\n", tun->name);
 
 	add_wait_queue(&tun->read_wait, &wait);
 	while (count) {
 		current->state = TASK_INTERRUPTIBLE;
 
-		/* Read frames from device queue */
-		if (!(skb=skb_dequeue(&tun->txq))) {
+		/* Read frames from the queue */
+		if (!(skb=skb_dequeue(&tun->readq))) {
 			if (file->f_flags & O_NONBLOCK) {
 				ret = -EAGAIN;
 				break;
@@ -335,49 +335,67 @@ static loff_t tun_chr_lseek(struct file * file, loff_t offset, int origin)
 	return -ESPIPE;
 }
 
-static int tun_set_iff(struct tun_struct *tun, unsigned long arg)
+static int tun_set_iff(struct file *file, struct ifreq *ifr)
 {
-	struct ifreq ifr;
-	char *mask;
+	struct tun_struct *tun;
+	struct net_device *dev;
 
-	if (copy_from_user(&ifr, (void *)arg, sizeof(ifr)))
-		return -EFAULT;
-	ifr.ifr_name[IFNAMSIZ-1] = '\0';
+	dev = __dev_get_by_name(ifr->ifr_name);
+	if (dev) {
+		/* Device exist */
+		tun = dev->priv;
 
-	if (tun->flags & TUN_IFF_SET)
-		return -EEXIST;
+		if (dev->init != tun_net_init || tun->attached)
+			return -EBUSY;
+	} else {
+		char *name;
 
-	/* Set dev type */
-	if (ifr.ifr_flags & IFF_TUN) {
-		/* TUN device */
-		tun->flags |= TUN_TUN_DEV;
-		mask = "tun%d";
-	} else if (ifr.ifr_flags & IFF_TAP) {
-		/* TAP device */
-		tun->flags |= TUN_TAP_DEV;
-		mask = "tap%d";
-	} else 
-		return -EINVAL;
+		/* Allocate new device */
+		if (!(tun = kmalloc(sizeof(struct tun_struct), GFP_KERNEL)) )
+			return -ENOMEM;
+		memset(tun, 0, sizeof(struct tun_struct));
+
+		skb_queue_head_init(&tun->readq);
+		init_waitqueue_head(&tun->read_wait);
+
+		tun->dev.init = tun_net_init;
+		tun->dev.priv = tun;
+
+		/* Set dev type */
+		if (ifr->ifr_flags & IFF_TUN) {
+			/* TUN device */
+			tun->flags |= TUN_TUN_DEV;
+			name = "tun%d";
+		} else if (ifr->ifr_flags & IFF_TAP) {
+			/* TAP device */
+			tun->flags |= TUN_TAP_DEV;
+			name = "tap%d";
+		} else 
+			return -EINVAL;
    
-	if (ifr.ifr_flags & IFF_NO_PI)
+		if (*ifr->ifr_name)
+			name = ifr->ifr_name;
+
+		if (dev_alloc_name(&tun->dev, name) < 0)
+			return -EEXIST;
+		if (register_netdevice(&tun->dev))
+			return -EBUSY;
+
+		tun->name = tun->dev.name;
+	}
+
+	DBG(KERN_INFO "%s: tun_set_iff\n", tun->name);
+
+	if (ifr->ifr_flags & IFF_NO_PI)
 		tun->flags |= TUN_NO_PI;
 
-	if (*ifr.ifr_name)
-		strcpy(tun->dev.name, ifr.ifr_name);
-	else
-		strcpy(tun->dev.name, mask);
+	if (ifr->ifr_flags & IFF_ONE_QUEUE)
+		tun->flags |= TUN_ONE_QUEUE;
 
-	/* Register net device */
-	if (register_netdev(&tun->dev))
-		return -EBUSY;
+	file->private_data = tun;
+	tun->attached = 1;
 
-	tun->flags |= TUN_IFF_SET;
-	strcpy(tun->name, tun->dev.name);
-
-	/* Return iface info to the user space */
-	strcpy(ifr.ifr_name, tun->dev.name);
-	copy_to_user((void *)arg, &ifr, sizeof(ifr));
-
+	strcpy(ifr->ifr_name, tun->name);
 	return 0;   
 }
 
@@ -386,20 +404,50 @@ static int tun_chr_ioctl(struct inode *inode, struct file *file,
 {
 	struct tun_struct *tun = (struct tun_struct *)file->private_data;
 
-	DBG(KERN_INFO "%s: tun_chr_ioctl\n", tun->name);
+	if (cmd == TUNSETIFF && !tun) {
+		struct ifreq ifr;
+		int err;
+
+		if (copy_from_user(&ifr, (void *)arg, sizeof(ifr)))
+			return -EFAULT;
+		ifr.ifr_name[IFNAMSIZ-1] = '\0';
+
+		rtnl_lock();
+		err = tun_set_iff(file, &ifr);
+		rtnl_unlock();
+
+		if( err )
+			return err;
+
+		copy_to_user((void *)arg, &ifr, sizeof(ifr));
+		return 0;
+	}
+
+	if (!tun)
+		return -EBADFD;
+
+	DBG(KERN_INFO "%s: tun_chr_ioctl cmd %d\n", tun->name, cmd);
 
 	switch (cmd) {
-	case TUNSETIFF:
-		return tun_set_iff(tun, arg); 
-
 	case TUNSETNOCSUM:
-		/* Disable/Enable checksum on net iface */
+		/* Disable/Enable checksum */
 		if (arg)
 			tun->flags |= TUN_NOCHECKSUM;
 		else
 			tun->flags &= ~TUN_NOCHECKSUM;
 
 		DBG(KERN_INFO "%s: checksum %s\n",
+		    tun->name, arg ? "disabled" : "enabled");
+		break;
+
+	case TUNSETPERSIST:
+		/* Disable/Enable persist mode */
+		if (arg)
+			tun->flags |= TUN_PERSIST;
+		else
+			tun->flags &= ~TUN_PERSIST;
+
+		DBG(KERN_INFO "%s: persist %s\n",
 		    tun->name, arg ? "disabled" : "enabled");
 		break;
 
@@ -421,6 +469,9 @@ static int tun_chr_fasync(int fd, struct file *file, int on)
 	struct tun_struct *tun = (struct tun_struct *)file->private_data;
 	int ret;
 
+	if( !tun )
+		return -EBADFD;
+
 	DBG(KERN_INFO "%s: tun_chr_fasync %d\n", tun->name, on);
 
 	if ((ret = fasync_helper(fd, file, on, &tun->fasync)) < 0)
@@ -436,25 +487,7 @@ static int tun_chr_fasync(int fd, struct file *file, int on)
 
 static int tun_chr_open(struct inode *inode, struct file * file)
 {
-	struct tun_struct *tun = NULL; 
-
 	DBG1(KERN_INFO "tunX: tun_chr_open\n");
-
-	tun = kmalloc(sizeof(struct tun_struct), GFP_KERNEL);
-	if (tun == NULL)
-		return -ENOMEM;
-
-	memset(tun, 0, sizeof(struct tun_struct));
-	file->private_data = tun;
-
-	skb_queue_head_init(&tun->txq);
-	init_waitqueue_head(&tun->read_wait);
-
-	sprintf(tun->name, "tunX");
-
-	tun->dev.init = tun_net_init;
-	tun->dev.priv = tun;
-
 	return 0;
 }
 
@@ -462,22 +495,27 @@ static int tun_chr_close(struct inode *inode, struct file *file)
 {
 	struct tun_struct *tun = (struct tun_struct *)file->private_data;
 
+	if( !tun )
+		return 0;
+
 	DBG(KERN_INFO "%s: tun_chr_close\n", tun->name);
 
-	if (tun->flags & TUN_IFF_SET) {
-		rtnl_lock();
+	rtnl_lock();
+
+	/* Detach from net device */
+	file->private_data = NULL;
+	tun->attached = 0;
+
+	/* Drop TX queue */
+	skb_queue_purge(&tun->readq);
+
+	if (!(tun->flags & TUN_PERSIST)) {
 		dev_close(&tun->dev);
-		rtnl_unlock();
-
-		/* Drop TX queue */
-		skb_queue_purge(&tun->txq);
-
-		unregister_netdev(&tun->dev);
+		unregister_netdevice(&tun->dev);
+		kfree(tun);
 	}
 
-	kfree(tun);
-	file->private_data = NULL;
-
+	rtnl_unlock();
 	return 0;
 }
 

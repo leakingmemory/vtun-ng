@@ -17,6 +17,7 @@ dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
 AC_INIT()
+
 AC_SUBST(KDIR)
 AC_SUBST(KVER)
 AC_SUBST(ARCH)
@@ -59,7 +60,7 @@ AC_TEST_FILES(tun.c if_tun.h, $TDIR, ,
    AC_MSG_ERROR( Unsupported kernel version. )
 )
 
-AC_DEFINE_UNQUOTED(TUN_VER, "$TUN_VER")
+UPGRADE=0
 
 case $TDIR in
      2.2)
@@ -72,6 +73,8 @@ case $TDIR in
 	   AC_MSG_RESULT("yes"),
 	   AC_MSG_RESULT("no")
 	)
+
+	AC_DEFINE_UNQUOTED(TUN_VER, "$TUN_VER")
         ;;
 
      2.4)
@@ -85,7 +88,6 @@ case $TDIR in
         O_VER=`grep '#.*TUN_VER' $KDIR/drivers/net/tun.c | tr -d '\000-\057A-z'`
         N_VER=`grep '#.*TUN_VER' $TDIR/tun.c | tr -d '\000-\057A-z'`
 
-	UPGRADE=0
         if test $N_VER -lt $O_VER; then
 	   AC_MSG_RESULT("newer")
         elif test $N_VER -eq $O_VER; then

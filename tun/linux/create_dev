@@ -7,19 +7,39 @@
 #
 #  $Id$
 #
-TUN_MAJOR=90
 
-TUN_MINOR=0
-TAP_MINOR=128
-#
-# TUN
-rm -f /dev/tun*
-for i in 0 1 2 3 4 5 6 7 8 9 10; do
-  mknod /dev/tun$i c ${TUN_MAJOR} $i
-done  
-#
-# TAP
-rm -f /dev/tap*
-for i in 0 1 2 3 4 5 6 7 8 9 10; do
-  mknod /dev/tap$i c ${TUN_MAJOR} `expr $i + ${TAP_MINOR}`
-done  
+case $1 in
+   2.2*)
+	TUN_MAJOR=90
+
+	TUN_MINOR=0
+	TAP_MINOR=128
+	#
+	# TUN
+	rm -f /dev/tun*
+	for i in 0 1 2 3; do
+  	   mknod /dev/tun$i c ${TUN_MAJOR} $i
+	done  
+	#
+	# TAP
+	rm -f /dev/tap*
+	for i in 0 1 2 3; do
+  	   mknod /dev/tap$i c ${TUN_MAJOR} `expr $i + ${TAP_MINOR}`
+	done  
+	;;
+
+   2.4*)
+	TUN_MAJOR=10
+	TUN_MINOR=200
+
+	if [ ! -d /dev/net ]; then
+	   mkdir /dev/net
+	fi
+	rm -f /dev/net/tun
+  	mknod /dev/net/tun c ${TUN_MAJOR} ${TUN_MINOR}
+	;;
+
+   *)
+	echo "Unknown kernel version"
+	;;
+esac

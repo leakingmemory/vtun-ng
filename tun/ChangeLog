@@ -1,5 +1,12 @@
 Universal TUN/TAP device driver ChangeLog.
 
+ver 1.1:
+	Massive Linux driver update. 2.4.x kernel support. New cloning 
+	interface, protocol indication. Statistics counting fixes.
+	Solaris driver update. Correct Ethernet header substitution.
+	Configure and Makefile updates.
+	Documentation update.
+	
 ver 1.0:
 	Final stable 1.0 release. CVS source tree access. Packages.
 	Solaris, Linux and FreeBSD drivers merged into one package.

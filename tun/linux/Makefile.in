@@ -51,7 +51,7 @@ module: tun.o
 tun.o: tun.c if_tun.h
 
 dev:
-	./create_dev
+	./create_dev $(KVER)
 
 # Target 'install' conflicts with Makefile from arch/i386
 inst: module dev

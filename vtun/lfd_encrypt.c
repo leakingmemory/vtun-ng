@@ -55,6 +55,10 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
+#include "vtun.h"
+#include "linkfd.h"
+#include "lib.h"
+
 #ifdef HAVE_SSL
 #ifndef __APPLE_CC__
 /* OpenSSL includes */
@@ -66,11 +70,6 @@
 #include <crypto/blowfish.h>
 #endif  /* __APPLE_CC__ */
 #endif  /* HAVE_SSL */
-
-#include "vtun.h"
-#include "linkfd.h"
-#include "lib.h"
-
 #define ENC_BUF_SIZE VTUN_FRAME_SIZE + 16
 #define ENC_KEY_SIZE 16
 

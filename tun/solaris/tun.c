@@ -48,8 +48,8 @@ static	int  tunopen(queue_t *, dev_t *, int, int, cred_t *);
 static	int  tunclose(queue_t *);
 static	int  tunwput(queue_t *wq, mblk_t *mb);
 static	int  tunwsrv(queue_t *wq);
-static  void tunioctl(queue_t *wq, mblk_t *mb);
-static  void tunproto(queue_t *wq, mblk_t *mp);
+static  void tun_ioctl(queue_t *wq, mblk_t *mb);
+static  void tun_proto(queue_t *wq, mblk_t *mp);
 static  void tun_frame(queue_t *wq, mblk_t *mp);
 
 #define TUN_VER "0.5"
@@ -317,11 +317,11 @@ static int tunwput(queue_t *wq, mblk_t *mp)
 
      case M_PROTO:
      case M_PCPROTO:
-	putq(wq, mp);
+	tun_proto(wq, mp);
 	break;
 
      case M_IOCTL:
-	qwriter(wq, mp, tunioctl, PERIM_OUTER);
+	qwriter(wq, mp, tun_ioctl, PERIM_OUTER);
 	break;
 
      case M_FLUSH:
@@ -361,7 +361,7 @@ static int tunwsrv(queue_t *wq)
 
 	 case M_PROTO:
 	 case M_PCPROTO:
-	    tunproto(wq, mp);
+	    tun_proto(wq, mp);
    	    break;
 
 	 default:
@@ -406,14 +406,14 @@ struct tunppa * tun_alloc_ppa(int id)
 }   
 
 /* Handle IOCTLs */
-static void tunioctl(queue_t *wq, mblk_t *mp)
+static void tun_ioctl(queue_t *wq, mblk_t *mp)
 {
   struct iocblk *ioc = (struct iocblk *)mp->b_rptr; 
   struct tunstr *str = (struct tunstr *)wq->q_ptr; 
   struct tunppa *ppa;
   int p;
 
-  DBG(CE_CONT,"tun: tunioctl 0x%x\n", ioc->ioc_cmd);
+  DBG(CE_CONT,"tun: tun_ioctl 0x%x\n", ioc->ioc_cmd);
   switch( ioc->ioc_cmd ){
      case TUNNEWPPA:
 	/* Allocate new PPA and assign control stream */
@@ -973,7 +973,7 @@ static void tun_frame(queue_t *wq, mblk_t *mp)
   }
 }
 
-static void tunproto(queue_t *wq, mblk_t *mp)
+static void tun_proto(queue_t *wq, mblk_t *mp)
 {
   union DL_primitives *dlp = (union DL_primitives *)mp->b_rptr;
   uint32_t prim = dlp->dl_primitive;

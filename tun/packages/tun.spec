@@ -1,7 +1,7 @@
 %define name	tun
 %define version	1.1
 %define release	1
-%define kernel  2.2.16-22
+%define kernel  %(uname -r)
 
 Name: %{name}
 Version: %{version}
@@ -30,12 +30,13 @@ BuildRoot: /var/tmp/%{name}-%{version}-build
 make 
 
 %install
+[ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
 install -m 755 -o root -g root -d $RPM_BUILD_ROOT/lib/modules/%{kernel}/net
 install -m 644 -o root -g root linux/tun.o $RPM_BUILD_ROOT/lib/modules/%{kernel}/net
 
 install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev
-install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev/net
-mknod $RPM_BUILD_ROOT/dev/net/tun c 10 200
+[ -d /dev/net ] && install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev/net
+[ -d /dev/net ] && mknod $RPM_BUILD_ROOT/dev/net/tun c 10 200
 mknod $RPM_BUILD_ROOT/dev/tun0 c 90 0
 mknod $RPM_BUILD_ROOT/dev/tun1 c 90 1
 mknod $RPM_BUILD_ROOT/dev/tun2 c 90 2
@@ -56,7 +57,7 @@ depmod -a
 %defattr(644,root,root)
 %doc FAQ README
 %attr(644,root,root) /lib/modules/%{kernel}/net/tun.o
-%attr(600,root,root) /dev/net/tun
+%{expand:%(if [ -d /dev/net ]; then echo "%attr(600,root,root) /dev/net/tun"; fi)}
 %attr(600,root,root) /dev/tun0
 %attr(600,root,root) /dev/tun1
 %attr(600,root,root) /dev/tun2

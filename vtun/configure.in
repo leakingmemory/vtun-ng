@@ -133,27 +133,24 @@ fi
 
 AC_MSG_RESULT()
 
+OS_REL=`uname -r | tr -d '[A-Za-z\-\_\.]'`
 case $host_os in
 	*solaris*)
 	     OS_DIR="svr4"
 	     ;;
-	*freebsd4*)
-	     OS_DIR="freebsd"
+	*freebsd*)
+	     if test "$OS_REL" -ge "40"; then 
+	        OS_DIR="freebsd"
+	     fi
 	     ;;
 	*openbsd*)
-	     OS_DIR="openbsd"
-	     ;;
-	*)
-	     OS_DIR="generic"
+	     if test "$OS_REL" -ge "25"; then 
+	        OS_DIR="openbsd"
+	     fi
 	     ;;
 esac	     
+AC_LINK_DRV(`cat vtun.drivers`, $OS_DIR)
 
-AC_MSG_RESULT( creating driver and protocol links ... )
-
-# Create links from OS dir
-./config.drivers link $OS_DIR
-
-# Create links from GENERIC dir
-./config.drivers link generic
+AC_MSG_RESULT()
 
 AC_OUTPUT(Makefile)

@@ -1,4 +1,4 @@
-
+dnl Test files
 AC_DEFUN( AC_TEST_FILES,
 [
     ac_file_found=yes
@@ -37,4 +37,28 @@ AC_DEFUN( AC_SEARCH_HEADERS,
         AC_MSG_RESULT("no") 
 	ifelse([$4], , :,[$4])
     fi
+])
+
+
+dnl Create links to all files($1) in directory($2
+AC_DEFUN( AC_LINK_DIR, 
+[
+    for i in $1; do
+      if test -f $2/$i -a ! -f $i; then
+         AC_MSG_RESULT(linking $2/$i  to  $i)
+         ln -f -s $2/$i $i
+      fi
+    done 
+])
+
+dnl Create driver and protocol links
+dnl $1 - drivers list, $2 - os dir
+AC_DEFUN( AC_LINK_DRV, 
+[
+    AC_MSG_RESULT( creating driver and protocol links ... )
+
+    if test "$2" != ""; then
+       AC_LINK_DIR($1, $2)
+    fi
+    AC_LINK_DIR($1, generic)
 ])

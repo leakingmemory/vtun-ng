@@ -2184,25 +2184,46 @@ fi
 
 echo "$ac_t""" 1>&6
 
+OS_REL=`uname -r | tr -d 'A-Za-z\-\_\.'`
 case $host_os in
 	*solaris*)
 	     OS_DIR="svr4"
 	     ;;
-	*freebsd4*)
-	     OS_DIR="freebsd"
+	*freebsd*)
+	     if test "$OS_REL" -ge "40"; then 
+	        OS_DIR="freebsd"
+	     fi
 	     ;;
-	*)
-	     OS_DIR="generic"
+	*openbsd*)
+	     if test "$OS_REL" -ge "25"; then 
+	        OS_DIR="openbsd"
+	     fi
 	     ;;
 esac	     
 
-echo "$ac_t""creating driver and protocol links ... " 1>&6
+    echo "$ac_t""creating driver and protocol links ... " 1>&6
 
-# Create links from OS dir
-./config.drivers link $OS_DIR
+    if test "$OS_DIR" != ""; then
+       
+    for i in `cat vtun.drivers`; do
+      if test -f $OS_DIR/$i -a ! -f $i; then
+         echo "$ac_t""linking $OS_DIR/$i  to  $i" 1>&6
+         ln -f -s $OS_DIR/$i $i
+      fi
+    done 
 
-# Create links from GENERIC dir
-./config.drivers link generic
+    fi
+    
+    for i in `cat vtun.drivers`; do
+      if test -f generic/$i -a ! -f $i; then
+         echo "$ac_t""linking generic/$i  to  $i" 1>&6
+         ln -f -s generic/$i $i
+      fi
+    done 
+
+
+
+echo "$ac_t""" 1>&6
 
 trap '' 1 2 15
 cat > confcache <<\EOF

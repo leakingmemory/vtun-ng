@@ -75,7 +75,7 @@ clean:
 
 distclean: clean
 	rm -f $(CONFIGURE_FILES)
-	./config.drivers unlink
+	rm -f `cat vtun.drivers`	
 
 install_man: 
 	$(INSTALL) -d -m 644 -o root -g 0 $(MAN_DIR)/man8

@@ -81,15 +81,15 @@ int tun_read(int fd, char *buf, int len)
 {
     struct iovec iv[2];
     u_int32_t type;
-    int r;
+    register int rlen;
 
     iv[0].iov_base = &type;
     iv[0].iov_len = sizeof(type);
     iv[1].iov_base = buf;
     iv[1].iov_len = len;
 
-    if( (r = readv(fd, iv, 2)) > 0 )
-       return r - sizeof(type);
+    if( (rlen = readv(fd, iv, 2)) > 0 )
+       return rlen - sizeof(type);
     else
-       return r;
+       return rlen;
 }

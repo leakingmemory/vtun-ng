@@ -340,7 +340,7 @@ int linkfd(struct vtun_host *host)
 	lfd_add_mod(&lfd_shaper);
 
      if(lfd_alloc_mod(host))
-	return -1;
+	return 0;
 
      memset(&sa, 0, sizeof(sa));
      sa.sa_handler=sig_term;

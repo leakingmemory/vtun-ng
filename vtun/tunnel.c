@@ -62,6 +62,12 @@ int (*dev_read)(int fd, char *buf, int len);
 int (*proto_write)(int fd, char *buf, int len);
 int (*proto_read)(int fd, char *buf);
 
+/* Initialize and start the tunnel.
+   Returns:
+      -1 - critical error
+      0  - normal close or noncritical error 
+*/
+   
 int tunnel(struct vtun_host *host)
 {
      int fd[2], null_fd, pid,opt;
@@ -120,7 +126,7 @@ int tunnel(struct vtun_host *host)
         case VTUN_UDP:
 	   if( (opt = udp_session(host, VTUN_TIMEOUT)) == -1){
 	      syslog(LOG_ERR,"Can't establish UDP session");
-	      return -1;
+	      return 0;
 	   } 	
 
  	   proto_write = udp_write;
@@ -132,7 +138,7 @@ int tunnel(struct vtun_host *host)
      switch( (pid=fork()) ){
 	case -1:
 	   syslog(LOG_ERR,"Couldn't fork()");
-	   return -1;
+	   return 0;
 	case 0:
      	   switch( host->flags & VTUN_TYPE_MASK ){
 	      case VTUN_TTY:

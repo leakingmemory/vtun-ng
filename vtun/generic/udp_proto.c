@@ -61,6 +61,7 @@ int udp_write(int fd, char *buf, int len)
 {
      unsigned short nlen, cnt; 
      struct iovec iv[2];
+     register int wlen;
 
      nlen = htons(len); 
      len  = len & VTUN_FSIZE_MASK;
@@ -77,9 +78,7 @@ int udp_write(int fd, char *buf, int len)
      }
 
      while( 1 ){
-        register int err;
-	err = writev(fd, iv, cnt); 
-	if( err < 0 ){
+	if( (wlen = writev(fd, iv, cnt)) < 0 ){ 
 	   if( errno == EAGAIN || errno == EINTR )
 	      continue;
 	   if( errno == ENOBUFS )
@@ -88,7 +87,7 @@ int udp_write(int fd, char *buf, int len)
 	/* Even if we wrote only part of the frame
          * we can't use second write since it will produce 
          * another UDP frame */  
-        return err;
+        return wlen;
      }
 }
 
@@ -96,7 +95,7 @@ int udp_read(int fd, char *buf)
 {
      unsigned short hdr, flen;
      struct iovec iv[2];
-     int rlen;
+     register int rlen;
 
      /* Read frame */
      iv[0].iov_len  = sizeof(short);
@@ -109,7 +108,7 @@ int udp_read(int fd, char *buf)
 	   if( errno == EAGAIN || errno == EINTR )
 	      continue;
 	   else
-     	      return -1;
+     	      return rlen;
 	}
         hdr = ntohs(hdr);
         flen = hdr & VTUN_FSIZE_MASK;

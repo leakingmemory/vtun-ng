@@ -58,6 +58,7 @@ int tcp_write(int fd, char *buf, int len)
 {
      unsigned short nlen, cnt; 
      struct iovec iv[2];
+     register int wlen;
 
      nlen = htons(len); 
      len  = len & VTUN_FSIZE_MASK;
@@ -74,29 +75,27 @@ int tcp_write(int fd, char *buf, int len)
      }
 
      while(1) {
-        register int err;
-	err = writev(fd, iv, cnt); 
-	if( err < 0 && ( errno == EAGAIN || errno == EINTR ) )
+	wlen = writev(fd, iv, cnt); 
+	if( wlen < 0 && ( errno == EAGAIN || errno == EINTR ) )
 	   continue;
-	if( err > 0 && err < (len + sizeof(short)) ) {
+	if( wlen > 0 && wlen < (len + sizeof(short)) ){
 	   /* We wrote only part of the frame, lets write the rest
 	    * FIXME should check if wrote less than sizeof(short) */
-	   err -= sizeof(short);
-	   return write_n(fd, buf + err, len - err);
+	   wlen -= sizeof(short);
+	   return write_n(fd, buf + wlen, len - wlen);
 	}
-
-	return err;
+	return wlen;
      }
 }
 
 int tcp_read(int fd, char *buf)
 {
      unsigned short len, flen;
-     register int err;     
+     register int rlen;     
 
      /* Read frame size */
-     if( (err = read_n(fd, (char *)&len, sizeof(short)) ) < 0)
-	return err;
+     if( (rlen = read_n(fd, (char *)&len, sizeof(short)) ) < 0)
+	return rlen;
 
      len = ntohs(len);
      flen = len & VTUN_FSIZE_MASK;
@@ -105,9 +104,9 @@ int tcp_read(int fd, char *buf)
      	/* Oversized frame, drop it. */ 
         while( flen ){
 	   len = min(flen, VTUN_FRAME_SIZE);
-           if( (len = read_n(fd, buf, len)) <= 0 )
+           if( (rlen = read_n(fd, buf, len)) <= 0 )
 	      break;
-           flen -= len;
+           flen -= rlen;
         }                                                               
 	return VTUN_BAD_FRAME;
      }	

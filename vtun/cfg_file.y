@@ -18,7 +18,7 @@
  */
 
 /*
- * $Id$
+ * cfg_file.y,v 1.3 2002/01/05 01:23:39 noop Exp
  */ 
 
 #include "config.h"
@@ -68,7 +68,7 @@ int yyerror(char *s);
    int  num;
    struct { int num1; int num2; } dnum;
 }
-%expect 18
+%expect 20
 
 %token K_OPTIONS K_DEFAULT K_PORT K_PERSIST K_TIMEOUT
 %token K_PASSWD K_PROG K_PPP K_SPEED K_IFCFG K_FWALL K_ROUTE K_DEVICE 

@@ -1,5 +1,5 @@
 %define name	vtun
-%define version	2.1b3
+%define version	2.1
 %define release	1
 %define prefix	/usr
 

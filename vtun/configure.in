@@ -140,6 +140,9 @@ case $host_os in
 	*freebsd4*)
 	     OS_DIR="freebsd"
 	     ;;
+	*openbsd*)
+	     OS_DIR="openbsd"
+	     ;;
 	*)
 	     OS_DIR="generic"
 	     ;;

@@ -340,6 +340,7 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 {
 	struct tun_struct *tun;
 	struct net_device *dev;
+	int err;
 
 	dev = __dev_get_by_name(ifr->ifr_name);
 	if (dev) {
@@ -368,6 +369,8 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 		tun->dev.init = tun_net_init;
 		tun->dev.priv = tun;
 
+		err = -EINVAL;
+
 		/* Set dev type */
 		if (ifr->ifr_flags & IFF_TUN) {
 			/* TUN device */
@@ -378,15 +381,16 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 			tun->flags |= TUN_TAP_DEV;
 			name = "tap%d";
 		} else 
-			return -EINVAL;
+			goto failed;
    
 		if (*ifr->ifr_name)
 			name = ifr->ifr_name;
 
-		if (dev_alloc_name(&tun->dev, name) < 0)
-			return -EEXIST;
-		if (register_netdevice(&tun->dev))
-			return -EBUSY;
+		if ((err = dev_alloc_name(&tun->dev, name)) < 0)
+			goto failed;
+		if ((err = register_netdevice(&tun->dev)))
+			goto failed;
+	
 		MOD_INC_USE_COUNT;
 
 		tun->name = tun->dev.name;
@@ -405,6 +409,10 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 
 	strcpy(ifr->ifr_name, tun->name);
 	return 0;
+
+failed:
+	kfree(tun);
+	return err;
 }
 
 static int tun_chr_ioctl(struct inode *inode, struct file *file, 

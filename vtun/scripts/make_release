@@ -15,9 +15,7 @@ TAG=$1
 MOD=$2
 #
 REL=`echo $TAG | tr -d 'REL-' | sed 's/\_/\./g'`
-VER="$REL `date '+%m.%d.%Y'`"
 DIR=$MOD-$REL
-#
 #
 cd /tmp
 #
@@ -31,11 +29,7 @@ if ! cvs -z9 export -r $TAG -d $DIR $MOD; then
   exit 1
 fi 
 
-echo "Creating $MOD $VER ..."
-
-# Substitute version
-sed "s/__VER__/$VER/g" $DIR/$MOD.h > $DIR/$MOD.h.new
-mv $DIR/$MOD.h.new $DIR/$MOD.h 
+echo "Creating $MOD-$REL ..."
 
 # Create archive
 tar czf $MOD-$REL.tar.gz $DIR

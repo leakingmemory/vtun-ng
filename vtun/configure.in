@@ -7,17 +7,9 @@ dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
 
-dnl Build release name
-TAG="$Name$"
-if "$TAG" != ""; then 
-   echo $TAG
-else
-   echo "Undef"
-fi 
-exit
-
 AC_INIT(lib.c)
 AC_CONFIG_HEADER(config.h)
+
 
 dnl Encryption support
 AC_ARG_WITH(ssl-headers,
@@ -162,6 +154,9 @@ AC_LINK_DRV(`cat vtun.drivers`, $OS_DIR)
 
 AC_MSG_RESULT()
 
-AC_DEFINE_UNQUOTED(COMPILE_DATE, "`date '+%m/%d/%Y'`")
+dnl Build release name
+TAG='substr($Name,0)$'
+REL=`echo $TAG | sed 's/\_/\./' | tr -d '[A-Za-z$\-\: ]'`
+AC_DEFINE_UNQUOTED(VTUN_VER, "$REL `date '+%m/%d/%Y'`")
 
 AC_OUTPUT(Makefile)

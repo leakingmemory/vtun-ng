@@ -280,7 +280,7 @@ struct vtun_host * auth_server(int fd)
 
         set_title("authentication");
 
-	print_p(fd,"VTUN server ver %s\n",VER);
+	print_p(fd,"VTUN server ver %s\n",VTUN_VER);
 
 	stage = ST_HOST;
 

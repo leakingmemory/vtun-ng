@@ -59,7 +59,7 @@ void client(struct vtun_host *host)
      struct sigaction sa;
      int s,opt;	
 
-     syslog(LOG_INFO,"VTun client ver %s started",VER);
+     syslog(LOG_INFO,"VTun client ver %s started",VTUN_VER);
 
      memset(&sa,0,sizeof(sa));     
      sa.sa_handler=SIG_IGN;

@@ -55,3 +55,6 @@
 
 /*Define if you have LZO */
 #undef HAVE_LZO
+
+/* Release version and date */
+#undef VTUN_VER

@@ -89,7 +89,7 @@ int main(int argc, char *argv[], char *env[])
 	/* Start logging to syslog and stderr */
 	openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
 
-	while ((opt = getopt(argc, argv, "isf:P:t:np")) != EOF) {
+	while ((opt = getopt(argc, argv, "isf:P:t:nph")) != EOF) {
 		switch (opt) {
 		case 'i':
 			vtun.svr_type = VTUN_INETD;
@@ -111,6 +111,7 @@ int main(int argc, char *argv[], char *env[])
 		case 't':
 			vtun.timeout = atoi(optarg);
 			break;
+		case 'h':
 		default:
 			usage();
 			exit(1);
@@ -232,8 +233,11 @@ void usage(void)
 	printf("VTun ver %s\n", VTUN_VER);
 	printf("Usage: \n");
 	printf("  Server:\n");
-	printf("\tvtund <-s> [-f file] [-P port]\n");
+	printf("\tvtund <-s> [-n] [-f file] [-P port]\n");
 	printf("  Client:\n");
-	printf("\tvtund [-f file] [-P port] [-L local address] "
-	       "[-p] [-t timeout] <host> <server adress>\n");
+	printf("\tvtund [-n] [-f file] [-P port] [-L local address] "
+	       "[-p] [-t timeout] <host> <server adress>\n"
+	       "\n"
+	       "\t-n\tDo not fork (also turns on some debugging messages)\n"
+	       );
 }

@@ -79,13 +79,17 @@ VTun - Frequently Asked Questions
 <dl><a href="#2.6"> 2.6 Why do I get "Can't allocate tun device" or "Can't allocate tap device" error messages ? </a></dl> 
 <dl><a href="#2.7"> 2.7 Why do I get "LZO compression is not supported" error message ? </a></dl> 
 <dl><a href="#2.8"> 2.8 Why do I get "expecting WORD at line xxx" error message ? </a></dl> 
-<dl><a href="#2.9"> 2.9 Why do I get the messsage "kernel: application bug: vtund(XXXX) has SIGCHLD set to SIG_IGN but calls wait()" in my system log? </a></dl>
+<dl><a href="#2.9"> 2.9 Why do I get the message "kernel: application bug: vtund(XXXX) has SIGCHLD set to SIG_IGN but calls wait()" in my system log? </a></dl>
+</ul> 
+<b>3. Crypto Questions</b> 
+<ul> 
+<dl><a href="#3.1"> 3.1 Isn't using only XOR to encrypt challenges completely unsafe ? </a></dl>
 </ul> 
 <br> 
 <b>1. General Questions</b><br> 
 <a name="1.1"> 1.1 What is VTun ? </a><br> 
 &nbsp;VTun is the easiest way to create Virtual Tunnels over TCP/IP networks<br> 
-&nbsp;with traffic shaping, compression, and encryption. <br> 
+&nbsp;with traffic shaping, compression, and encryption.  At least, we think so.<br> 
 &nbsp;It supports IP, PPP, SLIP, Ethernet and other tunnel types.<br> 
 &nbsp;VTun is easily and highly configurable, it can be used for various<br> 
 &nbsp;network tasks.<br> 
@@ -165,8 +169,8 @@ VTun - Frequently Asked Questions
 <br> 
 <a name="1.16"> 1.16 Why ZLIB compression does not work with UDP protocol ? </a><br> 
 &nbsp;UDP doesn't not provide reliable transport, and some frames could be <br> 
-&nbsp;lost on unreliable links. VTun does not have any retransmition or <br> 
-&nbsp;recovery algorithm for the lost UDP frames, because retransmition will<br> 
+&nbsp;lost on unreliable links. VTun does not have any retransmission or <br> 
+&nbsp;recovery algorithm for the lost UDP frames, because retransmission will<br> 
 &nbsp;be handled by Upper layers.<br> 
 &nbsp;You should use LZO compression with UDP protocol.&nbsp;&nbsp;&nbsp;&nbsp;<br> 
 <br> 
@@ -210,7 +214,7 @@ VTun - Frequently Asked Questions
 <a name="1.23"> 1.23 Can I use vtun over SSH ? </a><br> 
 &nbsp;Yes, via the port forwarding feature of ssh.&nbsp;&nbsp;Don't enable vtun's<br> 
 &nbsp;encryption as ssh does its own encryption.&nbsp;&nbsp;Also, make sure to select<br> 
-&nbsp;the tcp protocol as SSH can forward tcp but not udp.&nbsp;&nbsp;An example<br> 
+&nbsp;the TCP protocol as SSH can forward TCP but not UDP.&nbsp;&nbsp;An example<br> 
 &nbsp;session might look something like this:<br> 
 <br> 
 &nbsp;home$ ssh -L 5000:localhost:5000 work.megacorp.com<br> 
@@ -264,13 +268,41 @@ VTun - Frequently Asked Questions
 &nbsp;VTun passwords must be alpha characters or a mixture of alpha and<br> 
 &nbsp;numerical characters.<br> 
 <br> 
-<a name="2.9"> 2.9 Why do I get the messsage "kernel: application bug: vtund(XXXX) has SIGCHLD set to SIG_IGN but calls wait()" in my system log? </a><br>
+<a name="2.9"> 2.9 Why do I get the message "kernel: application bug: vtund(XXXX) has SIGCHLD set to SIG_IGN but calls wait()" in my system log? </a><br>
 
 &nbsp;Red Hat Linux users will notice this message.  It's been spotted<br>
-&nbsp;only on Red Hat Linux, but cannot be provoked easily enough on<br>
+&nbsp;only on Red Hat Linux, and cannot be provoked easily enough on<br>
 &nbsp;any other system.  We're advising people not to worry, but<br>
 &nbsp;definitely appreciate discussion on this topic that can result<br>
 &nbsp;in a fix that removes the warning.<br>
+
+
+<br> 
+<b>3. Crypto Questions</b><br> 
+<a name="3.1"> 3.1 Isn't using only XOR to encrypt challenges completely unsafe ? </a><br> 
+
+&nbsp;A few documents discussing security in VTun have pointed to<br>
+&nbsp;sections of code that use XOR to 'encrypt' challenges:<br>
+<br>
+&nbsp;Auth.c:<br>
+&nbsp;97:void encrypt_chal(char *chal, char *pwd)<br>
+&nbsp;98:{<br>
+&nbsp;99:   char * xor_msk = pwd;<br>
+&nbsp;100:   register int i, xor_len = strlen(xor_msk);<br>
+&nbsp;101:<br>
+&nbsp;102:   for(i=0; i < VTUN_CHAL_SIZE; i++)<br>
+&nbsp;103:      chal[i] ^= xor_msk[i%xor_len];<br>
+&nbsp;104:}<br>
+<br>
+
+&nbsp;However, this code doesn't get compiled into any standard<br>
+&nbsp;release, and anyone familiar with #ifdef notation should<br>
+&nbsp;understand that immediately.  This code is continually requested<br>
+&nbsp;by third-parties, though, and needs to remain in the product.<br>
+&nbsp;Since one needs to intentionally and willingly cripple the<br>
+&nbsp;product before this code becomes a concern, we don't think it's<br>
+&nbsp;a serious concern.  (Of course, we're open to debate!)<br>
+
 <br>
 
 &nbsp;If you have any unanswered question please send it to the mailing list <br> 

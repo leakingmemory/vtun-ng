@@ -36,7 +36,7 @@ Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: Bishop Clark (LC957) <bishop@platypus.bc.ca>
 BuildRoot: /var/tmp/%{name}-%{version}-build
 Obsoletes: vppp
-Buildrequires: %{!?NO_USE_LZO:lzo-devel}
+%{!?NO_USE_LZO:Buildrequires: lzo-devel}
 
 %description
 VTun provides the method for creating Virtual Tunnels over TCP/IP

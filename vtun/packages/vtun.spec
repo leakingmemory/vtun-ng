@@ -27,7 +27,7 @@ Name: %{name}
 Version: %{version}
 Release: %{release}
 Copyright: GPL
-Group: Networking/Tunnels
+Group: System Environment/Daemons
 Url: http://vtun.sourceforge.net/
 Source: http://vtun.sourceforge.net/%{name}-%{version}.tar.gz
 Summary: Virtual tunnel over TCP/IP networks.
@@ -132,6 +132,9 @@ fi
 %endif
 
 %changelog
+* Sat Aug 17 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-5
+- fix GROUP for amanda's genhdlist and Michael Van Donselaar
+
 * Tue Feb 12 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-4
 - Deprecated redundant directory creation in install
 - More undisputed patches by Willems Luc for SuSE support

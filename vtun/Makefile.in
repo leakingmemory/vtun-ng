@@ -60,13 +60,11 @@ CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
 vtund: $(OBJS)
 	$(CC) $(CFLAGS) -o vtund $(OBJS) $(LFD_OBJS) $(LDFLAGS)
 
-cfg_file.tab.o: cfg_file.y cfg_kwords.h config.h
+cfg_file.tab.c: cfg_file.y cfg_kwords.h config.h
 	$(YACC) $(YACCFLAGS) -b cfg_file cfg_file.y
-	$(CC) $(CFLAGS) $(DEFS) -c cfg_file.tab.c
 
-cfg_file.lex.o: cfg_file.l cfg_kwords.h config.h
+cfg_file.lex.c: cfg_file.l cfg_kwords.h config.h
 	$(LEX) $(LEXFLAGS) cfg_file.l > cfg_file.lex.c 
-	$(CC) $(CFLAGS) $(DEFS) -c cfg_file.lex.c
 
 depend:
 	makedepend -- $(CFLAGS) -- *.c

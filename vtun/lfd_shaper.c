@@ -36,6 +36,8 @@
  * Shaper module. 
  */
 
+#ifdef HAVE_SHAPER 
+
 unsigned long bytes, max_speed;
 struct timeval curr_time, last_time;
 
@@ -136,5 +138,21 @@ struct lfd_mod lfd_shaper = {
      NULL,
      NULL,
      NULL,
-     NULL,NULL
+     NULL,
+     NULL
 };
+
+#else  /* HAVE_SHAPER */
+
+int no_shaper(struct vtun_host *host)
+{
+     syslog(LOG_INFO, "Traffic shaping is not supported");
+     return -1;
+}
+
+struct lfd_mod lfd_shaper = {
+     "Shaper",
+     no_shaper, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+#endif /* HAVE_SHAPER */

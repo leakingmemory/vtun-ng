@@ -1,0 +1,56 @@
+#!/bin/sh
+#
+# Script for starting and stoping vtund.
+#
+# Writen by Dag Wieers <dag@mind.be>.
+# Updated by Charles Feduke (SuSE) 01-15-2001
+#
+# chkconfig: 345 55 45
+# description: vtund Virtual Tunnel Daemon.
+#    VTun provides the method for creating Virtual Tunnels 
+#    over TCP/IP networks and allows to shape, compress, encrypt 
+#    traffic in that tunnels.
+
+
+# base configuration
+. /etc/rc.config
+
+# the echo return value for success (defined 
+in /etc/rc.config)
+return=$rc_done
+
+# See how we were called.
+case "$1" in
+  start)
+        echo -n "Starting service vtund"
+        startproc /usr/local/sbin/vtund -s
+        touch /var/lock/subsys/vtund
+        echo -e "$return"
+        ;;
+  stop)
+        echo -n "Shutting down service vtund"
+        killproc -TERM /usr/local/sbin/vtund || return=$rc_failed
+        rm -f /var/lock/subsys/vtund
+        echo -e "$return"
+        ;;
+  reload|restart)
+        echo -n "Restarting service vtund"
+        killproc /usr/local/sbin/vtund
+        rm -f /var/lock/subsys/vtund
+        sleep 3
+        startproc /usr/local/sbin/vtund -s
+        touch /var/lock/subsys/vtund
+        echo
+        ;;
+  status)
+        echo -n "Checking for service vtund: "
+        checkproc /usr/local/sbin/vtund && echo OK || echo No process
+        ;;
+  *)
+        echo "Usage: rc.vtund {start|stop|restart|status}"
+        exit 1
+esac
+
+# inform caller and set an exit status
+test "$return" = "rc_done" || exit 1
+exit 0

@@ -22,7 +22,10 @@
 
 /*
  * Challenge based authentication. 
- * Thanx to Chris Todd<christ@insynq.com> for the good idea.   
+ * Thanx to Chris Todd<christ@insynq.com> for the good idea.
+ *
+ * Jim Yonan, 05/24/2001
+ * 	gen_chal rewrite to use better random number generator 
  */ 
 
 #include "config.h"
@@ -50,13 +53,72 @@
 #include <arpa/inet.h>
 #endif
 
-#include <md5.h>
-#include <blowfish.h>
-
 #include "vtun.h"
 #include "lib.h"
 #include "lock.h"
 #include "auth.h"
+
+/* Encryption and Decryption of the challenge key */
+#ifdef HAVE_SSL
+
+#include <md5.h>
+#include <blowfish.h>
+#include <rand.h>
+
+void gen_chal(char *buf)
+{
+   RAND_bytes(buf, VTUN_CHAL_SIZE);
+}
+
+void encrypt_chal(char *chal, char *pwd)
+{ 
+   register int i;
+   BF_KEY key;
+
+   BF_set_key(&key, 16, MD5(pwd,strlen(pwd),NULL));
+
+   for(i=0; i < VTUN_CHAL_SIZE; i += 8 )
+      BF_ecb_encrypt(chal + i,  chal + i, &key, BF_ENCRYPT);
+}
+
+void decrypt_chal(char *chal, char *pwd)
+{ 
+   register int i;
+   BF_KEY key;
+
+   BF_set_key(&key, 16, MD5(pwd,strlen(pwd),NULL));
+
+   for(i=0; i < VTUN_CHAL_SIZE; i += 8 )
+      BF_ecb_encrypt(chal + i,  chal + i, &key, BF_DECRYPT);
+}
+
+#else /* HAVE_SSL */
+
+void encrypt_chal(char *chal, char *pwd)
+{ 
+   char * xor_msk = pwd;
+   register int i, xor_len = strlen(xor_msk);
+
+   for(i=0; i < VTUN_CHAL_SIZE; i++)
+      chal[i] ^= xor_msk[i%xor_len];
+}
+
+void inline decrypt_chal(char *chal, char *pwd)
+{ 
+   encrypt_chal(chal, pwd);
+}
+
+/* Generate PSEUDO random challenge key. */
+void gen_chal(char *buf)
+{
+   register int i;
+ 
+   srand(time(NULL));
+
+   for(i=0; i < VTUN_CHAL_SIZE; i++)
+      buf[i] = (unsigned int)(255.0 * rand()/RAND_MAX);
+}
+#endif /* HAVE_SSL */
 
 /* 
  * Functions to convert binary flags to character string.
@@ -155,19 +217,15 @@ int cf2bf(char *str, struct vtun_host *host)
 	     case 'C':
 		if((s = strtol(ptr,&p,10)) == ERANGE || ptr == p) 
 		   return 0;
-		if( s ){
-		   host->flags |= VTUN_ZLIB;
-		   host->zlevel = s; 
-		}
+		host->flags |= VTUN_ZLIB;
+		host->zlevel = s; 
 		ptr = p;
 		break;
 	     case 'L':
 		if((s = strtol(ptr,&p,10)) == ERANGE || ptr == p) 
 		   return 0;
-		if( s ){
-		   host->flags |= VTUN_LZO;
-		   host->zlevel = s; 
-		}
+		host->flags |= VTUN_LZO;
+		host->zlevel = s; 
 		ptr = p;
 		break;
 	     case 'E':
@@ -217,7 +275,7 @@ char *cl2cs(char *chal)
 
 int cs2cl(char *str, char *chal)
 {
-     register unsigned char *ptr = str;
+     register char *ptr = str;
      register int i;
 
      if( !(ptr = strchr(str,'<')) ) 
@@ -234,41 +292,6 @@ int cs2cl(char *str, char *chal)
      return 1;
 }   
 
-/* Generate PSEUDO random challenge key. 
- * FIXME. Should be rewritten to use better algorithm */
-void gen_chal(char *buf)
-{
-   register int i;
- 
-   srand(time(NULL));
-
-   for(i=0; i<VTUN_CHAL_SIZE; i++)
-      buf[i] = (unsigned int)(255.0 * rand()/RAND_MAX);
-}
-
-/* Encrypt and Decrypt challenge key */
-void encrypt_chal(char *chal, char *pwd)
-{ 
-   register int i;
-   BF_KEY key;
-
-   BF_set_key(&key, 16, MD5(pwd,strlen(pwd),NULL));
-
-   for(i=0; i < VTUN_CHAL_SIZE; i += 8 )
-      BF_ecb_encrypt(chal + i,  chal + i, &key, BF_ENCRYPT);
-}
-
-void decrypt_chal(char *chal, char *pwd)
-{ 
-   register int i;
-   BF_KEY key;
-
-   BF_set_key(&key, 16, MD5(pwd,strlen(pwd),NULL));
-
-   for(i=0; i < VTUN_CHAL_SIZE; i += 8 )
-      BF_ecb_encrypt(chal + i,  chal + i, &key, BF_DECRYPT);
-}
-
 /* Authentication (Server side) */
 struct vtun_host * auth_server(int fd)
 {
@@ -284,7 +307,7 @@ struct vtun_host * auth_server(int fd)
 
 	stage = ST_HOST;
 
-	while( readn_t(fd, buf, VTUN_MESG_SIZE, VTUN_TIMEOUT) > 0 ){
+	while( readn_t(fd, buf, VTUN_MESG_SIZE, vtun.timeout) > 0 ){
 	   buf[sizeof(buf)-1]='\0';
 	   strtok(buf,"\r\n");
 
@@ -350,7 +373,7 @@ int auth_client(int fd, struct vtun_host *host)
 	
 	stage = ST_INIT;
 
-	while( readn_t(fd, buf, VTUN_MESG_SIZE, VTUN_TIMEOUT) > 0 ){
+	while( readn_t(fd, buf, VTUN_MESG_SIZE, vtun.timeout) > 0 ){
 	   buf[sizeof(buf)-1]='\0';
 	   switch( stage ){
 		case ST_INIT:

@@ -53,8 +53,10 @@ struct kword cfg_keyword[] = {
    { "ifcfg", 	 K_IFCFG },
    { "firewall", K_FWALL }, 
    { "route", 	 K_ROUTE }, 
+   { "ip", 	 K_IPROUTE }, 
    { "keepalive",K_KALIVE }, 
    { "stat",	 K_STAT }, 
+   { "syslog",   K_SYSLOG },
    { NULL , 0 }
 };
 

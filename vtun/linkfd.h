@@ -25,6 +25,41 @@
 /* Priority of the process in the link_fd function */
 #define LINKFD_PRIO -19
 
+/* Frame alloc/free */
+#define LINKFD_FRAME_RESERV 8
+
+static inline void * lfd_alloc(size_t size)
+{
+     register char * buf;
+
+     size += LINKFD_FRAME_RESERV;
+
+     if( !(buf = malloc(size)) )
+        return NULL;
+
+     return buf+LINKFD_FRAME_RESERV; 
+}
+
+static inline void * lfd_realloc(void *buf, size_t size)
+{
+     unsigned char *ptr = buf;
+
+     ptr  -= LINKFD_FRAME_RESERV;
+     size += LINKFD_FRAME_RESERV;
+
+     if( !(ptr = realloc(ptr, size)) )
+        return NULL;
+
+     return ptr+LINKFD_FRAME_RESERV; 
+}
+
+static inline void lfd_free(void *buf)
+{
+     unsigned char *ptr = buf;
+
+     free(ptr-LINKFD_FRAME_RESERV);
+}
+
 int linkfd(struct vtun_host *host);
 
 /* Module */

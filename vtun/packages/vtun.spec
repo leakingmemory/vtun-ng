@@ -1,7 +1,6 @@
 %define name	vtun
-%define version	2.3
+%define version	2.4
 %define release	1
-%define prefix	/usr
 
 # By default, builds without socks-support.
 # To build with socks-support, issue:
@@ -19,7 +18,6 @@ Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: Dag Wieers <dag@mind.be>
 BuildRoot: /var/tmp/%{name}-%{version}-build
 Obsoletes: vppp
-Prefix: %{prefix}
 
 %description
 VTun provides the method for creating Virtual Tunnels over TCP/IP networks
@@ -35,35 +33,35 @@ to any kernel parts.
 This package is build with%{!?USE_SOCKS:out} SOCKS-support.
 
 %prep
-%setup -n %{name}-%{version}
 
-%build
-%configure					   \
-            --prefix=$RPM_BUILD_ROOT%{prefix} 	   \
-	    --sysconfdir=$RPM_BUILD_ROOT/etc 	   \
-	    --localstatedir=$RPM_BUILD_ROOT/var	   \
-            --enable-lzo                           \
+%setup -n %{name}-%{version}
+%configure			   \
+            --prefix=/usr 	   \
+	    --sysconfdir=/etc 	   \
+	    --localstatedir=/var   \
 %{?USE_SOCKS: --enable-socks}
 
-make CFG_FILE=/etc/vtund.conf PID_FILE=/var/run/vtund.pid  \
-     STAT_DIR=/var/log/vtund LOCK_DIR=/var/lock/vtund
+%build
+make
 
 %install
-rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT%{prefix}/sbin
-install -d $RPM_BUILD_ROOT%{prefix}/man/man8
-install -d $RPM_BUILD_ROOT%{prefix}/man/man5
+[ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
+install -d $RPM_BUILD_ROOT/usr/sbin
+install -d $RPM_BUILD_ROOT/usr/man/man8
+install -d $RPM_BUILD_ROOT/usr/man/man5
 install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
 install -d $RPM_BUILD_ROOT/var/log/vtund
 install -d $RPM_BUILD_ROOT/var/lock/vtund
-
-make install INSTALL_OWNER=
-
 install scripts/vtund.rc.red_hat $RPM_BUILD_ROOT/etc/rc.d/init.d/vtund
 
+make install SBIN_DIR=$RPM_BUILD_ROOT/usr/sbin \
+        MAN_DIR=$RPM_BUILD_ROOT/usr/man \
+        ETC_DIR=$RPM_BUILD_ROOT/etc \
+        VAR_DIR=$RPM_BUILD_ROOT/var \
+	INSTALL_OWNER=
+
 %clean
-rm -rf $RPM_BUILD_ROOT
-rm -rf ../%{name}-%{version}
+[ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(644,root,root)
@@ -71,12 +69,12 @@ rm -rf ../%{name}-%{version}
 %doc TODO vtund.conf 
 %attr(755,root,root) %config /etc/rc.d/init.d/vtund
 %attr(600,root,root) %config /etc/vtund.conf
-%attr(755,root,root) %{prefix}/sbin/vtund
+%attr(755,root,root) /usr/sbin/vtund
 %attr(755,root,root) %dir /var/log/vtund
 %attr(755,root,root) %dir /var/lock/vtund
-%{prefix}/man/man8/vtund.8*
-%{prefix}/man/man8/vtun.8*
-%{prefix}/man/man5/vtund.conf.5*
+/usr/man/man8/vtund.8*
+/usr/man/man8/vtun.8*
+/usr/man/man5/vtund.conf.5*
 
 %changelog
 * Mon May 29 2000 Michael Tokarev <mjt@tls.msk.ru>

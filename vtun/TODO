@@ -1,11 +1,4 @@
-TODO and Future plans list for VTun development.
-
-  - Start 3.0 development branch. 
-    Massive redesign.
- 
-  - Make everything more modular(authentication, etc)
-
-  - Improve encryption support.
+See TODO list for 3.X development branch.
 
 Comments, suggestion, wishes and if possible patches are always welcome.
 Send them to vtun@office.satix.net

@@ -20,6 +20,8 @@
  * $Id$
  */ 
 
+/* ZLIB compression module */
+
 #include "config.h"
 
 #include <stdio.h>
@@ -27,18 +29,16 @@
 #include <stdlib.h>
 #include <syslog.h>
 
-#ifdef HAVE_ZLIB
-#include <zlib.h>
-#endif
-
 #include "vtun.h"
 #include "linkfd.h"
 #include "lib.h"
 
-/* ZLIB compression module */
+#ifdef HAVE_ZLIB
+
+#include <zlib.h>
 
 static z_stream zi, zd; 
-static char *zbuf;
+static unsigned char *zbuf;
 static int zbuf_size = VTUN_FRAME_SIZE + 200;
 
 /* 
@@ -47,6 +47,8 @@ static int zbuf_size = VTUN_FRAME_SIZE + 200;
  */  
 int zlib_alloc(struct vtun_host *host)
 {
+     int zlevel = host->zlevel ? host->zlevel : 1;
+
      zd.zalloc = (alloc_func)0;
      zd.zfree  = (free_func)0;
      zd.opaque = (voidpf)0;
@@ -54,7 +56,7 @@ int zlib_alloc(struct vtun_host *host)
      zi.zfree  = (free_func)0;
      zi.opaque = (voidpf)0;
     
-     if( deflateInit(&zd, host->zlevel ) != Z_OK ){
+     if( deflateInit(&zd, zlevel ) != Z_OK ){
 	syslog(LOG_ERR,"Can't initialize compressor");
 	return 1;
      }	
@@ -62,12 +64,12 @@ int zlib_alloc(struct vtun_host *host)
 	syslog(LOG_ERR,"Can't initialize decompressor");
 	return 1;
      }	
-     if( !(zbuf = malloc(zbuf_size)) ){
+     if( !(zbuf = (void *) lfd_alloc(zbuf_size)) ){
 	syslog(LOG_ERR,"Can't allocate buffer for the compressor");
 	return 1;
      }
    
-     syslog(LOG_INFO,"ZLIB compression[level %d] initialized.", host->zlevel);
+     syslog(LOG_INFO,"ZLIB compression[level %d] initialized.", zlevel);
      return 0;
 }
 
@@ -80,13 +82,15 @@ int zlib_free()
 {
      deflateEnd(&zd);
      inflateEnd(&zi);
-     free(zbuf);
+
+     lfd_free(zbuf); zbuf = NULL;
+
      return 0;
 }
 
 static int expand_zbuf(z_stream *zs, int len)
 {
-     if( !(zbuf = realloc(zbuf,zbuf_size+len)) )
+     if( !(zbuf = lfd_realloc(zbuf,zbuf_size+len)) )
          return -1;
      zs->next_out = zbuf + zbuf_size;
      zs->avail_out = len;
@@ -105,9 +109,9 @@ int zlib_comp(int len, char *in, char **out)
      int oavail, olen = 0;    
      int err;
  
-     zd.next_in = in;
+     zd.next_in = (void *) in;
      zd.avail_in = len;
-     zd.next_out = zbuf;
+     zd.next_out = (void *) zbuf;
      zd.avail_out = zbuf_size;
     
      while(1) {
@@ -125,7 +129,7 @@ int zlib_comp(int len, char *in, char **out)
            return -1;
 	}
      }
-     *out = zbuf;
+     *out = (void *) zbuf;
      return olen;
 }
 
@@ -134,9 +138,9 @@ int zlib_decomp(int len, char *in, char **out)
      int oavail = 0, olen = 0;     
      int err;
 
-     zi.next_in = in;
+     zi.next_in = (void *) in;
      zi.avail_in = len;
-     zi.next_out = zbuf;
+     zi.next_out = (void *) zbuf;
      zi.avail_out = zbuf_size;
 
      while(1) {
@@ -153,7 +157,7 @@ int zlib_decomp(int len, char *in, char **out)
            return -1;
 	}
      }
-     *out = zbuf;
+     *out = (void *) zbuf;
      return olen;
 }
 
@@ -165,5 +169,21 @@ struct lfd_mod lfd_zlib = {
      zlib_decomp,
      NULL,
      zlib_free,
-     NULL,NULL
+     NULL,
+     NULL
 };
+
+#else  /* HAVE_ZLIB */
+
+int no_zlib(struct vtun_host *host)
+{
+     syslog(LOG_INFO, "ZLIB compression is not supported");
+     return -1;
+}
+
+struct lfd_mod lfd_zlib = {
+     "ZLIB",
+     no_zlib, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
+#endif /* HAVE_ZLIB */

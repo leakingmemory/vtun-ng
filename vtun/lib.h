@@ -24,6 +24,7 @@
 
 #include "config.h"
 #include <sys/types.h>
+#include <signal.h>
 #include <errno.h>
 
 #ifdef HAVE_LIBUTIL_H
@@ -48,40 +49,53 @@ int print_p(int f, const char *ftm, ...);
 int  run_cmd(void *d, void *opt);
 void free_sopt(struct vtun_sopt *opt);
 
+/* IO cancelation */
+extern volatile sig_atomic_t __io_canceled;
+
+static inline void io_init(void)
+{
+	__io_canceled = 0;
+}
+
+static inline void io_cancel(void)
+{
+	__io_canceled = 1;
+}
+
 /* Read exactly len bytes (Signal safe)*/
-extern inline int read_n(int fd, char *buf, int len)
+static inline int read_n(int fd, char *buf, int len)
 {
 	register int t=0, w;
 
-	do {
+	while (!__io_canceled && len > 0) {
 	  if( (w = read(fd, buf, len)) < 0 ){
-	     if( errno == EINTR && errno == EAGAIN )
+	     if( errno == EINTR || errno == EAGAIN )
  	        continue;
 	     return -1;
 	  }
 	  if( !w )
 	     return 0;
 	  len -= w; buf += w; t += w;
-	} while(len > 0);
+	}
 
 	return t;
 }   
 
 /* Write exactly len bytes (Signal safe)*/
-extern inline int write_n(int fd, char *buf, int len)
+static inline int write_n(int fd, char *buf, int len)
 {
 	register int t=0, w;
 
-	do {
+	while (!__io_canceled && len > 0) {
  	  if( (w = write(fd, buf, len)) < 0 ){
-	     if( errno == EINTR && errno == EAGAIN )
+	     if( errno == EINTR || errno == EAGAIN )
   	         continue;
 	     return -1;
 	  }
 	  if( !w )
 	     return 0;
 	  len -= w; buf += w; t += w;
-	} while(len > 0);
+	}
 
 	return t;
 }

@@ -56,36 +56,14 @@
 
 int tcp_write(int fd, char *buf, int len)
 {
-     unsigned short nlen, cnt; 
-     struct iovec iv[2];
-     register int wlen;
+     register char *ptr;
 
-     nlen = htons(len); 
-     len  = len & VTUN_FSIZE_MASK;
+     ptr = buf - sizeof(short);
 
-     iv[0].iov_len  = sizeof(short); 
-     iv[0].iov_base = (char *) &nlen; 
-     if( buf ) {
-        iv[1].iov_len  = len; 
-        iv[1].iov_base = buf;
-	cnt = 2;
-     } else {
-        /* Write flags only */
-	cnt = 1;
-     }
+     *((unsigned short *)ptr) = htons(len); 
+     len  = (len & VTUN_FSIZE_MASK) + sizeof(short);
 
-     while(1) {
-	wlen = writev(fd, iv, cnt); 
-	if( wlen < 0 && ( errno == EAGAIN || errno == EINTR ) )
-	   continue;
-	if( wlen > 0 && wlen < (len + sizeof(short)) ){
-	   /* We wrote only part of the frame, lets write the rest
-	    * FIXME should check if wrote less than sizeof(short) */
-	   wlen -= sizeof(short);
-	   return write_n(fd, buf + wlen, len - wlen);
-	}
-	return wlen;
-     }
+     return write_n(fd, ptr, len);
 }
 
 int tcp_read(int fd, char *buf)
@@ -94,7 +72,7 @@ int tcp_read(int fd, char *buf)
      register int rlen;     
 
      /* Read frame size */
-     if( (rlen = read_n(fd, (char *)&len, sizeof(short)) ) < 0)
+     if( (rlen = read_n(fd, (char *)&len, sizeof(short)) ) <= 0)
 	return rlen;
 
      len = ntohs(len);

@@ -1,3 +1,10 @@
+VTun - Virtual Tunnel over TCP/IP network.
+Copyright (C) 1998-2000 Maxim Krasnyansky <max_mk@yahoo.com>
+
+This product includes software developed by the OpenSSL Project
+for use in the OpenSSL Toolkit. (http://www.openssl.org/).
+Copyright (c) 1998-2000 The OpenSSL Project.  All rights reserved.
+
 Compilation and Installation.
 
 In order to compile VTun you need several software packages.
@@ -5,25 +12,26 @@ Required packages:
   - Good C compiler (gcc, egcs, etc)
   - Lexical Analyzer (flex, lex)
   - YACC (yacc, bison, byacc)
-  - Zlib compression library
+  - Universal TUN/TAP driver 	http://vtun.sourceforge.net/tun
   - OpenSSL encryption library 	http://www.openssl.org 
 
 Optional packages:
+  - Zlib compression library
   - LZO compression library 	http://wildsau.idv.uni-linz.ac.at/mfx/lzo.html
   - SOCKS library:
 	 Socks5 by NEC (recommended)	http://www.socks.nec.com 
 	 Dante Socks4/5 	http://www.inet.no/dante 
-  - Universal TUN/TAP driver 	http://vtun.sourceforge.net/tun
-    (REQUIRED for Ethernet(TAP) and IP(TUN) tunnels)
 
 To configure VTun run:
   ./configure 
 Optional support:
-  --enable-lzo  	compile with LZO compression support
+  --disable-lzo  	compile without LZO compression support
+  --disable-zlib  	compile without ZLIB compression support
+  --disable-shaper  	compile without Traffic shaping support
   --enable-socks 	compile with SOCKS support
 
 Configure automatically searches for all required library and header files. 
-However you might need to specify location of the files that could not be 
+However you might need to specify location of the files which could not be 
 found in default location:
   SSL(Crypto) library:
   --with-ssl-lib=/path/to/library (libcrypto.a) 

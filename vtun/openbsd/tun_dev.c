@@ -42,7 +42,7 @@
  * Allocate TUN device, returns opened fd. 
  * Stores dev name in the first arg(must be large enough).
  */  
-int tun_alloc(char *dev)
+int tun_open(char *dev)
 {
     char tunname[14];
     int i, fd = -1;
@@ -61,6 +61,11 @@ int tun_alloc(char *dev)
        }
     }
     return fd;
+}
+
+int tun_close(int fd, char *dev)
+{
+    return close(fd);
 }
 
 /* Read/write frames from TUN device */

@@ -7,12 +7,9 @@ vtund.conf \- VTun(Virtual Tunnel) daemon configuration file.
 
 .SH DESCRIPTION
 
-This is configuration file for
+Configuration file for
 .BR vtund (8)
 virtual tunnel daemon.
-.BR vtund (8)
-reads this file to determine options it should use.
-
 .LP
 File consists of sections in the form:
 .IP
@@ -33,11 +30,10 @@ Name of section (\fIname\fR) can be one of:
 .IP \fBoptions\fR
 this section specifies general options for vtund
 .IP \fBdefault\fR
-specifies default options for all hosts (connections)
-.IP \fIhostname\fR
+specifies default options for all sessions
+.IP \fIsession\fR
 (any other word except "options" and "default")
-introduces one host (connection) and specifies
-options for it.
+introduces new session and specifies options for it.
 .LP
 All keyword names can be abbreviated to a minimum of 4 characters.
 .LP
@@ -59,24 +55,23 @@ mode (\fBstand\fR), that is the default, or be invoked from
 server port number to listen on or connect to.
 By default, \fBvtund\fR(8) uses port 5000.
 
-.IP \fBpersist\fR\ \fByes\fR|\fBno\fR
-persist mode.  If \fByes\fR, client will try to reconnect
-to the server after connection termination.  If \fBno\fR,
-client will exit (default).
-This option is ignored by server.
+.IP \fBtimeout\ \fIseconds\fR
+General timeout.
 
-.IP \fBtimeout\ \fIsecounds\fR
-Connect timeout for the client.
-Ignored by server.
+.IP \fBsyslog\fR\ \fBnumber\fR|\fBname\fR
+syslog facility specification, either numeric or name (from syslog (3)).
 
 .IP \fBppp\ \fIpath\fR
-path to \fBpppd\fR(8) program.  Can be used in host sections.
+path to \fBpppd\fR(8) program.  Can be used in session sections.
 
 .IP \fBifconfig\ \fIpath\fR
-path to \fBifconfig\fR(8) program.  Can be used in host sections.
+path to \fBifconfig\fR(8) program.  Can be used in session sections.
 
 .IP \fBroute\ \fIpath\fR
-path to \fBroute\fR(8) program.  Can be used in host sections.
+path to \fBroute\fR(8) program.  Can be used in session sections.
+
+.IP \fBip\ \fIpath\fR
+path to \fBiproute\fR(8) program.  Can be used in session sections.
 
 .IP \fBfirewall\ \fIpath\fR
 program for the firewall setup.
@@ -84,15 +79,15 @@ program for the firewall setup.
 .LP
 All the \fBppp\fR, \fBifconfig\fR, \fBroute\fR and \fBfirewall\fR
 parameters can specify a filename for corresponding program or
-equivalent (or shell script).  This parameters are used in host sections
+equivalent (or shell script).  This parameters are used in session sections
 to setup network interfaces.
 
-.SH "HOST OPTIONS"
+.SH "SESSION OPTIONS"
 
 .LP
-Host options can be specified inside host section or
+Session options can be specified inside session section or
 inside \fBdefault\fR section.  Default parameters apply
-to any host section but can be overwritten there.
+to any session section but can be overwritten there.
 Parameters are:
 
 .IP \fBpassword\ \fIsecret\fR
@@ -114,15 +109,26 @@ pipe tunnel
 .IP
 Default tunnel type is \fBtty\fR.
 This option is ignored by client.
+
 .IP \fBdevice\ \fIdev\fR
 network device to use.  You can choose
 \fBtap\fIXX\fR for \fBether\fR tunnel
 or \fBtun\fIXX\fR for \fBtun\fR tunnel.
 By default \fBvtund\fR(8) will automatically select available device.
+
 .IP \fBproto\ \fBtcp\fR|\fBudp\fR
 protocol to use.  By default, \fBvtund\fR(8) will use TCP protocol.
 UDP is recommended for \fBether\fR and \fBtun\fR tunnels only.
 This option is ignored by the client.
+
+.IP \fBtimeout\ \fIsecounds\fR
+Connect timeout.
+
+.IP \fBpersist\fR\ \fByes\fR|\fBno\fR
+persist mode.  If \fByes\fR, client will try to reconnect
+to the server after connection termination.  If \fBno\fR,
+client will exit (default).
+This option is ignored by server.
 
 .IP \fBcompress\ \fImethod\fR[\fB:\fIlevel\fR]
 specifies compression method to use.  Compression \fImethod\fRs includes:
@@ -147,7 +153,7 @@ enable or disable connection keep-alive.
 This option is ignored by the client.
 .IP \fBstat\ \fByes\fR|\fBno\fR
 enable or disable statistics.  If enabled \fBvtund\fR(8) will log
-statistic counters to /var/log/vtund/host_X every 5 minutes.
+statistic counters to /var/log/vtund/session_X every 5 minutes.
 .IP \fBspeed\ \fIkbps\fR
 specifies speed of the connection in kilobits/second.
 Valid values for \fIkbps\fR are 8,16,32,64,128,256,etc.
@@ -172,7 +178,7 @@ address and port.  Format:
 .IP \fBiface\ \fIif_name\fR
 use interface address \fIif_name\fR as the source address.
 .IP \fBaddr\ \fIaddr\fR
-source address.  Can be either IP number or host name.
+source address.  Can be either IP address or host name.
 .IP \fBport\ \fIportnumber\fR
 source port.
 .RE
@@ -185,7 +191,7 @@ Ignored by the client.
 .IP \fBup\ \fIlist\fR
 list of programs to run after connection has been established.
 Used to initialize protocols, devices, routing and firewall.
-This option looks like whole section inside of host section.
+This option looks like whole section inside of session section.
 Format:
 .nf
  \fBup\fR {
@@ -225,6 +231,8 @@ All special character described above are valid in \fIarguments\fR here.
 run program specified by \fBifconfig\fR statement in \fBoptions\fR section.
 .IP \fBroute\ \fIarguments\fR
 run program specified by \fBroute\fR statement in \fBoptions\fR section.
+.IP \fBip\ \fIarguments\fR
+run program specified by \fBip\fR statement in \fBoptions\fR section.
 .IP \fBfirewall\ \fIarguments\fR
 run program specified by \fBfirewall\fR statement in \fBoptions\fR section.
 .RE
@@ -250,6 +258,7 @@ time or are used only on the server side.
 .BR ifconfig (8),
 .BR route (8),
 .BR pppd (8),
+.BR syslog (3),
 .BR zlib (3).
 
 .SH AUTHOR

@@ -45,6 +45,9 @@
 /* Define if you have the <sys/sockio.h> header file.  */
 #undef HAVE_SYS_SOCKIO_H
 
+/* Define if you have the <linux/if_tun.h> header file.  */
+#undef HAVE_LINUX_IF_TUN_H
+
 /* Define if you have setproctitle. */
 #undef HAVE_SETPROC_TITLE
 
@@ -53,8 +56,13 @@
 /* Define if you have ZLIB */
 #undef HAVE_ZLIB
 
-/*Define if you have LZO */
+/* Define if you have LZO */
 #undef HAVE_LZO
+
+/* Define if you have OpenSSL */
+#undef HAVE_SSL
+
+#undef HAVE_SHAPER
 
 /* Release version and date */
 #undef VTUN_VER

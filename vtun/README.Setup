@@ -75,18 +75,22 @@ Server S1
    # Server entry
    s2 {
 	pass XXXX;
-	ifconfig "%% 192.168.0.1 pointopoint 192.168.0.2";
-	route "add -net 192.168.1.0 netmask 255.255.255.0 gw 192.168.0.2";
-	program /sbin/arp "-sD 192.168.0.2 eth0 pub";
+	up {
+	   ifconfig "%% 192.168.0.1 pointopoint 192.168.0.2";
+	   route "add -net 192.168.1.0 netmask 255.255.255.0 gw 192.168.0.2";
+	   program /sbin/arp "-sD 192.168.0.2 eth0 pub";
+	};
    }
 
    # Tunnel between S1 and S3 (192.168.0.0 <-> 192.168.2.0)
    # Server entry
    s3_1 {
 	pass XXXX;
-	ifconfig "%% 192.168.0.1 pointopoint 192.168.0.3";
-	route "add -net 192.168.2.0 netmask 255.255.255.0 gw 192.168.0.3";
-	program /sbin/arp "-sD 192.168.0.3 eth0 pub";
+	up {
+	   ifconfig "%% 192.168.0.1 pointopoint 192.168.0.3";
+	   route "add -net 192.168.2.0 netmask 255.255.255.0 gw 192.168.0.3";
+	   program /sbin/arp "-sD 192.168.0.3 eth0 pub";
+	};
    }
    Start vtund as 'vtund -s'
 
@@ -102,16 +106,20 @@ Server S2
    # Client entry
    s2 {
 	pass XXXX;
-	ifconfig "%% 192.168.0.2 pointopoint 192.168.0.1";
-	route "add -net 192.168.0.0 netmask 255.255.255.0 gw 192.168.0.1";
+	up {
+	   ifconfig "%% 192.168.0.2 pointopoint 192.168.0.1";
+	   route "add -net 192.168.0.0 netmask 255.255.255.0 gw 192.168.0.1";
+	};
    }
 
    # Tunnel between S2 and S3 (192.168.1.0 <-> 192.168.2.0)
    # Server entry
    s3_2 {
 	pass XXXX;
-	ifconfig "%% 192.168.0.2 pointopoint 192.168.0.3";
-	route "add -net 192.168.2.0 netmask 255.255.255.0 gw 192.168.0.3";
+	up {
+	   ifconfig "%% 192.168.0.2 pointopoint 192.168.0.3";
+	   route "add -net 192.168.2.0 netmask 255.255.255.0 gw 192.168.0.3";
+	};
    }
 	
    Start vtund as 
@@ -123,22 +131,22 @@ Server S3
    # Client entry
    s3_1 {
 	pass XXXX;
-	ifconfig "%% 192.168.0.3 pointopoint 192.168.0.1";
-	route "add -net 192.168.0.0 netmask 255.255.255.0 gw 192.168.0.1";
+	up {
+	   ifconfig "%% 192.168.0.3 pointopoint 192.168.0.1";
+	   route "add -net 192.168.0.0 netmask 255.255.255.0 gw 192.168.0.1";
+	};
    }
 
    # Tunnel between S3 and S2 (192.168.2.0 <-> 192.168.1.0)
    # Client entry
    s3_2 {
 	pass XXXX;
-	ifconfig "%% 192.168.0.3 pointopoint 192.168.0.2";
-	route "add -net 192.168.1.0 netmask 255.255.255.0 gw 192.168.0.2";
+	up {
+	   ifconfig "%% 192.168.0.3 pointopoint 192.168.0.2";
+	   route "add -net 192.168.1.0 netmask 255.255.255.0 gw 192.168.0.2";
+	};
    }
    
    Start vtund as
    'vtund s3_1 real_address_of_s1'
    'vtund s3_2 real_address_of_s2'
-
-2.2 Example 2
-We will add more examples soon.
-

@@ -39,6 +39,8 @@
 #include "linkfd.h"
 #include "lib.h"
 
+volatile sig_atomic_t __io_canceled = 0;
+
 #ifndef HAVE_SETPROC_TITLE
 /* Functions to manipulate with program title */
 
@@ -149,7 +151,7 @@ int readn_t(int fd, void *buf, size_t count, time_t timeout)
 char * subst_opt(char *str, struct vtun_sopt *opt)
 {
     register int slen, olen, sp, np;
-    register char *optr, *nstr;
+    register char *optr, *nstr, *tmp;
     char buf[10];
 
     if( !str ) return NULL;
@@ -191,10 +193,11 @@ char * subst_opt(char *str, struct vtun_sopt *opt)
                 /* Opt found substitute */
                 olen = strlen(optr);
                 slen = slen - 2 + olen;
-                if( !(nstr = realloc(nstr, slen)) ){
+                if( !(tmp = realloc(nstr, slen)) ){
                    free(nstr);
                    return str;
                 }
+                nstr = tmp;
                 memcpy(nstr + np, optr, olen);
                 np += olen;
              }
@@ -324,10 +327,18 @@ int run_cmd(void *d, void *opt)
 
 void free_sopt( struct vtun_sopt *opt )
 {
-     if( opt->dev )
+     if( opt->dev ){
 	free(opt->dev);
-     if( opt->laddr )
+        opt->dev = NULL;
+     }
+
+     if( opt->laddr ){
 	free(opt->laddr);
-     if( opt->raddr )
+        opt->laddr = NULL;
+     }
+
+     if( opt->raddr ){
 	free(opt->raddr);
-};
+        opt->raddr = NULL;
+     }
+}

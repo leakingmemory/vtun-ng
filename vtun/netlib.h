@@ -33,7 +33,7 @@
 
 unsigned long getifaddr(char * ifname);
 int connect_t(int s, struct sockaddr *svr, time_t timeout); 
-int udp_session(struct vtun_host *host, time_t timeout); 
+int udp_session(struct vtun_host *host); 
 
 int local_addr(struct sockaddr_in *addr, struct vtun_host *host, int con);
 int server_addr(struct sockaddr_in *addr, struct vtun_host *host);

@@ -81,29 +81,29 @@ int tunnel(struct vtun_host *host)
      }
      switch( host->flags & VTUN_TYPE_MASK ){
 	case VTUN_TTY:
-	   if( (fd[0]=pty_alloc(dev)) < 0 ){
-	      syslog(LOG_ERR,"Can't allocate pseudo tty");
+	   if( (fd[0]=pty_open(dev)) < 0 ){
+	      syslog(LOG_ERR,"Can't allocate pseudo tty. %s(%d)", strerror(errno), errno);
 	      return -1;
            }
 	   break;
 
 	case VTUN_PIPE:
-	   if( pipe_alloc(fd) < 0 ){
- 	      syslog(LOG_ERR,"Can't create pipe");
+	   if( pipe_open(fd) < 0 ){
+ 	      syslog(LOG_ERR,"Can't create pipe. %s(%d)", strerror(errno), errno);
    	      return -1;
 	   }
 	   break;
 
 	case VTUN_ETHER:
-	   if( (fd[0]=tap_alloc(dev)) < 0 ){
- 	      syslog(LOG_ERR,"Can't allocate tap device");
+	   if( (fd[0]=tap_open(dev)) < 0 ){
+ 	      syslog(LOG_ERR,"Can't allocate tap device. %s(%d)", strerror(errno), errno);
    	      return -1;
 	   }
 	   break;
 
 	case VTUN_TUN:
-	   if( (fd[0]=tun_alloc(dev)) < 0 ){
- 	      syslog(LOG_ERR,"Can't allocate tun device");
+	   if( (fd[0]=tun_open(dev)) < 0 ){
+ 	      syslog(LOG_ERR,"Can't allocate tun device. %s(%d)", strerror(errno), errno);
    	      return -1;
 	   }
 	   break;
@@ -125,7 +125,7 @@ int tunnel(struct vtun_host *host)
 	   break;
 
         case VTUN_UDP:
-	   if( (opt = udp_session(host, VTUN_TIMEOUT)) == -1){
+	   if( (opt = udp_session(host)) == -1){
 	      syslog(LOG_ERR,"Can't establish UDP session");
 	      close(fd[0]); close(fd[1]);
 	      return 0;
@@ -204,13 +204,25 @@ int tunnel(struct vtun_host *host)
   		 dev_write = tun_write; 
 	   	 break;
      	   }
+
 	   host->loc_fd = fd[0];
 	   opt = linkfd(host);
 
 	   set_title("%s running down commands", host->host);
-	   llist_trav(&host->down,run_cmd, &host->sopt);
+	   llist_trav(&host->down, run_cmd, &host->sopt);
 
 	   set_title("%s closing", host->host);
+
+	   /* Gracefully destroy interface */
+	   switch( host->flags & VTUN_TYPE_MASK ){
+	      case VTUN_TUN:
+		 tun_close(fd[0], dev);
+	         break;
+
+	      case VTUN_ETHER:
+	         tap_close(fd[0], dev);
+	         break;
+           }
 
 	   /* Close all fds */
 	   close(host->loc_fd); close(host->rmt_fd);

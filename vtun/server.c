@@ -61,15 +61,17 @@ void connection(int sock)
      opt = sizeof(struct sockaddr_in);
      if( getpeername(sock, (struct sockaddr *) &cl_addr, &opt) ){
         syslog(LOG_ERR, "Can't get peer name");
-        exit(-1);
+        exit(1);
      }
      opt = sizeof(struct sockaddr_in);
      if( getsockname(sock, (struct sockaddr *) &my_addr, &opt) < 0 ){
-        syslog(LOG_ERR,"Can't get local socket address");
-        exit(-1); 
+        syslog(LOG_ERR, "Can't get local socket address");
+        exit(1); 
      }
 
      ip = strdup(inet_ntoa(cl_addr.sin_addr));
+
+     io_init();
 
      if( (host=auth_server(sock)) ){	
         sa.sa_handler=SIG_IGN;
@@ -159,6 +161,7 @@ void server(int sock)
      sigaction(SIGQUIT,&sa,NULL);
      sigaction(SIGCHLD,&sa,NULL);
      sigaction(SIGPIPE,&sa,NULL);
+     sigaction(SIGUSR1,&sa,NULL);
 
      syslog(LOG_INFO,"VTUN server ver %s (%s)", VTUN_VER,
 		vtun.svr_type == VTUN_INETD ? "inetd" : "stand" );

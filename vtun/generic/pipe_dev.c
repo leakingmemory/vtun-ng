@@ -36,7 +36,7 @@
 /* 
  * Create pipe. Return open fd. 
  */  
-int pipe_alloc(int *fd)
+int pipe_open(int *fd)
 {
     return socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
 }

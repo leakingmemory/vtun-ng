@@ -98,7 +98,7 @@ int connect_t(int s, struct sockaddr *svr, time_t timeout)
 
      FD_ZERO(&fdset);
      FD_SET(s,&fdset);
-     if( select(s+1,NULL,&fdset,NULL,&tv) > 0 ){
+     if( select(s+1,NULL,&fdset,NULL,timeout?&tv:NULL) > 0 ){
         int l=sizeof(errno);	 
         errno=0;
         getsockopt(s,SOL_SOCKET,SO_ERROR,&errno,&l);
@@ -140,9 +140,9 @@ unsigned long getifaddr(char * ifname)
 
 /* 
  * Establish UDP session with host connected to fd(socket).
- * Returns connected UDP socket or -1 on error. 
+ * Returns connected UDP socket or -1 on error.
  */
-int udp_session(struct vtun_host *host, time_t timeout) 
+int udp_session(struct vtun_host *host) 
 {
      struct sockaddr_in saddr; 
      short port;
@@ -178,7 +178,7 @@ int udp_session(struct vtun_host *host, time_t timeout)
      host->sopt.lport = htons(port);
 
      /* Read port of the other's end UDP socket */
-     if( readn_t(host->rmt_fd,&port,sizeof(short),timeout) < 0 ){
+     if( readn_t(host->rmt_fd,&port,sizeof(short),host->timeout) < 0 ){
         syslog(LOG_ERR,"Can't read port number %s", strerror(errno));
         return -1;
      }
@@ -262,7 +262,7 @@ int server_addr(struct sockaddr_in *addr, struct vtun_host *host)
       * address can be dynamic.
       */
      if( !(hent = gethostbyname(vtun.svr_name)) ){
-        syslog(LOG_ERR, "Can't resolv server address %s", vtun.svr_name);
+        syslog(LOG_ERR, "Can't resolv server address: %s", vtun.svr_name);
         return -1;
      }
      addr->sin_addr.s_addr = *(unsigned long *)hent->h_addr; 

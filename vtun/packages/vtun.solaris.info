@@ -1,6 +1,6 @@
 PKG="vtun"
 NAME="VTun - Virtual tunnels over TCP/IP"
-VERSION="2.3"
+VERSION="2.4b2"
 ARCH="i386"
 VENDOR="Maxim Krasnyansky"
 EMAIL="max_mk@yahoo.com"

@@ -43,7 +43,7 @@ vtund \- VTun(Virtual Tunnel) daemon.
 .I -n 
 ] 
 <
-.I host 
+.I session 
 >
 <
 .I server address 
@@ -68,7 +68,7 @@ to any kernel parts.
 .I -f file 
 Read config information from the
 .I file
-By default vtund uses /etc/vtund.conf
+(full path required). By default vtund uses /etc/vtund.conf
 .TP
 .I -n 
 Do not become daemon.
@@ -104,9 +104,8 @@ Connect
 Default is 30 seconds. This options is equivalent to the 'timeout' option of
 config file.
 .TP
-.I host 
-Host to authenticate with the server. Password and other information of this 
-host will be taken from the config file.
+.I session 
+Session name from the config file.
 .TP
 .I server 
 Address of the server to connect to. Either IP address or domain name can be 
@@ -114,7 +113,7 @@ specified.
 .SH FILES
 .TP
 .B /etc/vtund.conf
-Main configuration file with hosts and other information. 
+Main configuration file with sessions and other information. 
 See vtund.conf example provided with distribution and vtund.conf(5) 
 for more information.
 .TP
@@ -129,7 +128,9 @@ Format:
 .SH SIGNALS
 .TP
 .B SIGHUP
-This signal causes vtund(server mode) to reread config file. 
+Server mode: Causes vtund to reread the config file.
+.br
+Client mode: Causes vtund to reestablish the connection.
 .TP
 .B SIGUSR1
 This signal causes vtund to reset statistic counters. 
@@ -138,8 +139,7 @@ This signal causes vtund to reset statistic counters.
 vtund.conf(5)
 .SH NOTES 
 .LP
-VTun has been derived from VPPP package by Maxim Krasnyansky.
-.LP
-Comments, ideas and if possible patches are always welcome.
+This product includes software developed by the OpenSSL Project
+for use in the OpenSSL Toolkit. (http://www.openssl.org/)
 .SH AUTHORS
 Maxim Krasnyansky <max_mk@yahoo.com>

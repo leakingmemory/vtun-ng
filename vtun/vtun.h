@@ -89,6 +89,7 @@ struct vtun_host {
    llist down;
 
    int  flags;
+   int  timeout;
    int  spd_in;
    int  spd_out;
    int  zlevel;
@@ -98,6 +99,10 @@ struct vtun_host {
 
    /* Multiple connections */
    int  multi;
+
+   /* Keep Alive */
+   int ka_interval;
+   int ka_failure;
 
    /* Source address */
    struct vtun_addr src_addr;
@@ -130,6 +135,7 @@ extern llist host_list;
 #define VTUN_CLNT_MASK  0xf000
 
 #define VTUN_STAT	0x1000
+#define VTUN_PERSIST    0x2000
 
 /* Constants and flags for VTun protocol */
 #define VTUN_FRAME_SIZE     2048
@@ -151,8 +157,8 @@ extern llist host_list;
 
 /* Global options */
 struct vtun_opts {
-   int persist;
-   int timeout;
+   int  timeout;
+   int  persist;
 
    char *cfg_file;
 
@@ -161,10 +167,12 @@ struct vtun_opts {
    char *ifcfg;		 /* Command to configure net devices */
    char *route;		 /* Command to configure routing */
    char *fwall; 	 /* Command to configure FireWall */
+   char *iproute;	 /* iproute command */
 
    char *svr_name;       /* Server's host name */
    int  svr_port;	 /* Server's port */
    int  svr_type;	 /* Server mode */
+   int  syslog; 	 /* Facility to log messages to syslog under */
 };
 #define VTUN_STAND_ALONE	0 
 #define VTUN_INETD		1	

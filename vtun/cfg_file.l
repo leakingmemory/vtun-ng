@@ -71,7 +71,8 @@ word		[A-Za-z0-9\-\_+=\!\$\#\%\&\*\^\@@\\\~\.]+
 wordnm		{word}:{num}
 kword		[A-Za-z0-9\_\-]+	
 comment		\#.*\n
-path		(\/{kword})+
+fname		[A-Za-z0-9\_\.\-]+	
+path		(\/{fname})+
 string		\".*\"
 
 %x OPTION PARAM  

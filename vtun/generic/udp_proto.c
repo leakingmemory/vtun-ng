@@ -59,26 +59,16 @@
 /* Functions to read/write UDP frames. */
 int udp_write(int fd, char *buf, int len)
 {
-     unsigned short nlen, cnt; 
-     struct iovec iv[2];
+     register char *ptr;
      register int wlen;
 
-     nlen = htons(len); 
-     len  = len & VTUN_FSIZE_MASK;
+     ptr = buf - sizeof(short);
 
-     iv[0].iov_len  = sizeof(short); 
-     iv[0].iov_base = (char *) &nlen; 
-     if( buf ) {
-        iv[1].iov_len  = len; 
-        iv[1].iov_base = buf;
-	cnt = 2;
-     } else {
-        /* Write flags only */
-	cnt = 1;
-     }
+     *((unsigned short *)ptr) = htons(len); 
+     len  = (len & VTUN_FSIZE_MASK) + sizeof(short);
 
      while( 1 ){
-	if( (wlen = writev(fd, iv, cnt)) < 0 ){ 
+	if( (wlen = write(fd, ptr, len)) < 0 ){ 
 	   if( errno == EAGAIN || errno == EINTR )
 	      continue;
 	   if( errno == ENOBUFS )

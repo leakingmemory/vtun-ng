@@ -1,3 +1,31 @@
+ver 2.5b1:
+	 Encryption fixes: improved challenge generation, padding check.
+	 Config parser fixes. Don't allow empty passwords.
+	 New config option to specify syslog logging facility.
+	 Support for new Linux TUN/TAP driver.
+	 IO (read_n/write_n) cancellation.
+	 Signal handling and other minor fixes.
+	 Makefile improvement.
+	 Documentation update.
+
+ver 2.4:
+	 Configurable keep-alive. Fix for 0 compression level.
+	 RPM package and documentation update.
+
+ver 2.4b2:
+	 TCP driver fixes. Modules and frame handling optimizations.
+	 Configure options to disable LZO, ZLIB, OpenSSL and Shaper support.
+	 Cleanups. Documentation update.
+
+ver 2.4b1:
+	 Numerous stability fixes. TCP driver fixes.
+	 Improved TUN driver support for Solaris 8.
+	 Fixed incorrect error handling in read_n/write_n. 
+	 Signal handling fix. Persist mode fixes.
+	 Memory handling fixes. New config options.
+	 Command path parsing fix.
+	 Documentation update and spelling fixes.
+
 ver 2.3:
 	 Fixed incorrect error handling in UDP and TCP drivers. Makefile 
 	 improvements. RPM package fixes. Persist mode fixes. Fixed a 

@@ -62,20 +62,25 @@ int main(int argc, char *argv[], char *env[])
      vtun.persist = -1;
      vtun.timeout = -1;
 	
-     /* Dup strings because parser will try to free them */	
+     /* Dup strings because parser will try to free them */
      vtun.ppp   = strdup("/usr/sbin/pppd");
      vtun.ifcfg = strdup("/sbin/ifconfig");
      vtun.route = strdup("/sbin/route");
      vtun.fwall = strdup("/sbin/ipchains");	
+     vtun.iproute = strdup("/sbin/ip");	
 
      vtun.svr_name = NULL;
      vtun.svr_port = -1;
      vtun.svr_type = -1;
+     vtun.syslog   = LOG_DAEMON;
 
      /* Initialize default host options */
      memset(&default_host, 0, sizeof(default_host));
-     default_host.flags = VTUN_TTY | VTUN_TCP; 
-     default_host.multi = VTUN_MULTI_ALLOW;
+     default_host.flags   = VTUN_TTY | VTUN_TCP;
+     default_host.multi   = VTUN_MULTI_ALLOW;
+     default_host.timeout = VTUN_CONNECT_TIMEOUT;
+     default_host.ka_interval = 30;
+     default_host.ka_failure  = 4;
 
      /* Start logging to syslog and stderr */
      openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
@@ -109,6 +114,12 @@ int main(int argc, char *argv[], char *env[])
      }	
      reread_config(0);
 
+     if (vtun.syslog != LOG_DAEMON) {
+	/* Restart logging to syslog using specified facility  */
+ 	closelog();
+ 	openlog("vtund", LOG_PID|LOG_NDELAY|LOG_PERROR, vtun.syslog);
+     }
+
      if(!svr){
 	if( argc - optind < 2 ){
 	   usage();
@@ -131,9 +142,9 @@ int main(int argc, char *argv[], char *env[])
      if(vtun.svr_port == -1)
 	vtun.svr_port = VTUN_PORT;
      if(vtun.persist == -1)
-	vtun.persist = 0;		
+	vtun.persist = 0;
      if(vtun.timeout == -1)
-	vtun.timeout = VTUN_CONNECT_TIMEOUT;
+	vtun.timeout = VTUN_TIMEOUT;
 
      switch( vtun.svr_type ){
 	case -1:
@@ -209,6 +220,7 @@ void reread_config(int sig)
 
 void usage(void)
 {
+     printf("VTun ver %s\n", VTUN_VER);
      printf("Usage: \n");
      printf("  Server:\n");
      printf("\tvtund <-s> [-f file] [-P port]\n");

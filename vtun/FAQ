@@ -103,7 +103,7 @@ I'll think about more elegant way to fix this problem.
 
 1.19 How secure is VTun ?
 Well. VTun doesn't try to be the MOST secure tunneling software in the 
-world, it tries to be fast, stable, reach of features, easy to use 
+world, it tries to be fast, stable, rich of features, easy to use 
 and secure enough instead.
 VTun uses Challenge Based Authentication and doesn't transfer passwords 
 in clear text. Encryption module uses MD5 for 128 bits key generation 
@@ -124,6 +124,18 @@ VTun package contains:
    Manual page for configuration file.
    Fully documented config file.
    Several README files.
+
+1.23 Can I use vtun over SSH ?
+Yes, via the port forwarding feature of ssh.  Don't enable vtun's
+encryption as ssh does its own encryption.  Also, make sure to select
+the tcp protocol as SSH can forward tcp but not udp.  An example
+session might look something like this:
+
+home$ ssh -L 5000:localhost:5000 work.megacorp.com
+(authenticate if necessary)
+work$ vtund -s home_tunnel_config
+...
+home$ vtund home_tunnel_config localhost
 
 2. Error Messages
 2.1 Why do I see no vtund log and error messages ?

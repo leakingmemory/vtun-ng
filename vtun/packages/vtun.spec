@@ -1,7 +1,7 @@
 %define name	vtun
-# this will be bumped for 3.0.0, trust me.
-%define version	2.5
-%define release	4
+# temporary version for timestamped releases
+%define version	3.0.0
+%define release	0
 
 #this part NEEDS to be expanded
 %define IsSuSE	%( [ -f /etc/SuSE-release ] && echo 1 || echo 0 )

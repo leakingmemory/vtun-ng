@@ -55,10 +55,12 @@ ${KMOD}.kld:  ${SRCS} ${OBJS}
 ${KMOD}.ko:   ${KMOD}.kld
 	${LD} -Bshareable ${LDFLAGS} -o ${.TARGET} ${KMOD}.kld
 
-install:  all
+dev:
+	./create_dev
+
+inst:  all dev
 	${INSTALL} ${COPY} -o ${KMODOWN} -g ${KMODGRP} -m ${KMODMODE} \
 		${_INSTALLFLAGS} ${KMOD}.ko ${DESTDIR}
-
 clean:
 	rm -f *.o
 

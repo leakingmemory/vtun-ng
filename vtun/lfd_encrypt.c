@@ -55,13 +55,17 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
+#ifdef HAVE_SSL
+#ifndef __APPLE_CC__
 /* OpenSSL includes */
 #include <openssl/md5.h>
 #include <openssl/blowfish.h>
-
-#ifndef __APPLE_CC__
 #include <openssl/rand.h>
+#else /* YAY - We're MAC OS */
+#include <sys/md5.h>
+#include <crypto/blowfish.h>
 #endif  /* __APPLE_CC__ */
+#endif  /* HAVE_SSL */
 
 #include "vtun.h"
 #include "linkfd.h"

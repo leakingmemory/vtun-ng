@@ -138,9 +138,9 @@ fi
 if test "$SSL" = "yes"; then
    AC_MSG_RESULT()
    AC_CHECKING( for md5 Library and Header files ... )
-   AC_SEARCH_HEADERS(openssl/md5.h openssl/blowfish.h,
-	$SSL_HDR_DIR "" /usr/include/ssl /usr/local/include /usr/local/ssl/include,
-	AC_MSG_ERROR( SSL headers not found. )
+   AC_SEARCH_HEADERS( sys/md5.h openssl/md5.h crypto/blowfish.h openssl/blowfish.h,
+    $SSL_HDR_DIR "" /usr/include /usr/include/ssl /usr/local/include /usr/local/ssl/include,
+    AC_MSG_ERROR( SSL headers not found. )
    )
 fi
 

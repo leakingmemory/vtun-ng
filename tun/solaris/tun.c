@@ -51,7 +51,7 @@ static	int  tunwsrv(queue_t *wq);
 
 static  void tun_frame(queue_t *wq, mblk_t *mpi, int q);
 
-#define TUN_VER "0.5"
+#define TUN_VER "0.6"
 
 static struct module_info tunminfo = {
   125,		/* mi_idnum  - Module ID number	*/

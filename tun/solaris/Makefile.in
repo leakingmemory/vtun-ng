@@ -23,7 +23,7 @@ CC = gcc
 LD = ld
 
 DEFS = @DEFS@
-CFLAGS = $(DEFS) -Wall -D_KERNEL -I.
+CFLAGS = $(DEFS) -O2 -Wall -D_KERNEL -I.
 
 ADD_DRV = /usr/sbin/add_drv
 DRV_DIR = /usr/kernel/drv

@@ -1,8 +1,14 @@
 Universal TUN/TAP device driver.
 Copyright (C) 1999-2000 Maxim Krasnyansky <max_mk@yahoo.com>
 
+  Linux, Solaris drivers 
+  Copyright (C) 1999-2000 Maxim Krasnyansky <max_mk@yahoo.com>
+
+  FreeBSD TAP driver 
+  Copyright (c) 1999-2000 Maksim Yevmenkin <m_evmenkin@yahoo.com>
+
 1. Description
-  TUN provides packet reception and transmission for user space programs. 
+  TUN/TAP provides packet reception and transmission for user space programs. 
   It can be viewed as a simple Point-to-Point or Ethernet device, which 
   instead of receiving packets from a physical media, receives them from 
   user space program and instead of sending packets via physical media 

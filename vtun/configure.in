@@ -7,6 +7,15 @@ dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
 
+dnl Build release name
+TAG="$Name"
+if "$TAG" != ""; then 
+   echo $TAG
+else
+   echo "Undef"
+fi 
+exit
+
 AC_INIT(lib.c)
 AC_CONFIG_HEADER(config.h)
 
@@ -152,5 +161,7 @@ esac
 AC_LINK_DRV(`cat vtun.drivers`, $OS_DIR)
 
 AC_MSG_RESULT()
+
+AC_DEFINE_UNQUOTED(COMPILE_DATE, "`date '+%m/%d/%Y'`")
 
 AC_OUTPUT(Makefile)

@@ -951,27 +951,36 @@ TDIR=`echo $KVER | cut -d '.' -f 1,2`
     fi
 
 
-CPPFLAGS="$CPPFLAGS -D__KERNEL__ -I $KDIR/include"
-cat > conftest.$ac_ext <<EOF
-#line 957 "configure"
+case $TDIR in
+     2.2)
+ 	echo $ac_n "checking for new kill_fasync call ""... $ac_c" 1>&6
+echo "configure:958: checking for new kill_fasync call " >&5
+        CPPFLAGS="$CPPFLAGS -D__KERNEL__ -I $KDIR/include"
+	cat > conftest.$ac_ext <<EOF
+#line 961 "configure"
 #include "confdefs.h"
  #include <linux/fs.h> 
 int main() {
  kill_fasync(NULL, 1, 1) 
 ; return 0; }
 EOF
-if { (eval echo configure:964: \"$ac_compile\") 1>&5; (eval $ac_compile) 2>&5; }; then
+if { (eval echo configure:968: \"$ac_compile\") 1>&5; (eval $ac_compile) 2>&5; }; then
   rm -rf conftest*
   cat >> confdefs.h <<\EOF
 #define NEW_FASYNC 1
 EOF
 
-
+	   echo "$ac_t"""yes"" 1>&6
 else
   echo "configure: failed program was:" >&5
   cat conftest.$ac_ext >&5
+  rm -rf conftest*
+  echo "$ac_t"""no"" 1>&6
+	
 fi
 rm -f conftest*
+        ;;
+esac
 
 
 

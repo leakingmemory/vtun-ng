@@ -58,13 +58,19 @@ AC_TEST_FILES(tun.c if_tun.h, $TDIR, ,
    AC_MSG_ERROR( Unsupported kernel version. )
 )
 
-dnl Check for new kill_fasync call
-CPPFLAGS="$CPPFLAGS -D__KERNEL__ -I $KDIR/include"
-AC_TRY_COMPILE( 
-   [ #include <linux/fs.h> ], 
-   [ kill_fasync(NULL, 1, 1) ],
-   AC_DEFINE(NEW_FASYNC)
-)
+case $TDIR in
+     2.2)
+ 	AC_MSG_CHECKING( for new kill_fasync call )
+        CPPFLAGS="$CPPFLAGS -D__KERNEL__ -I $KDIR/include"
+	AC_TRY_COMPILE( 
+	   [ #include <linux/fs.h> ], 
+	   [ kill_fasync(NULL, 1, 1) ],
+	   AC_DEFINE(NEW_FASYNC)
+	   AC_MSG_RESULT("yes"),
+	   AC_MSG_RESULT("no")
+	)
+        ;;
+esac
 
 AC_LINK_FILES($TDIR/tun.c $TDIR/if_tun.h, tun.c if_tun.h)
 

@@ -43,7 +43,7 @@ inst: module
 	$(INSTALL) -m 644 -o root -g root if_tun.h /usr/include/net 
 	$(INSTALL) -m 644 -o root -g root tun $(DRV_DIR)
 	$(INSTALL) -m 644 -o root -g root tun.conf $(DRV_DIR)
-	$(REM_DRV) tun >/dev/null 2>&1; exit 0
+	-$(REM_DRV) tun >/dev/null 2>&1
 	$(ADD_DRV) tun	
 
 clean:

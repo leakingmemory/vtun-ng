@@ -471,8 +471,7 @@ static dl_info_ack_t tun_dl_info = {
   ETHERMTU,                       /* dl_max_sdu */
   0,                              /* dl_min_sdu */
   TUN_ADDR_LEN,                   /* dl_addr_length */
-//  DL_ETHER,                       /* dl_mac_type */
-  DL_OTHER,                       /* dl_mac_type */
+  DL_ETHER,                       /* dl_mac_type */
   0,                              /* dl_reserved */
   0,                              /* dl_current_state */
   -2,                             /* dl_sap_length */
@@ -503,7 +502,7 @@ static void tun_info_req(queue_t *wq, mblk_t *mp)
 
   DBG(CE_CONT,"tun: tun_info_req str %p\n", str);
 
-  size = sizeof(dl_info_ack_t) + TUN_ADDR_LEN + ETHERADDRL;
+  size = sizeof(dl_info_ack_t) + TUN_ADDR_LEN;
   if( !(mp = tunchmsg(mp, size, M_PCPROTO, DL_INFO_ACK)) ){
      tunerr(wq, ENOSR);
      return;
@@ -823,6 +822,28 @@ static mblk_t * tun_unitdata_ind(mblk_t *mp, int type)
   return nmp;
 }
 
+static mblk_t * tun_eth_hdr(mblk_t *mp, int type)
+{
+  mblk_t *nmp;
+  int size;
+
+  DBG(CE_CONT,"tun: tun_eht_hdr \n");
+
+  /* Allocate new mblk */
+  size = sizeof(struct ether_header);
+  if( !(nmp = allocb(size, BPRI_LO)) ){
+     freemsg(mp);
+     return NULL;
+  }
+  DB_TYPE(nmp) = (uint8_t)M_DATA;
+  nmp->b_wptr += sizeof(struct ether_header);
+  bzero(nmp->b_rptr, sizeof(struct ether_header));
+  ((struct ether_header *)nmp->b_rptr)->ether_type = htons(type);
+  nmp->b_cont = mp;
+  return nmp;
+}
+
+
 /* Route frames */
 static void tun_frame(queue_t *wq, mblk_t *mp, int q)
 {
@@ -850,15 +871,10 @@ static void tun_frame(queue_t *wq, mblk_t *mp, int q)
   	DBG(CE_CONT,"tun: frame %d -> sniffer %p\n", msgdsize(nmp), tmp);
 
         if( tmp->flags & TUN_RAW ){
-           putnext(tmp->rq, nmp);
+           if( (nmp=tun_eth_hdr(nmp, ETHERTYPE_IP)) ) 
+	      putnext(tmp->rq, nmp);
 	   continue;
 	}          
-
-        if( (tmp->flags & TUN_FAST) ){
-           putnext(tmp->rq, nmp);
-	   continue;
-	}
-
         if( (nmp=tun_unitdata_ind(nmp, ETHERTYPE_IP)) )
            putnext(tmp->rq, nmp);
      }
@@ -890,15 +906,10 @@ static void tun_frame(queue_t *wq, mblk_t *mp, int q)
   	   DBG(CE_CONT,"tun: frame %d -> proto %p\n", msgdsize(nmp), tmp);
 
            if( tmp->flags & TUN_RAW ){
-              putnext(tmp->rq, nmp);
+              if( (nmp=tun_eth_hdr(nmp, ETHERTYPE_IP)) ) 
+	         putnext(tmp->rq, nmp);
 	      continue;
 	   }          
-
-           if( (tmp->flags & TUN_FAST) ){
-              putnext(tmp->rq, nmp);
-	      continue;
-	   }
-
            if( (nmp=tun_unitdata_ind(nmp, ETHERTYPE_IP)) )
               putnext(tmp->rq, nmp);
 	}

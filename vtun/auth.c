@@ -63,7 +63,10 @@
 
 #include <md5.h>
 #include <blowfish.h>
+
+#ifndef __APPLE_CC__
 #include <rand.h>
+#endif  __APPLE_CC__
 
 void gen_chal(char *buf)
 {

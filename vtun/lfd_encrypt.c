@@ -58,7 +58,10 @@
 /* OpenSSL includes */
 #include <md5.h>
 #include <blowfish.h>
+
+#ifndef __APPLE_CC__
 #include <rand.h>
+#endif  __APPLE_CC__
 
 #include "vtun.h"
 #include "linkfd.h"

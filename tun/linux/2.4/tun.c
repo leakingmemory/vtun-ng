@@ -351,8 +351,8 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 			return -EBUSY;
 
 		/* Check permissions */
-		if (!capable(CAP_NET_ADMIN) && tun->owner != -1)
-			if (tun->owner != current->uid && tun->owner != current->euid)
+		if (tun->owner != -1)
+			if (current->euid != tun->owner && !capable(CAP_NET_ADMIN))
 				return -EPERM;
 	} else {
 		char *name;

@@ -1,0 +1,137 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="Author" content="Maxim Krasnyansky">
+<meta name="Keywords" content="vpn, ip, ppp, slip, ethernet, virtual, tunnel, vtun, vtund, network, Maxim, Krasnyansky, Maksim, Krasnyanskiy">
+<meta name="Description" content="The easiest way to create Virtual Tunnels over TCP/IP network">
+
+<title>
+   Universal TUN/TAP driver - FAQ
+</title>
+</head>
+
+<body bgcolor="#FFFFFF" vlink="#446DC4" link="#000000" text="#446DC4">
+
+<center>
+   <br>
+   <img src="tuntap.gif" width="535" height="109" alt="* TUN/TAP *">
+   <br>
+   <font face="Verdana"><b>
+     Frequently Asked Questions<br>
+   </b></font>
+   <br>
+   <table border="0" cellpadding="0" cellspacing="0" width="95%">
+	<tr>
+        <td align="center" valign="top">
+	   <table border="1" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                 <td align="center" valign="top" bgcolor="#446DC4">
+		    <font color="#FFFFFF" face="Verdana">
+		    <b>FAQ</b>
+		    </font>
+	 	 </td>
+              </tr>
+              <tr>
+                 <td bgcolor="#E7E7E7" align="center">
+	           <table border="0" cellpadding="0" cellspacing="0" width="98%">
+		   <tr><td align="left" valign="top">
+		   <font color="#000000" face="Verdana">
+
+
+Universal TUN/TAP device driver Frequently Asked Question. 
+ 
+<p align="justify"> 
+<b>1. General questions.</b> 
+<ul> 
+<dl><a href="#1.1"> 1.1 What is the TUN ? </a></dl> 
+<dl><a href="#1.2"> 1.2 What is the TAP ? </a></dl> 
+<dl><a href="#1.3"> 1.3 What platforms are supported by TUN/TAP driver ? </a></dl> 
+<dl><a href="#1.4"> 1.4 What is TUN/TAP driver used for? </a></dl> 
+<dl><a href="#1.5"> 1.5 How does Virtual network device actually work ?  </a></dl> 
+<dl><a href="#1.6"> 1.6 What is the difference between TUN driver and TAP driver? </a></dl> 
+<dl><a href="#1.7"> 1.7 What is the difference between BPF and TUN/TAP driver? </a></dl> 
+<dl><a href="#1.8"> 1.8 Does TAP driver support kernel Ethernet bridging? </a></dl> 
+</ul> 
+<br> 
+<b>1. General questions.</b><br> 
+<a name="1.1"> 1.1 What is the TUN ? </a><br> 
+&nbsp;The TUN is Virtual Point-to-Point network device.<br> 
+&nbsp;TUN driver was designed as low level kernel support for<br> 
+&nbsp;IP tunneling. It provides to userland application<br> 
+&nbsp;two interfaces:<br> 
+&nbsp;&nbsp;&nbsp;- /dev/tunX	- character device;<br> 
+&nbsp;&nbsp;&nbsp;- tunX	- virtual Point-to-Point interface.<br> 
+<br> 
+&nbsp;Userland application can write IP frame to /dev/tunX<br> 
+&nbsp;and kernel will receive this frame from tunX interface. <br> 
+&nbsp;In the same time every frame that kernel writes to tunX <br> 
+&nbsp;interface can be read by userland application from /dev/tunX<br> 
+&nbsp;device.<br> 
+<br> 
+<a name="1.2"> 1.2 What is the TAP ? </a><br> 
+&nbsp;The TAP is a Virtual Ethernet network device.<br> 
+&nbsp;TAP driver was designed as low level kernel support for<br> 
+&nbsp;Ethernet tunneling. It provides to userland application<br> 
+&nbsp;two interfaces:<br> 
+&nbsp;&nbsp;&nbsp;- /dev/tapX	- character device;<br> 
+&nbsp;&nbsp;&nbsp;- tapX	- virtual Ethernet interface.<br> 
+<br> 
+&nbsp;Userland application can write Ethernet frame to /dev/tapX<br> 
+&nbsp;and kernel will receive this frame from tapX interface. <br> 
+&nbsp;In the same time every frame that kernel writes to tapX <br> 
+&nbsp;interface can be read by userland application from /dev/tapX<br> 
+&nbsp;device.<br> 
+<br> 
+<a name="1.3"> 1.3 What platforms are supported by TUN/TAP driver ? </a><br> 
+&nbsp;Currently driver has been written for 3 Unices:<br> 
+&nbsp;&nbsp;&nbsp; Linux kernels 2.2.x, 2.4.x <br> 
+&nbsp;&nbsp;&nbsp; FreeBSD 3.x, 4.x, 5.x<br> 
+&nbsp;&nbsp;&nbsp; Solaris 2.6, 7.0, 8.0<br> 
+<br> 
+<a name="1.4"> 1.4 What is TUN/TAP driver used for? </a><br> 
+&nbsp;As mentioned above, main purpose of TUN/TAP driver is tunneling. <br> 
+&nbsp;It used by VTun (http://vtun.netpedia.net).<br> 
+<br> 
+<a name="1.5"> 1.5 How does Virtual network device actually work ?  </a><br> 
+&nbsp;Virtual network device can be viewed as a simple Point-to-Point or<br> 
+&nbsp;Ethernet device, which instead of receiving packets from a physical <br> 
+&nbsp;media, receives them from user space program and instead of sending <br> 
+&nbsp;packets via physical media sends them to the user space program. <br> 
+<br> 
+&nbsp;Let's say that you configured IPX on the tap0, then whenever <br> 
+&nbsp;kernel sends any IPX packet to tap0, it is passed to the application<br> 
+&nbsp;(VTun for example). Application encrypts, compresses and sends it to <br> 
+&nbsp;the other side over TCP or UDP. Application on other side decompress <br> 
+&nbsp;and decrypts them and write packet to the TAP device, kernel handles <br> 
+&nbsp;the packet like it came from real physical device.<br> 
+<br> 
+<a name="1.6"> 1.6 What is the difference between TUN driver and TAP driver? </a><br> 
+&nbsp;TUN works with IP frames. TAP works with Ethernet frames.<br> 
+<br> 
+<a name="1.7"> 1.7 What is the difference between BPF and TUN/TAP driver? </a><br> 
+&nbsp;BFP is a advanced packet filter. It can be attached to existing<br> 
+&nbsp;network interface. It does not provide virtual network interface.<br> 
+&nbsp;TUN/TAP driver does provide virtual network interface and it is possible<br> 
+&nbsp;to attach BPF to this interface.<br> 
+<br> 
+<a name="1.8"> 1.8 Does TAP driver support kernel Ethernet bridging? </a><br> 
+&nbsp;Yes. Linux and FreeBSD drivers support Ethernet bridging. <br> 
+<br></p> 
+
+		   </font>
+		   </td></tr>
+	           </table>
+                 </td>
+              </tr>
+           </table>
+	</td>
+	</tr>
+   </table>
+   <br><br>
+   <font face="Verdana"> 
+      Copyright (C) 1999-2001 Maxim Krasnyansky
+   </font>
+</center>
+</body>
+</html>

@@ -28,6 +28,7 @@ LEX = @LEX@
 LEXFLAGS = -t 
 
 INSTALL = @INSTALL@
+INSTALL_OWNER = -o root -g 0
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -78,23 +79,24 @@ distclean: clean
 	rm -f `cat vtun.drivers`	
 
 install_man: 
-	$(INSTALL) -d -m 755 -o root -g 0 $(MAN_DIR)/man8
-	$(INSTALL) -m 644 -o root -g 0 vtund.8 $(MAN_DIR)/man8
-	$(INSTALL) -m 644 -o root -g 0 vtund.conf.5 $(MAN_DIR)/man5
+	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(MAN_DIR)/man8
+	$(INSTALL) -m 644 $(INSTALL_OWNER) vtund.8 $(MAN_DIR)/man8
+	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(MAN_DIR)/man5
+	$(INSTALL) -m 644 $(INSTALL_OWNER) vtund.conf.5 $(MAN_DIR)/man5
 	rm -f $(MAN_DIR)/man8/vtun.8 
 	ln -s vtund.8 $(MAN_DIR)/man8/vtun.8 
 
 install_config: 
-	$(INSTALL) -d -m 755 -o root -g 0 $(ETC_DIR)
+	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(ETC_DIR)
 	if [ ! -f $(ETC_DIR)/vtund.conf ]; then \
-	  $(INSTALL) -m 600 -o root -g 0 vtund.conf $(ETC_DIR); \
+	  $(INSTALL) -m 600 $(INSTALL_OWNER) vtund.conf $(ETC_DIR); \
 	fi
 
 install: vtund install_config install_man
-	$(INSTALL) -d -m 755 -o root -g 0 $(VAR_DIR)/run
-	$(INSTALL) -d -m 755 -o root -g 0 $(STAT_DIR)
-	$(INSTALL) -d -m 755 -o root -g 0 $(LOCK_DIR)
-	$(INSTALL) -d -m 755 -o root -g 0 $(SBIN_DIR)
-	$(INSTALL) -m 755 -o root -g 0 vtund $(SBIN_DIR)
+	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(VAR_DIR)/run
+	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(STAT_DIR)
+	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(LOCK_DIR)
+	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(SBIN_DIR)
+	$(INSTALL) -m 755 $(INSTALL_OWNER) vtund $(SBIN_DIR)
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.

@@ -1,5 +1,5 @@
 %define name	vtun
-%define version	2.2
+%define version	2.3
 %define release	1
 %define prefix	/usr
 
@@ -38,7 +38,7 @@ This package is build with%{!?USE_SOCKS:out} SOCKS-support.
 %setup -n %{name}-%{version}
 
 %build
-CFLAGS="$RPM_OPT_FLAGS"; ./configure 		   \
+%configure					   \
             --prefix=$RPM_BUILD_ROOT%{prefix} 	   \
 	    --sysconfdir=$RPM_BUILD_ROOT/etc 	   \
 	    --localstatedir=$RPM_BUILD_ROOT/var	   \
@@ -49,13 +49,15 @@ make CFG_FILE=/etc/vtund.conf PID_FILE=/var/run/vtund.pid  \
      STAT_DIR=/var/log/vtund LOCK_DIR=/var/lock/vtund
 
 %install
+rm -rf $RPM_BUILD_ROOT
 install -d $RPM_BUILD_ROOT%{prefix}/sbin
 install -d $RPM_BUILD_ROOT%{prefix}/man/man8
+install -d $RPM_BUILD_ROOT%{prefix}/man/man5
 install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
 install -d $RPM_BUILD_ROOT/var/log/vtund
 install -d $RPM_BUILD_ROOT/var/lock/vtund
 
-make install
+make install INSTALL_OWNER=
 
 install scripts/vtund.rc.red_hat $RPM_BUILD_ROOT/etc/rc.d/init.d/vtund
 
@@ -72,10 +74,17 @@ rm -rf ../%{name}-%{version}
 %attr(755,root,root) %{prefix}/sbin/vtund
 %attr(755,root,root) %dir /var/log/vtund
 %attr(755,root,root) %dir /var/lock/vtund
-%{prefix}/man/man8/vtund.8
-%{prefix}/man/man8/vtun.8
+%{prefix}/man/man8/vtund.8*
+%{prefix}/man/man8/vtun.8*
+%{prefix}/man/man5/vtund.conf.5*
 
 %changelog
+* Mon May 29 2000 Michael Tokarev <mjt@tls.msk.ru>
+- Allow to build as non-root (using new INSTALL_OWNER option)
+- Added vtund.conf.5 manpage
+- Allow compressed manpages
+- Added cleanup of old $RPM_BUILD_ROOT at beginning of %install stage
+
 * Sat Mar 04 2000 Dag Wieers <dag@mind.be> 
 - Added USE_SOCKS compile option.
 - Added Prefix-header

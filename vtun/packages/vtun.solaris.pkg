@@ -18,6 +18,7 @@ d none etc
 !search $BASEDIR/sbin $BASEDIR/etc $BASEDIR/man/man8
 !default 644 root root
 f none man/man8/vtund.8
+f none man/man5/vtund.conf.5
 s none man/man8/vtun.8=vtund.8
 
 f none etc/vtund.conf 0600 root root

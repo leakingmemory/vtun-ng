@@ -1,4 +1,4 @@
-@name vtun-2.2
+@name vtun-2.3
 
 @owner root
 @group wheel
@@ -6,8 +6,9 @@
 @cwd /usr/local
 
 @mode 644
-man/man8/vtund.8
 man/man8/vtun.8
+man/man8/vtund.8
+man/man5/vtund.conf.5
 
 @exec if [ -f %D/etc/vtund.conf ]; then echo "Saving vtund.conf to vtund.conf.backup";cp %D/etc/vtund.conf %D/etc/vtund.conf.backup; fi
 

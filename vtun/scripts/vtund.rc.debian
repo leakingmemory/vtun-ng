@@ -1,0 +1,92 @@
+#! /usr/bin/perl -w
+
+### vtund-start
+###
+### script to start vtund as either a server or a client, according to
+### the config file /etc/vtund-start.conf
+###
+### Copyright 1999 Craig Sanders <cas@taz.net.au>
+###
+### Written for the Debian GNU/Linux distribution.  This script is free
+### software licensed under the terms of the GNU General Public License.
+
+$DAEMON="/usr/sbin/vtund" ;
+
+$do_what = shift ;
+$args="start|stop|reload|force-reload|restart" ;
+if ( $do_what !~ /^($args)$/i ) {
+    print "Usage: /etc/init.d/vtun {$args}\n" ;
+        exit 0 ;
+}
+
+$SSD="/sbin/start-stop-daemon" ;
+$SSDARGS="--verbose --exec $DAEMON" ;
+
+$sconf="/etc/vtund-start.conf" ;
+open(SCONF,"<$sconf") || die "couldn't open $sconf: $!\n" ;
+while (<SCONF>) {
+        chomp ;
+        s/#.*//;
+        s/^ +| +$//;
+        next if (/^$/) ;
+
+        @line = split ;
+        $host = shift(@line) ;
+        $server = shift(@line) ;
+        $args = "" ;
+        foreach (@line) { $args .= " $_" } ;
+
+        $host='' if ($host =~ /--server--/i ) ;
+
+        if ( $do_what eq 'start' ) {
+                &start($host,$server,$args) ;
+        } elsif ( $do_what eq 'stop' ) {
+                &stop($host,$server,$args) ;
+        } elsif ( $do_what eq 'restart' ) {
+                &stop($pidfile) ;
+                &start($host,$server,$args) ;
+        } elsif ( $do_what =~ /^(reload|force-reload)$/ ) {
+                &reload($host,$server) ;
+        }
+}
+close (SCONF);
+
+
+sub start {
+        my($host,$server,$args) = @_ ;
+    print "  Starting vtun " ;
+        if ($host eq '') {
+                print "server\n" ;
+        system "$SSD --start $SSDARGS -- $args -s -P $server" ;
+        } else {
+                print "client $host to $server\n" ;
+                $pidfile="/var/run/vtun.$host.$server" ;
+        system "$SSD --start $SSDARGS --pidfile $pidfile -- $args $host $server" ;
+        }
+} ;
+
+sub stop {
+        my($host,$server,$args) = @_ ;
+    print "  Stopping vtun " ;
+        if ($host eq '') {
+                print "server\n" ;
+        system "$SSD --stop $SSDARGS" ;
+        } else {
+                print "client $host to $server\n" ;
+                $pidfile="/var/run/vtun.$host.$server" ;
+        system "$SSD --stop $SSDARGS --pidfile $pidfile" ;
+        }
+} ;
+
+sub reload {
+        my($host,$server) = @_ ;
+    print "  Reloading vtun " ;
+        if ($host eq '') {
+                print "server\n" ;
+        system "$SSD --stop $SSDARGS --signal 1" ;
+        } else {
+                print "client $host to $server\n" ;
+                $pidfile="/var/run/vtun.$host.$server" ;
+        system "$SSD --stop $SSDARGS --signal 1 --pidfile $pidfile" ;
+        }
+}

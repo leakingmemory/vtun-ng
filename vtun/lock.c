@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * lock.c,v 1.1.1.1 2000/03/28 17:19:44 maxk Exp
+ */
 
 #include "config.h"
 
@@ -35,129 +35,139 @@
 
 #include "vtun.h"
 #include "linkfd.h"
-#include "lib.h" 
+#include "lib.h"
 #include "lock.h"
 
-int create_lock(char * file)
+int create_lock(char *file)
 {
-  char tmp_file[255], str[20];
-  int  fd, pid, ret;
-   
-  pid = getpid();  
-  ret = 0;
+	char tmp_file[255], str[20];
+	int fd, pid, ret;
 
-  /* Create temp file */
-  sprintf(tmp_file, "%s_%d_tmp\n", file, pid);
-  if( (fd = open(tmp_file, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0 ){
-     syslog(LOG_ERR, "Can't create temp lock file %s", file);
-     return -1;
-  }
+	pid = getpid();
+	ret = 0;
 
-  pid = sprintf(str, "%d\n", pid);
-  if( write(fd, str, pid) == pid ){
-     /* Create lock file */
-     if( link(tmp_file, file) < 0 ){
-        /* Oops, already locked */
-        ret = -1;
-     }
-  } else { 
-     syslog(LOG_ERR, "Can't write to %s", tmp_file);
-     ret = -1;
-  }
-  close(fd);
+	/* Create temp file */
+	sprintf(tmp_file, "%s_%d_tmp\n", file, pid);
+	if ((fd = open(tmp_file, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0) {
+		syslog(LOG_ERR, "Can't create temp lock file %s", file);
+		return -1;
+	}
 
-  /* Remove temp file */
-  unlink(tmp_file);
+	pid = sprintf(str, "%d\n", pid);
+	if (write(fd, str, pid) == pid) {
+		/* Create lock file */
+		if (link(tmp_file, file) < 0) {
+			/* Oops, already locked */
+			ret = -1;
+		}
+	} else {
+		syslog(LOG_ERR, "Can't write to %s", tmp_file);
+		ret = -1;
+	}
+	close(fd);
 
-  return ret;
+	/* Remove temp file */
+	unlink(tmp_file);
+
+	return ret;
 }
 
-pid_t read_lock(char * file)
+pid_t read_lock(char *file)
 {
-  char str[20];
-  int  fd, pid;
+	char str[20];
+	int fd, pid;
 
-  /* Read PID from existing lock */
-  if( (fd = open(file, O_RDONLY)) < 0)
-     return -1;
+	/* Read PID from existing lock */
+	if ((fd = open(file, O_RDONLY)) < 0)
+		return -1;
 
-  pid = read(fd,str,sizeof(str));
-  close(fd);
-  if( pid <= 0 )
-     return -1;
+	pid = read(fd, str, sizeof(str));
+	close(fd);
+	if (pid <= 0)
+		return -1;
 
-  str[sizeof(str)-1]='\0';
-  pid = strtol(str, NULL, 10);
-  if( !pid || errno == ERANGE ){
-     /* Broken lock file */
-     if( unlink(file) < 0 )
-        syslog(LOG_ERR, "Unable to remove broken lock %s", file);
-     return -1;
-  }
+	str[sizeof(str) - 1] = '\0';
+	pid = strtol(str, NULL, 10);
+	if (!pid || errno == ERANGE) {
+		/* Broken lock file */
+		if (unlink(file) < 0)
+			syslog(LOG_ERR, "Unable to remove broken lock %s",
+			       file);
+		return -1;
+	}
 
-  /* Check if process is still alive */
-  if( kill(pid, 0) < 0 && errno == ESRCH ){
-     /* Process is dead. Remove stale lock. */
-     if( unlink(file) < 0 )
-        syslog(LOG_ERR, "Unable to remove stale lock %s", file);
-     return -1;
-  }
+	/* Check if process is still alive */
+	if (kill(pid, 0) < 0 && errno == ESRCH) {
+		/* Process is dead. Remove stale lock. */
+		if (unlink(file) < 0)
+			syslog(LOG_ERR, "Unable to remove stale lock %s",
+			       file);
+		return -1;
+	}
 
-  return pid;
+	return pid;
 }
 
-int lock_host(struct vtun_host * host)
+int lock_host(struct vtun_host *host)
 {
-  char lock_file[255];
-  struct timespec tm;
-  int pid, i;
+	char lock_file[255];
+	struct timespec tm;
+	int pid, i;
 
-  if( host->multi == VTUN_MULTI_ALLOW )
-     return 0;
+	if (host->multi == VTUN_MULTI_ALLOW)
+		return 0;
 
-  sprintf(lock_file, "%s/%s", VTUN_LOCK_DIR, host->host);
+	sprintf(lock_file, "%s/%s", VTUN_LOCK_DIR, host->host);
 
-  /* Check if lock already exists. */
-  if( (pid = read_lock(lock_file)) > 0 ){ 
-     /* Old process is alive */
-     switch( host->multi ){
-	case VTUN_MULTI_KILL:
-           syslog(LOG_INFO, "Killing old connection (process %d)", pid);
-           if( kill(pid, SIGTERM) < 0 && errno != ESRCH ){
-              syslog(LOG_ERR, "Can't kill process %d. %s",pid,strerror(errno));
-              return -1;
-           }
-           /* Give it a time(up to 5 secs) to terminate */
-	   for(i=0; i < 10 && !kill(pid, 0); i++ ){
-              tm.tv_sec = 0; tm.tv_nsec = 500000000; 
-              nanosleep(&tm, NULL);
-	   }
+	/* Check if lock already exists. */
+	if ((pid = read_lock(lock_file)) > 0) {
+		/* Old process is alive */
+		switch (host->multi) {
+		case VTUN_MULTI_KILL:
+			syslog(LOG_INFO,
+			       "Killing old connection (process %d)", pid);
+			if (kill(pid, SIGTERM) < 0 && errno != ESRCH) {
+				syslog(LOG_ERR,
+				       "Can't kill process %d. %s", pid,
+				       strerror(errno));
+				return -1;
+			}
+			/* Give it a time(up to 5 secs) to terminate */
+			for (i = 0; i < 10 && !kill(pid, 0); i++) {
+				tm.tv_sec = 0;
+				tm.tv_nsec = 500000000;
+				nanosleep(&tm, NULL);
+			}
 
-	   /* Make sure it's dead */		 
-           if( !kill(pid, SIGKILL) ){
-              syslog(LOG_ERR, "Process %d ignored TERM, killed with KILL", pid);
-   	      /* Remove lock */
-              if( unlink(lock_file) < 0 )
-                 syslog(LOG_ERR, "Unable to remove lock %s", lock_file);
-	   }
+			/* Make sure it's dead */
+			if (!kill(pid, SIGKILL)) {
+				syslog(LOG_ERR,
+				       "Process %d ignored TERM, killed with KILL",
+				       pid);
+				/* Remove lock */
+				if (unlink(lock_file) < 0)
+					syslog(LOG_ERR,
+					       "Unable to remove lock %s",
+					       lock_file);
+			}
 
-	   break;
-        case VTUN_MULTI_DENY:
-           return -1;
-     }
-  }
-  return create_lock(lock_file);
+			break;
+		case VTUN_MULTI_DENY:
+			return -1;
+		}
+	}
+	return create_lock(lock_file);
 }
 
 void unlock_host(struct vtun_host *host)
-{ 
-  char lock_file[255];
+{
+	char lock_file[255];
 
-  if( host->multi == VTUN_MULTI_ALLOW )
-     return;
+	if (host->multi == VTUN_MULTI_ALLOW)
+		return;
 
-  sprintf(lock_file, "%s/%s", VTUN_LOCK_DIR, host->host);
+	sprintf(lock_file, "%s/%s", VTUN_LOCK_DIR, host->host);
 
-  if( unlink(lock_file) < 0 )
-     syslog(LOG_ERR, "Unable to remove lock %s", lock_file);
+	if (unlink(lock_file) < 0)
+		syslog(LOG_ERR, "Unable to remove lock %s", lock_file);
 }

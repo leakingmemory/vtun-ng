@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * compat.h,v 1.1.1.2 2000/03/28 17:19:39 maxk Exp
+ */
 #ifndef _VTUN_COMPAT_H
 #define _VTUN_COMPAT_H
 
@@ -30,4 +30,4 @@
 #define SA_NOCLDWAIT 0
 #endif
 
-#endif /* _VTUN_COMPAT_H */
+#endif				/* _VTUN_COMPAT_H */

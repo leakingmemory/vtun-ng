@@ -17,14 +17,14 @@
  */
 
 /*
- * $Id$
- */ 
+ * auth.h,v 1.1.1.2 2000/03/28 17:19:39 maxk Exp
+ */
 
-#define VTUN_CHAL_SIZE	 16	
+#define VTUN_CHAL_SIZE	 16
 
 #define ST_INIT  0
 #define ST_HOST  1
 #define ST_CHAL  2
 
-struct vtun_host * auth_server(int fd);
+struct vtun_host *auth_server(int fd);
 int auth_client(int fd, struct vtun_host *host);

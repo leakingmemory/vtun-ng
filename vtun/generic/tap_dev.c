@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * tap_dev.c,v 1.3 2001/09/20 06:26:41 talby Exp
+ */
 
 #include "config.h"
 
@@ -35,41 +35,41 @@
 /* 
  * Allocate Ether TAP device, returns opened fd. 
  * Stores dev name in the first arg(must be large enough).
- */ 
+ */
 int tap_open(char *dev)
 {
-    char tapname[14];
-    int i, fd;
+	char tapname[14];
+	int i, fd;
 
-    if( *dev ) {
-       sprintf(tapname, "/dev/%s", dev);
-       return open(tapname, O_RDWR);
-    }
+	if (*dev) {
+		sprintf(tapname, "/dev/%s", dev);
+		return open(tapname, O_RDWR);
+	}
 
-    for(i=0; i < 255; i++) {
-       sprintf(tapname, "/dev/tap%d", i);
-       /* Open device */
-       if( (fd=open(tapname, O_RDWR)) > 0 ) {
-          sprintf(dev, "tap%d",i);
-          return fd;
-       }
-    }
-    return -1;
+	for (i = 0; i < 255; i++) {
+		sprintf(tapname, "/dev/tap%d", i);
+		/* Open device */
+		if ((fd = open(tapname, O_RDWR)) > 0) {
+			sprintf(dev, "tap%d", i);
+			return fd;
+		}
+	}
+	return -1;
 }
 
 int tap_close(int fd, char *dev)
 {
-    return close(fd);
+	return close(fd);
 }
 
 /* Write frames to TAP device */
 int tap_write(int fd, char *buf, int len)
 {
-    return write(fd, buf, len);
+	return write(fd, buf, len);
 }
 
 /* Read frames from TAP device */
 int tap_read(int fd, char *buf, int len)
 {
-    return read(fd, buf, len);
+	return read(fd, buf, len);
 }

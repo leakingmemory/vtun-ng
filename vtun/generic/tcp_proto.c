@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * tcp_proto.c,v 1.5 2001/09/20 06:26:41 talby Exp
+ */
 
 #include "config.h"
 
@@ -56,44 +56,44 @@
 
 int tcp_write(int fd, char *buf, int len)
 {
-     register char *ptr;
+	register char *ptr;
 
-     ptr = buf - sizeof(short);
+	ptr = buf - sizeof(short);
 
-     *((unsigned short *)ptr) = htons(len); 
-     len  = (len & VTUN_FSIZE_MASK) + sizeof(short);
+	*((unsigned short *) ptr) = htons(len);
+	len = (len & VTUN_FSIZE_MASK) + sizeof(short);
 
-     return write_n(fd, ptr, len);
+	return write_n(fd, ptr, len);
 }
 
 int tcp_read(int fd, char *buf)
 {
-     unsigned short len, flen;
-     register int rlen;     
+	unsigned short len, flen;
+	register int rlen;
 
-     /* Read frame size */
-     if( (rlen = read_n(fd, (char *)&len, sizeof(short)) ) <= 0)
-	return rlen;
+	/* Read frame size */
+	if ((rlen = read_n(fd, (char *) &len, sizeof(short))) <= 0)
+		return rlen;
 
-     len = ntohs(len);
-     flen = len & VTUN_FSIZE_MASK;
+	len = ntohs(len);
+	flen = len & VTUN_FSIZE_MASK;
 
-     if( flen > VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD ){
-     	/* Oversized frame, drop it. */ 
-        while( flen ){
-	   len = min(flen, VTUN_FRAME_SIZE);
-           if( (rlen = read_n(fd, buf, len)) <= 0 )
-	      break;
-           flen -= rlen;
-        }                                                               
-	return VTUN_BAD_FRAME;
-     }	
+	if (flen > VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD) {
+		/* Oversized frame, drop it. */
+		while (flen) {
+			len = min(flen, VTUN_FRAME_SIZE);
+			if ((rlen = read_n(fd, buf, len)) <= 0)
+				break;
+			flen -= rlen;
+		}
+		return VTUN_BAD_FRAME;
+	}
 
-     if( len & ~VTUN_FSIZE_MASK ){
-	/* Return flags */
-	return len;
-     }
+	if (len & ~VTUN_FSIZE_MASK) {
+		/* Return flags */
+		return len;
+	}
 
-     /* Read frame */
-     return read_n(fd, buf, flen);
+	/* Read frame */
+	return read_n(fd, buf, flen);
 }

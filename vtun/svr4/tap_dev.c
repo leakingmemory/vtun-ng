@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * tap_dev.c,v 1.2 2001/09/20 06:26:41 talby Exp
+ */
 
 #include "config.h"
 
@@ -64,81 +64,82 @@
 /* 
  * Allocate Ether TAP device, returns opened fd. 
  * Stores dev name in the first arg(must be large enough).
- */ 
+ */
 int tap_open(char *dev)
 {
-    int tap_fd, if_fd, ppa = -1;
-    static int ip_fd = 0;
-    char *ptr;
+	int tap_fd, if_fd, ppa = -1;
+	static int ip_fd = 0;
+	char *ptr;
 
-    if( *dev ){
-       ptr = dev;	
-       while( *ptr && !isdigit((int)*ptr) ) ptr++; 
-       ppa = atoi(ptr);
-    }
+	if (*dev) {
+		ptr = dev;
+		while (*ptr && !isdigit((int) *ptr))
+			ptr++;
+		ppa = atoi(ptr);
+	}
 
-    /* Check if IP device was opened */
-    if( ip_fd )
-       close(ip_fd);
+	/* Check if IP device was opened */
+	if (ip_fd)
+		close(ip_fd);
 
-    if( (ip_fd = open("/dev/ip", O_RDWR, 0)) < 0){
-       syslog(LOG_ERR, "Can't open /dev/ip");
-       return -1;
-    }
+	if ((ip_fd = open("/dev/ip", O_RDWR, 0)) < 0) {
+		syslog(LOG_ERR, "Can't open /dev/ip");
+		return -1;
+	}
 
-    if( (tap_fd = open("/dev/tap", O_RDWR, 0)) < 0){
-       syslog(LOG_ERR, "Can't open /dev/tap");
-       return -1;
-    }
+	if ((tap_fd = open("/dev/tap", O_RDWR, 0)) < 0) {
+		syslog(LOG_ERR, "Can't open /dev/tap");
+		return -1;
+	}
 
-    /* Assign a new PPA and get its unit number. */
-    if( (ppa = ioctl(tap_fd, TUNNEWPPA, ppa)) < 0){
-       syslog(LOG_ERR, "Can't assign new interface");
-       return -1;
-    }
+	/* Assign a new PPA and get its unit number. */
+	if ((ppa = ioctl(tap_fd, TUNNEWPPA, ppa)) < 0) {
+		syslog(LOG_ERR, "Can't assign new interface");
+		return -1;
+	}
 
-    if( (if_fd = open("/dev/tap", O_RDWR, 0)) < 0){
-       syslog(LOG_ERR, "Can't open /dev/tap (2)");
-       return -1;
-    }
-    if(ioctl(if_fd, I_PUSH, "ip") < 0){
-       syslog(LOG_ERR, "Can't push IP module");
-       return -1;
-    }
+	if ((if_fd = open("/dev/tap", O_RDWR, 0)) < 0) {
+		syslog(LOG_ERR, "Can't open /dev/tap (2)");
+		return -1;
+	}
+	if (ioctl(if_fd, I_PUSH, "ip") < 0) {
+		syslog(LOG_ERR, "Can't push IP module");
+		return -1;
+	}
 
-    /* Assign ppa according to the unit number returned by tap device */
-    if(ioctl(if_fd, IF_UNITSEL, (char *)&ppa) < 0){
-       syslog(LOG_ERR, "Can't set PPA %d", ppa);
-       return -1;
-    }
-    if(ioctl(ip_fd, I_LINK, if_fd) < 0){
-       syslog(LOG_ERR, "Can't link TAP device to IP");
-       return -1;
-    }
+	/* Assign ppa according to the unit number returned by tap device */
+	if (ioctl(if_fd, IF_UNITSEL, (char *) &ppa) < 0) {
+		syslog(LOG_ERR, "Can't set PPA %d", ppa);
+		return -1;
+	}
+	if (ioctl(ip_fd, I_LINK, if_fd) < 0) {
+		syslog(LOG_ERR, "Can't link TAP device to IP");
+		return -1;
+	}
 
-    sprintf(dev, "tap%d", ppa);
-    return tap_fd;
+	sprintf(dev, "tap%d", ppa);
+	return tap_fd;
 }
 
 int tap_close(int fd, char *dev)
 {
-    return close(fd);
+	return close(fd);
 }
 
 int tap_write(int fd, char *buf, int len)
 {
-    struct strbuf sbuf;
-    sbuf.len = len;      
-    sbuf.buf = buf;      
-    return putmsg(fd, NULL, &sbuf, 0) >= 0 ? sbuf.len : -1;
+	struct strbuf sbuf;
+	sbuf.len = len;
+	sbuf.buf = buf;
+	return putmsg(fd, NULL, &sbuf, 0) >= 0 ? sbuf.len : -1;
 }
 
 int tap_read(int fd, char *buf, int len)
 {
-    struct strbuf sbuf;
-    int f = 0;
+	struct strbuf sbuf;
+	int f = 0;
 
-    sbuf.maxlen = len;      
-    sbuf.buf = buf;      
-    return getmsg(fd, NULL, &sbuf, &f) >= 0 ? sbuf.len : -1;
+	sbuf.maxlen = len;
+	sbuf.buf = buf;
+	return getmsg(fd, NULL, &sbuf, &f) >= 0 ? sbuf.len : -1;
 }

@@ -17,30 +17,30 @@
  */
 
 /*
- * $Id$
- */ 
+ * vtun_socks.h,v 1.1.1.1 2000/03/28 17:19:47 maxk Exp
+ */
 
 #ifndef _VTUN_SOCKS_H
 #define _VTUN_SOCKS_H
 
 #if defined(VTUN_SOCKS)
    /* Syscalls to SOCKS calls */
-   #if VTUN_SOCKS == 1
-      #define connect 		SOCKSconnect
-      #define bind 		SOCKSbind
-      #define select		SOCKSselect
-      #define getsockname 	SOCKSgetsockname
-      #define getpeername 	SOCKSgetpeername
-      #define gethostbyname 	SOCKSgethostbyname
-   #else
-      #define connect 		Rconnect
-      #define bind 		Rbind
-      #define select		Rselect
-      #define getsockname 	Rgetsockname
-      #define getpeername 	Rgetpeername
-      #define gethostbyname 	Rgethostbyname
-   #endif
+#if VTUN_SOCKS == 1
+#define connect 		SOCKSconnect
+#define bind 		SOCKSbind
+#define select		SOCKSselect
+#define getsockname 	SOCKSgetsockname
+#define getpeername 	SOCKSgetpeername
+#define gethostbyname 	SOCKSgethostbyname
+#else
+#define connect 		Rconnect
+#define bind 		Rbind
+#define select		Rselect
+#define getsockname 	Rgetsockname
+#define getpeername 	Rgetpeername
+#define gethostbyname 	Rgethostbyname
+#endif
 #endif
 
 
-#endif /* _VTUN_SOCKS_H */
+#endif				/* _VTUN_SOCKS_H */

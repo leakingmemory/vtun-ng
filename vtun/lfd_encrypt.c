@@ -18,8 +18,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * lfd_encrypt.c,v 1.4 2001/09/20 06:36:23 talby Exp
+ */
 
 /*
  * This lfd_encrypt module uses MD5 to create 128 bits encryption
@@ -64,24 +64,26 @@
 #include "linkfd.h"
 #include "lib.h"
 
-#define ENC_BUF_SIZE VTUN_FRAME_SIZE + 16 
+#define ENC_BUF_SIZE VTUN_FRAME_SIZE + 16
 #define ENC_KEY_SIZE 16
 
 BF_KEY key;
 
 char *enc_buf;
-int (*crypt_buf)(int, char *, char *, int) = NULL;
+int (*crypt_buf) (int, char *, char *, int) = NULL;
 
 /* encryption could be stronger if the initial ivec was not
  * a constant, but this is only an issue with the first
  * packet. (first few packets?) */
 int str_crypt_buf(int len, char *ibuf, char *obuf, int enc)
 {
-  static unsigned char ivec[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-  static int           num[2] = {0,0};
+	static unsigned char ivec[16] =
+	    { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+	static int num[2] = { 0, 0 };
 
-  BF_cfb64_encrypt(ibuf, obuf, len, &key, ivec + (enc<<3), num + enc, enc);
-  return(len);
+	BF_cfb64_encrypt(ibuf, obuf, len, &key, ivec + (enc << 3),
+			 num + enc, enc);
+	return (len);
 }
 
 /* UDP packets get a header.  The first byte in the packet is the
@@ -89,122 +91,130 @@ int str_crypt_buf(int len, char *ibuf, char *obuf, int enc)
  * boundary */
 int pkt_crypt_buf(int len, char *ibuf, char *obuf, int enc)
 {
-  char *ip = ibuf,
-       *op = obuf;
-  int i = len >> 3;
-  char hdr[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-  char hlen;
+	char *ip = ibuf, *op = obuf;
+	int i = len >> 3;
+	char hdr[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	char hlen;
 
-  if(enc == BF_ENCRYPT) {       /* build header */
-    hlen = 8 - (len & 7);
-    if(hlen == 0) hlen = 8;
-    hdr[0] = hlen;
-    memcpy(hdr + hlen, ip, 8 - hlen);
-    BF_ecb_encrypt(hdr, op, &key, enc);
-    op  += 8;
-    ip  += 8 - hlen;
-    len += hlen;
-  } else {                      /* strip header */
-    BF_ecb_encrypt(ip, hdr, &key, enc);
-    hlen = hdr[0];
-    memcpy(op, hdr + hlen, 8 - hlen);
-    op += 8 - hlen;
-    ip += 8;
-    len -= hlen;
-  }
-  while(i > 0) {
-    BF_ecb_encrypt(ip, op, &key, enc);
-    ip += 8; op += 8; i--;
-  }
-  return(len);
+	if (enc == BF_ENCRYPT) {	/* build header */
+		hlen = 8 - (len & 7);
+		if (hlen == 0)
+			hlen = 8;
+		hdr[0] = hlen;
+		memcpy(hdr + hlen, ip, 8 - hlen);
+		BF_ecb_encrypt(hdr, op, &key, enc);
+		op += 8;
+		ip += 8 - hlen;
+		len += hlen;
+	} else {		/* strip header */
+		BF_ecb_encrypt(ip, hdr, &key, enc);
+		hlen = hdr[0];
+		memcpy(op, hdr + hlen, 8 - hlen);
+		op += 8 - hlen;
+		ip += 8;
+		len -= hlen;
+	}
+	while (i > 0) {
+		BF_ecb_encrypt(ip, op, &key, enc);
+		ip += 8;
+		op += 8;
+		i--;
+	}
+	return (len);
 }
 
 int encrypt_buf(int len, char *in, char **out)
 {
-   *out = enc_buf;
-   return(crypt_buf(len, in, *out, BF_ENCRYPT));
+	*out = enc_buf;
+	return (crypt_buf(len, in, *out, BF_ENCRYPT));
 }
 
 int decrypt_buf(int len, char *in, char **out)
 {
-   *out = enc_buf;
-   return(crypt_buf(len, in, *out, BF_DECRYPT));
+	*out = enc_buf;
+	return (crypt_buf(len, in, *out, BF_DECRYPT));
 }
 
-unsigned char *session_key(struct vtun_host *host) {
-   static char buf[ENC_KEY_SIZE];
-   BF_KEY initkey;
-   fd_set rfd;
-   struct timeval tv;
-   u_int32_t val;
-   char ivec[] = {0,0,0,0,0,0,0,0};
-   int fun[4];
-   char *mode;
+unsigned char *session_key(struct vtun_host *host)
+{
+	static char buf[ENC_KEY_SIZE];
+	BF_KEY initkey;
+	fd_set rfd;
+	struct timeval tv;
+	u_int32_t val;
+	char ivec[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	int fun[4];
+	char *mode;
 
-   BF_set_key(&initkey, ENC_KEY_SIZE,
-     MD5(host->passwd, strlen(host->passwd), NULL));
-   tv.tv_sec  = 0; tv.tv_usec = 0; FD_ZERO(&rfd); FD_SET(host->rmt_fd, &rfd);
-   select(host->rmt_fd + 1, &rfd, NULL, NULL, &tv);
-   if(!FD_ISSET(host->rmt_fd, &rfd)) {
-      char cbuf[ENC_KEY_SIZE];
+	BF_set_key(&initkey, ENC_KEY_SIZE,
+		   MD5(host->passwd, strlen(host->passwd), NULL));
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+	FD_ZERO(&rfd);
+	FD_SET(host->rmt_fd, &rfd);
+	select(host->rmt_fd + 1, &rfd, NULL, NULL, &tv);
+	if (!FD_ISSET(host->rmt_fd, &rfd)) {
+		char cbuf[ENC_KEY_SIZE];
 
-      RAND_seed(host->passwd, strlen(host->passwd));
-      RAND_bytes(buf, ENC_KEY_SIZE);
-      BF_cbc_encrypt(buf, cbuf, ENC_KEY_SIZE, &initkey, ivec, BF_ENCRYPT);
-      write(host->rmt_fd, cbuf, ENC_KEY_SIZE);
-      mode = "send";
-   } else {
-      read(host->rmt_fd, buf, ENC_KEY_SIZE);
-      BF_cbc_encrypt(buf, buf, ENC_KEY_SIZE, &initkey, ivec, BF_DECRYPT);
-      mode = "recv";
-   }
-   /* return(MD5(host->passwd, strlen(host->passwd), NULL)); */
-   memcpy(fun, buf, ENC_KEY_SIZE);
-   syslog(LOG_ERR, "blowfish: %s key %08x %08x %08x %08x", mode,
-     htonl(fun[0]), htonl(fun[1]), htonl(fun[2]), htonl(fun[3]));
-   return(buf);
+		RAND_seed(host->passwd, strlen(host->passwd));
+		RAND_bytes(buf, ENC_KEY_SIZE);
+		BF_cbc_encrypt(buf, cbuf, ENC_KEY_SIZE, &initkey, ivec,
+			       BF_ENCRYPT);
+		write(host->rmt_fd, cbuf, ENC_KEY_SIZE);
+		mode = "send";
+	} else {
+		read(host->rmt_fd, buf, ENC_KEY_SIZE);
+		BF_cbc_encrypt(buf, buf, ENC_KEY_SIZE, &initkey, ivec,
+			       BF_DECRYPT);
+		mode = "recv";
+	}
+	/* return(MD5(host->passwd, strlen(host->passwd), NULL)); */
+	memcpy(fun, buf, ENC_KEY_SIZE);
+	syslog(LOG_ERR, "blowfish: %s key %08x %08x %08x %08x", mode,
+	       htonl(fun[0]), htonl(fun[1]), htonl(fun[2]), htonl(fun[3]));
+	return (buf);
 }
 
 int alloc_encrypt(struct vtun_host *host)
 {
-   char *mode;
+	char *mode;
 
-   if((enc_buf = (char *)lfd_alloc(ENC_BUF_SIZE)) == NULL) {
-      syslog(LOG_ERR, "Unable to allocate encryption buffer");
-      return -1;
-   }
+	if ((enc_buf = (char *) lfd_alloc(ENC_BUF_SIZE)) == NULL) {
+		syslog(LOG_ERR, "Unable to allocate encryption buffer");
+		return -1;
+	}
 
-   BF_set_key(&key, ENC_KEY_SIZE, session_key(host));
+	BF_set_key(&key, ENC_KEY_SIZE, session_key(host));
 
-   if(host->flags & VTUN_TCP) {
-      crypt_buf = str_crypt_buf;
-      mode = "cfb64";
-   } else {
-      crypt_buf = pkt_crypt_buf;
-      mode = "ecb";
-   }
+	if (host->flags & VTUN_TCP) {
+		crypt_buf = str_crypt_buf;
+		mode = "cfb64";
+	} else {
+		crypt_buf = pkt_crypt_buf;
+		mode = "ecb";
+	}
 
-   syslog(LOG_INFO, "blowfish/%s encryption initialized", mode);
-   return 0;
+	syslog(LOG_INFO, "blowfish/%s encryption initialized", mode);
+	return 0;
 }
 
 int free_encrypt()
 {
-   lfd_free(enc_buf);
+	lfd_free(enc_buf);
 
-   return 0;
+	return 0;
 }
 
 /* 
  * Module structure.
  */
 struct lfd_mod lfd_encrypt = {
-     "Encryptor",
-     alloc_encrypt,
-     encrypt_buf,
-     NULL,
-     decrypt_buf,
-     NULL,
-     free_encrypt,
-     NULL,NULL
+	"Encryptor",
+	alloc_encrypt,
+	encrypt_buf,
+	NULL,
+	decrypt_buf,
+	NULL,
+	free_encrypt,
+	NULL, NULL
 };

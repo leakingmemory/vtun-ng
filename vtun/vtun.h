@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * vtun.h,v 1.9 2002/01/05 01:23:39 noop Exp
+ */
 #ifndef _VTUN_H
 #define _VTUN_H
 
@@ -34,85 +34,85 @@
 #define VTUN_TIMEOUT 30
 
 /* Number of seconds for delay after pppd startup*/
-#define VTUN_DELAY_SEC  10 
+#define VTUN_DELAY_SEC  10
 
 /* Statistic interval in seconds */
-#define VTUN_STAT_IVAL  5*60  /* 5 min */
+#define VTUN_STAT_IVAL  5*60	/* 5 min */
 
 /* Max lenght of device name */
-#define VTUN_DEV_LEN  20 
- 
+#define VTUN_DEV_LEN  20
+
 /* End of configurable part */
 
 struct vtun_sopt {
-    char *dev;
-    char *laddr;
-    int  lport;
-    char *raddr;
-    int  rport;
+	char *dev;
+	char *laddr;
+	int lport;
+	char *raddr;
+	int rport;
 };
 
 struct vtun_stat {
-   unsigned long byte_in;
-   unsigned long byte_out;
-   unsigned long comp_in;
-   unsigned long comp_out;
-   FILE *file;
+	unsigned long byte_in;
+	unsigned long byte_out;
+	unsigned long comp_in;
+	unsigned long comp_out;
+	FILE *file;
 };
 
 struct vtun_cmd {
-   char *prog;
-   char *args;
-   int  flags;
+	char *prog;
+	char *args;
+	int flags;
 };
 /* Command flags */
-#define VTUN_CMD_WAIT	0x01 
+#define VTUN_CMD_WAIT	0x01
 #define VTUN_CMD_DELAY  0x02
 #define VTUN_CMD_SHELL  0x04
 
 struct vtun_addr {
-   char *name;
-   char *ip;
-   int port;
-   int type;
+	char *name;
+	char *ip;
+	int port;
+	int type;
 };
 /* Address types */
-#define VTUN_ADDR_IFACE	0x01 
+#define VTUN_ADDR_IFACE	0x01
 #define VTUN_ADDR_NAME  0x02
 
 struct vtun_host {
-   char *host;
-   char *passwd;
-   char *dev;
+	char *host;
+	char *passwd;
+	char *dev;
 
-   llist up;
-   llist down;
+	llist up;
+	llist down;
 
-   int  flags;
-   int  timeout;
-   int  spd_in;
-   int  spd_out;
-   int  zlevel;
+	int flags;
+	int timeout;
+	int spd_in;
+	int spd_out;
+	int zlevel;
 
-   int  rmt_fd;
-   int  loc_fd;
+	int rmt_fd;
+	int loc_fd;
 
-   /* Persist mode */
-   int  persist;
+	/* Persist mode */
+	int persist;
 
-   /* Multiple connections */
-   int  multi;
+	/* Multiple connections */
+	int multi;
 
-   /* Keep Alive */
-   int ka_interval;
-   int ka_failure;
+	/* Keep Alive */
+	int ka_interval;
+	int ka_failure;
 
-   /* Source address */
-   struct vtun_addr src_addr;
+	/* Source address */
+	struct vtun_addr src_addr;
 
-   struct vtun_stat stat;
+	struct vtun_stat stat;
 
-   struct vtun_sopt sopt;
+	struct vtun_sopt sopt;
 };
 
 extern llist host_list;
@@ -122,12 +122,12 @@ extern llist host_list;
 #define VTUN_PIPE       0x0200
 #define VTUN_ETHER      0x0400
 #define VTUN_TUN        0x0800
-#define VTUN_TYPE_MASK  (VTUN_TTY | VTUN_PIPE | VTUN_ETHER | VTUN_TUN) 
+#define VTUN_TYPE_MASK  (VTUN_TTY | VTUN_PIPE | VTUN_ETHER | VTUN_TUN)
 
-#define VTUN_TCP        0x0010  
-#define VTUN_UDP        0x0020  
-#define VTUN_PROT_MASK  (VTUN_TCP | VTUN_UDP) 
-#define VTUN_KEEP_ALIVE 0x0040	
+#define VTUN_TCP        0x0010
+#define VTUN_UDP        0x0020
+#define VTUN_PROT_MASK  (VTUN_TCP | VTUN_UDP)
+#define VTUN_KEEP_ALIVE 0x0040
 
 #define VTUN_ZLIB       0x0001
 #define VTUN_LZO        0x0002
@@ -154,8 +154,8 @@ extern llist host_list;
 #define VTUN_MESG_SIZE	50
 
 /* Support for multiple connections */
-#define VTUN_MULTI_DENY		0  /* no */ 
-#define VTUN_MULTI_ALLOW	1  /* yes */
+#define VTUN_MULTI_DENY		0	/* no */
+#define VTUN_MULTI_ALLOW	1	/* yes */
 #define VTUN_MULTI_KILL		2
 
 /* keep interface in persistant mode */
@@ -168,32 +168,32 @@ extern llist host_list;
 
 /* Global options */
 struct vtun_opts {
-   int  timeout;
-   int  persist;
+	int timeout;
+	int persist;
 
-   char *cfg_file;
+	char *cfg_file;
 
-   char *shell; 	 /* Shell */
-   char *ppp;		 /* Command to configure ppp devices */
-   char *ifcfg;		 /* Command to configure net devices */
-   char *route;		 /* Command to configure routing */
-   char *fwall; 	 /* Command to configure FireWall */
-   char *iproute;	 /* iproute command */
+	char *shell;		/* Shell */
+	char *ppp;		/* Command to configure ppp devices */
+	char *ifcfg;		/* Command to configure net devices */
+	char *route;		/* Command to configure routing */
+	char *fwall;		/* Command to configure FireWall */
+	char *iproute;		/* iproute command */
 
-   char *svr_name;       /* Server's host name */
-   int  svr_port;	 /* Server's port */
-   int  svr_type;	 /* Server mode */
-   int  syslog; 	 /* Facility to log messages to syslog under */
+	char *svr_name;		/* Server's host name */
+	int svr_port;		/* Server's port */
+	int svr_type;		/* Server mode */
+	int syslog;		/* Facility to log messages to syslog under */
 };
-#define VTUN_STAND_ALONE	0 
-#define VTUN_INETD		1	
+#define VTUN_STAND_ALONE	0
+#define VTUN_INETD		1
 
 extern struct vtun_opts vtun;
 
 void server(int sock);
 void client(struct vtun_host *host);
-int  tunnel(struct vtun_host *host);
-int  read_config(char *file);
-struct vtun_host * find_host(char *host);
+int tunnel(struct vtun_host *host);
+int read_config(char *file);
+struct vtun_host *find_host(char *host);
 
 #endif

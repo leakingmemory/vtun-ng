@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * pty_dev.c,v 1.2 2001/09/20 06:26:41 talby Exp
+ */
 
 #include "config.h"
 
@@ -35,33 +35,33 @@
 /* 
  * Allocate pseudo tty, returns master side fd. 
  * Stores slave name in the first arg(must be large enough).
- */  
+ */
 int pty_open(char *sl_name)
 {
-    char ptyname[] = "/dev/ptyXY";
-    char ch[] = "pqrstuvwxyz";
-    char digit[] = "0123456789abcdefghijklmnopqrstuv";
-    int  l, m;
-    int  mr_fd;
+	char ptyname[] = "/dev/ptyXY";
+	char ch[] = "pqrstuvwxyz";
+	char digit[] = "0123456789abcdefghijklmnopqrstuv";
+	int l, m;
+	int mr_fd;
 
-    /* This algorithm should work for almost all standard Unices */	
-    for(l=0; ch[l]; l++ ) {
-        for(m=0; digit[m]; m++ ) {
-	 	ptyname[8] = ch[l];
-		ptyname[9] = digit[m];
-		/* Open the master */
-		if( (mr_fd=open(ptyname, O_RDWR)) < 0 )
-	 	   continue;
-		/* Check the slave */
-		ptyname[5] = 't';
-		if( (access(ptyname, R_OK | W_OK)) < 0 ){
-		   close(mr_fd);
-		   ptyname[5] = 'p';
-		   continue;
+	/* This algorithm should work for almost all standard Unices */
+	for (l = 0; ch[l]; l++) {
+		for (m = 0; digit[m]; m++) {
+			ptyname[8] = ch[l];
+			ptyname[9] = digit[m];
+			/* Open the master */
+			if ((mr_fd = open(ptyname, O_RDWR)) < 0)
+				continue;
+			/* Check the slave */
+			ptyname[5] = 't';
+			if ((access(ptyname, R_OK | W_OK)) < 0) {
+				close(mr_fd);
+				ptyname[5] = 'p';
+				continue;
+			}
+			strcpy(sl_name, ptyname);
+			return mr_fd;
 		}
-		strcpy(sl_name,ptyname);
-		return mr_fd;
-	    }
 	}
 	return -1;
 }
@@ -69,11 +69,11 @@ int pty_open(char *sl_name)
 /* Write frames to PTY device */
 int pty_write(int fd, char *buf, int len)
 {
-    return write_n(fd, buf, len);
+	return write_n(fd, buf, len);
 }
 
 /* Read frames from PTY device */
 int pty_read(int fd, char *buf, int len)
 {
-    return read(fd, buf, len);
+	return read(fd, buf, len);
 }

@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * pipe_dev.c,v 1.2 2001/09/20 06:26:41 talby Exp
+ */
 
 #include "config.h"
 
@@ -35,20 +35,20 @@
 
 /* 
  * Create pipe. Return open fd. 
- */  
+ */
 int pipe_open(int *fd)
 {
-    return socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
+	return socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
 }
 
 /* Write frames to pipe */
 int pipe_write(int fd, char *buf, int len)
 {
-    return write_n(fd, buf, len);
+	return write_n(fd, buf, len);
 }
 
 /* Read frames from pipe */
 int pipe_read(int fd, char *buf, int len)
 {
-    return read(fd, buf, len);
+	return read(fd, buf, len);
 }

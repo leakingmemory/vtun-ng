@@ -17,8 +17,8 @@
  */
 
 /*
- * $Id$
- */ 
+ * driver.h,v 1.2 2001/09/20 06:26:41 talby Exp
+ */
 #ifndef _DRIVER_H
 #define _DRIVER_H
 
@@ -27,11 +27,11 @@
  * version 3.0
  */
 
-extern int (*dev_write)(int fd, char *buf, int len);
-extern int (*dev_read)(int fd, char *buf, int len);
+extern int (*dev_write) (int fd, char *buf, int len);
+extern int (*dev_read) (int fd, char *buf, int len);
 
-extern int (*proto_write)(int fd, char *buf, int len);
-extern int (*proto_read)(int fd, char *buf);
+extern int (*proto_write) (int fd, char *buf, int len);
+extern int (*proto_read) (int fd, char *buf);
 
 int tun_open(char *dev);
 int tun_close(int fd, char *dev);

@@ -17,68 +17,68 @@
  */
 
 /*
- * $Id$
- */ 
+ * cfg_kwords.h,v 1.3 2002/01/05 01:23:39 noop Exp
+ */
 
 extern int lineno;
 
 struct kword {
-   char *str;
-   int  type;
-}; 
+	char *str;
+	int type;
+};
 
 struct kword cfg_keyword[] = {
-   { "options",  K_OPTIONS }, 
-   { "default",  K_DEFAULT },
-   { "up",	 K_UP },
-   { "down",	 K_DOWN },
-   { "port",     K_PORT }, 
-   { "srcaddr",  K_SRCADDR }, 
-   { "addr",  	 K_ADDR }, 
-   { "iface",  	 K_IFACE }, 
-   { "persist",	 K_PERSIST }, 
-   { "multi",	 K_MULTI }, 
-   { "iface",    K_IFACE }, 
-   { "timeout",	 K_TIMEOUT }, 
-   { "passwd",   K_PASSWD }, 
-   { "program",  K_PROG }, 
-   { "speed",    K_SPEED }, 
-   { "compress", K_COMPRESS }, 
-   { "encrypt",  K_ENCRYPT }, 
-   { "type",	 K_TYPE }, 
-   { "proto",	 K_PROT }, 
-   { "device",	 K_DEVICE }, 
-   { "ppp",	 K_PPP },
-   { "ifconfig", K_IFCFG },
-   { "ifcfg", 	 K_IFCFG },
-   { "firewall", K_FWALL }, 
-   { "route", 	 K_ROUTE }, 
-   { "ip", 	 K_IPROUTE }, 
-   { "keepalive",K_KALIVE }, 
-   { "stat",	 K_STAT }, 
-   { "syslog",   K_SYSLOG },
-   { NULL , 0 }
+	{"options", K_OPTIONS},
+	{"default", K_DEFAULT},
+	{"up", K_UP},
+	{"down", K_DOWN},
+	{"port", K_PORT},
+	{"srcaddr", K_SRCADDR},
+	{"addr", K_ADDR},
+	{"iface", K_IFACE},
+	{"persist", K_PERSIST},
+	{"multi", K_MULTI},
+	{"iface", K_IFACE},
+	{"timeout", K_TIMEOUT},
+	{"passwd", K_PASSWD},
+	{"program", K_PROG},
+	{"speed", K_SPEED},
+	{"compress", K_COMPRESS},
+	{"encrypt", K_ENCRYPT},
+	{"type", K_TYPE},
+	{"proto", K_PROT},
+	{"device", K_DEVICE},
+	{"ppp", K_PPP},
+	{"ifconfig", K_IFCFG},
+	{"ifcfg", K_IFCFG},
+	{"firewall", K_FWALL},
+	{"route", K_ROUTE},
+	{"ip", K_IPROUTE},
+	{"keepalive", K_KALIVE},
+	{"stat", K_STAT},
+	{"syslog", K_SYSLOG},
+	{NULL, 0}
 };
 
 struct kword cfg_param[] = {
-   { "yes",      1 }, 
-   { "no",       0 },
-   { "allow",	 1 },
-   { "deny",	 0 },
-   { "enable",	 1 },
-   { "disable",	 0 },
-   { "tty",      VTUN_TTY }, 
-   { "pipe",	 VTUN_PIPE }, 
-   { "ether",	 VTUN_ETHER }, 
-   { "tun",	 VTUN_TUN }, 
-   { "tcp",      VTUN_TCP }, 
-   { "udp",      VTUN_UDP }, 
-   { "lzo",      VTUN_LZO }, 
-   { "zlib",     VTUN_ZLIB }, 
-   { "wait",	 1 },
-   { "kill",	 VTUN_MULTI_KILL },
-   { "inetd",	 VTUN_INETD },
-   { "stand",	 VTUN_STAND_ALONE },
-   { "keep",     VTUN_PERSIST_KEEPIF },
-   { NULL , 0 }
+	{"yes", 1},
+	{"no", 0},
+	{"allow", 1},
+	{"deny", 0},
+	{"enable", 1},
+	{"disable", 0},
+	{"tty", VTUN_TTY},
+	{"pipe", VTUN_PIPE},
+	{"ether", VTUN_ETHER},
+	{"tun", VTUN_TUN},
+	{"tcp", VTUN_TCP},
+	{"udp", VTUN_UDP},
+	{"lzo", VTUN_LZO},
+	{"zlib", VTUN_ZLIB},
+	{"wait", 1},
+	{"kill", VTUN_MULTI_KILL},
+	{"inetd", VTUN_INETD},
+	{"stand", VTUN_STAND_ALONE},
+	{"keep", VTUN_PERSIST_KEEPIF},
+	{NULL, 0}
 };

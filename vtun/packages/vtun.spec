@@ -37,6 +37,7 @@ Packager: Bishop Clark (LC957) <bishop@platypus.bc.ca>
 BuildRoot: /var/tmp/%{name}-%{version}-build
 Obsoletes: vppp
 %{!?NO_USE_LZO:Buildrequires: lzo-devel}
+Buildrequires: byacc, flex, openssl-devel, zlib-devel
 
 %description
 VTun provides the method for creating Virtual Tunnels over TCP/IP

@@ -212,7 +212,7 @@ void write_pid(void)
 	FILE *f;
 
 	if (!(f = fopen(VTUN_PID_FILE, "w"))) {
-		syslog(LOG_ERR, "Can't write PID file");
+		syslog(LOG_ERR, "Can't write PID file %s", VTUN_PID_FILE);
 		return;
 	}
 

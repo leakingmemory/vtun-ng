@@ -104,7 +104,7 @@ static	struct cb_ops tun_cb_ops = {
   nochpoll,		/* cb_chpoll */
   ddi_prop_op,		/* cb_prop_op */
   &tun_info,		/* cb_stream */
-  D_MP			/* cb_flag */
+  (D_MP | D_MT_QPAIR | D_MTOUTPERIM | D_MTOCEXCL)	/* cb_flag */
 };
 
 static	struct dev_ops tun_ops = {
@@ -131,50 +131,28 @@ static struct modlinkage modlinkage = {
   MODREV_1, { &modldrv, NULL }
 };
 
-/* Global lock */
-static kmutex_t tun_lock;
-
 /* TUN device pointer */
 static dev_info_t *tun_dev = NULL;
 
 /* PPA array */
 static struct tunppa *tun_ppa[TUNMAXPPA];
-static krwlock_t tun_ppa_lock;
 
 /* List of active driver Streams */
 static struct tunstr *tun_str;
-static krwlock_t tun_str_lock;
 
 int _init(void)
 {
-  int status;
-
-  mutex_init(&tun_lock, "tun global lock", MUTEX_DRIVER, NULL);
-  rw_init(&tun_ppa_lock, "tun ppa array lock", RW_DRIVER, NULL);
-  rw_init(&tun_str_lock, "tun streams list lock", RW_DRIVER, NULL);
-  if( (status = mod_install(&modlinkage)) ){
-     rw_destroy(&tun_ppa_lock);
-     rw_destroy(&tun_str_lock);
-     mutex_destroy(&tun_lock);
-  }
-
   cmn_err(CE_CONT, "Universal TUN/TAP device driver ver %s"
 		   "(C) 1999-2000 Maxim Krasnyansky\n", TUN_VER);
+
   DBG(CE_CONT,"tun: _init\n");
-  return status;
+  return mod_install(&modlinkage);
 }
 
 int _fini(void)
 {
-  int status;
-
-  if( !(status = mod_remove(&modlinkage)) ){
-     mutex_destroy(&tun_lock);
-     rw_destroy(&tun_ppa_lock);
-     rw_destroy(&tun_str_lock);
-  }
   DBG(CE_CONT,"tun: _fini\n");
-  return status;
+  return mod_remove(&modlinkage);
 }
 
 int _info(struct modinfo *modinfop)
@@ -250,9 +228,6 @@ static int tunopen(queue_t *rq, dev_t *dev, int flag, int sflag, cred_t *credp)
   register struct tunstr *str, **prev;
   int minordev, rc = 0;
 
-  /* Serialize all driver open and close */
-  rw_enter(&tun_str_lock, RW_WRITER);
-
   /* Determine minor device number */
   prev = &tun_str;
   if(sflag == CLONEOPEN){
@@ -271,14 +246,12 @@ static int tunopen(queue_t *rq, dev_t *dev, int flag, int sflag, cred_t *credp)
      str->rq = rq;
      str->minor = minordev;
      str->state = DL_UNATTACHED;
-     mutex_init(&str->lock, "tun stream lock", MUTEX_DRIVER, (void *)0);
 
      str->s_next = *prev;
      *prev = str;
 
      rq->q_ptr = WR(rq)->q_ptr = (char *)str;
   }
-  rw_exit(&tun_str_lock);
 
   DBG(CE_CONT,"tun: tunopen str %p minor %d", str, minordev);
 
@@ -300,7 +273,6 @@ static int tunclose(queue_t *rq)
   	DBG(CE_CONT,"tun: closing control stream %p\n", str);
 	
 	/* Unlink PPA from all protocol Streams */
-	rw_enter(&tun_ppa_lock, RW_WRITER);
 	for(tmp = ppa->p_str; tmp; tmp = tmp->p_next){
 	   flushq(WR(tmp->rq), FLUSHDATA);
 	   tmp->ppa = NULL;
@@ -308,28 +280,21 @@ static int tunclose(queue_t *rq)
        
 	/* Free PPA */
 	tun_ppa[ppa->id] = NULL;
-	rw_exit(&tun_ppa_lock); 
-
 	kmem_free((char *)ppa, sizeof(struct tunppa));
      } else {
 	/* Unlink Stream from PPA list */
-	rw_enter(&tun_ppa_lock, RW_WRITER);
 	for(prev = &ppa->p_str; (tmp = *prev); prev = &tmp->p_next)
      	   if( tmp==str ) break;
         *prev = tmp->p_next;
-	rw_exit(&tun_ppa_lock);
      }
   }
 
   /* Unlink Stream from streams list and free it */
-  rw_enter(&tun_str_lock, RW_WRITER);
   for(prev = &tun_str; (tmp = *prev); prev = &tmp->s_next)
      if( tmp==str) break;
   *prev = tmp->s_next;
-  mutex_destroy(&str->lock);
   kmem_free((char *)str, sizeof(struct tunstr));
   rq->q_ptr = WR(rq)->q_ptr = NULL;
-  rw_exit(&tun_str_lock);
 
   return 0;
 }
@@ -354,7 +319,7 @@ static int tunwput(queue_t *wq, mblk_t *mp)
 	break;
 
      case M_IOCTL:
-        tunioctl(wq,mp);
+	qwriter(wq, mp, tunioctl, PERIM_OUTER);
 	break;
 
      case M_FLUSH:
@@ -458,16 +423,13 @@ static void tunioctl(queue_t *wq, mblk_t *mp)
 	   return;
 	}
 
-        rw_enter(&tun_ppa_lock, RW_WRITER);
 	if( p != -1 && tun_ppa[p] ){	 
            tuniocack(wq, mp, M_IOCNAK, 0, EEXIST);
-           rw_exit(&tun_ppa_lock);
 	   return;
 	}
 
 	if( !(ppa = tun_alloc_ppa(p)) ){
            tuniocack(wq, mp, M_IOCNAK, 0, ENOMEM);
-           rw_exit(&tun_ppa_lock);
 	   return;
 	}
 
@@ -477,7 +439,6 @@ static void tunioctl(queue_t *wq, mblk_t *mp)
 	str->ppa = ppa;
  	str->flags |= TUN_CONTROL;
 
-        rw_exit(&tun_ppa_lock);
         tuniocack(wq, mp, M_IOCACK, ppa->id, 0);
 
   	DBG(CE_CONT,"tun: new PPA %d, control stream %p\n", p, str);
@@ -491,10 +452,8 @@ static void tunioctl(queue_t *wq, mblk_t *mp)
 	   return;
 	}
 
-        rw_enter(&tun_ppa_lock, RW_WRITER);
 	if( !(ppa = tun_ppa[p]) ){	 
            tuniocack(wq, mp, M_IOCNAK, 0, ENODEV);
-           rw_exit(&tun_ppa_lock);
 	   break;
 	}
 	str->p_next = ppa->p_str;
@@ -502,7 +461,6 @@ static void tunioctl(queue_t *wq, mblk_t *mp)
 	
 	str->ppa = ppa;
 
-        rw_exit(&tun_ppa_lock);
         tuniocack(wq, mp, M_IOCACK, p, 0);
 
   	DBG(CE_CONT,"tun: stream %p attached to PPA %d \n", str, p);
@@ -723,10 +681,8 @@ static void tun_attach_req(queue_t *wq, mblk_t *mp)
      return;
   }
 
-  rw_enter(&tun_ppa_lock, RW_READER);
   if( !(ppa = tun_ppa[p]) ){	 
      tundlerrack(wq, mp, dlp->dl_primitive, DL_BADPPA, 0);
-     rw_exit(&tun_ppa_lock);
      return;
   }
   str->p_next = ppa->p_str;
@@ -735,7 +691,6 @@ static void tun_attach_req(queue_t *wq, mblk_t *mp)
   str->ppa = ppa;
   str->state = DL_UNBOUND;
 
-  rw_exit(&tun_ppa_lock);
   tundlokack(wq, mp, DL_ATTACH_REQ);
 
   DBG(CE_CONT,"tun: stream %p attached to PPA %d \n", str, p);
@@ -759,11 +714,9 @@ static void tun_detach_req(queue_t *wq, mblk_t *mp)
   }
 
   /* Unlink from PPA list */
-  rw_enter(&tun_ppa_lock, RW_WRITER);
   for(prev = &ppa->p_str; (tmp = *prev); prev = &tmp->p_next)
      if( tmp == str ) break;
   *prev = tmp->p_next;
-  rw_exit(&tun_ppa_lock);
 
   str->ppa = NULL;
   str->state = DL_UNATTACHED;
@@ -921,19 +874,17 @@ static void tunproto(queue_t *wq, mblk_t *mp)
   struct tunstr *str = (struct tunstr *)wq->q_ptr;
   uint32_t prim = dlp->dl_primitive;
 
-  mutex_enter(&str->lock);
-
   switch(prim) {
      case DL_INFO_REQ:
         tun_info_req(wq, mp);
         break;
 
      case DL_ATTACH_REQ:
-        tun_attach_req(wq, mp);
+	qwriter(wq, mp, tun_attach_req, PERIM_OUTER);
         break;
 
      case DL_DETACH_REQ:
-        tun_detach_req(wq, mp);
+	qwriter(wq, mp, tun_detach_req, PERIM_OUTER);
         break;
 
      case DL_BIND_REQ:
@@ -962,8 +913,6 @@ static void tunproto(queue_t *wq, mblk_t *mp)
         tundlerrack(wq, mp, prim, DL_UNSUPPORTED, 0);
         break;
   }
-
-  mutex_exit(&str->lock);
 }
 
 /* Route frames */
@@ -976,15 +925,11 @@ static void tun_frame(queue_t *wq, mblk_t *mp)
   register struct tunstr *tmp;
   mblk_t *nmp;
 
-  rw_enter(&tun_ppa_lock, RW_READER);
-
   if( !(ppa = str->ppa) ){
      /* Stream is not attached to PPA. Ignore frame. */
-
-     rw_exit(&tun_ppa_lock);	     
-     freemsg(mp);
-
      DBG(CE_CONT,"tun: data from unattached str %p\n", str);
+
+     freemsg(mp);
      return; 
   }
 
@@ -1047,6 +992,4 @@ static void tun_frame(queue_t *wq, mblk_t *mp)
      /* Free original message */
      freemsg(mp);
   }
-
-  rw_exit(&tun_ppa_lock);
 }

@@ -60,7 +60,6 @@ struct tunppa {
 struct tunstr {
   struct tunstr	*s_next;	/* next in streams list */
   struct tunstr	*p_next;	/* next in ppa list */
-  kmutex_t lock;		/* protect this structure */
   queue_t *rq;			/* pointer to rq */
 
   struct tunppa *ppa;		/* assigned PPA */

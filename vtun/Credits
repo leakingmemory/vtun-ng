@@ -68,8 +68,8 @@ Ryan Defelice <ryand@mobiletel.com>
 
 Alexander Bergolth <leo@strike.wu-wien.ac.at>
 	Initial multiple connection handling and host lock functionalities. 
-	Improvements and fixes of source address option. Incorrect error 
-	handling fix. Ideas. Suggestions.
+	Improvements and fixes of source address option. Fixed incorrect 
+	error handling. Ideas. Suggestions.
 
 Hubert Feyrer <feyrer@rfhs8012.fh-regensburg.de>
 	NetBSD package.

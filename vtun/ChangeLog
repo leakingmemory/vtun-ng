@@ -3,7 +3,7 @@ ver 2.3:
 	 improvements. RPM package fixes. Persist mode fixes. Fixed a 
 	 couple of memory and file descriptor leaks. Correct closing of 
 	 Solaris TUN device.
-	 Added man page for configuration file. Documentation update. 
+	 Added man page for the configuration file. Documentation update. 
 	 Team members list update. 
 	 Upgrade is strongly recommended.
 

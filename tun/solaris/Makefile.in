@@ -27,19 +27,19 @@ CFLAGS = @CFLAGS@ -D_KERNEL -I.
 
 ADD_DRV = /usr/sbin/add_drv
 REM_DRV = /usr/sbin/rem_drv
-DRV_DIR = /usr/kernel/drv
+DRV_DIR = @DRV_DIR@
 
 INSTALL = @INSTALL@
 
-all: module
+MODULE  = tun
 
-module: tun.o
+all: $(MODULE)
+
+$(MODULE): tun.c if_tun.h
+	$(CC) $(CFLAGS) $(DEFS) -c tun.c
 	$(LD) -r -o tun tun.o
 
-tun.o: tun.c if_tun.h
-	$(CC) $(CFLAGS) $(DEFS) -c tun.c
-
-inst: module 
+inst: $(MODULE)
 	$(INSTALL) -m 644 -o root -g root if_tun.h /usr/include/net 
 	$(INSTALL) -m 644 -o root -g root tun $(DRV_DIR)
 	$(INSTALL) -m 644 -o root -g root tun.conf $(DRV_DIR)

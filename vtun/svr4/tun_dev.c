@@ -67,8 +67,8 @@
  */  
 int tun_alloc(char *dev)
 {
-    int tun_fd, if_fd, ppa = -1;
-    static int ip_fd = 0;
+    static int ip_fd = -1, if_fd = -1;
+    static int tun_fd, ppa;
     char *ptr;
 
     if( *dev ){
@@ -77,9 +77,7 @@ int tun_alloc(char *dev)
        ppa = atoi(ptr);
     }
 
-    /* Check if IP device was opened */
-    if( ip_fd )
-       close(ip_fd);
+    close(ip_fd); close(if_fd);
 
     if( (ip_fd = open("/dev/ip", O_RDWR, 0)) < 0){
        syslog(LOG_ERR, "Can't open /dev/ip");

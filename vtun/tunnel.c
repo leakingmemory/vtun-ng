@@ -73,14 +73,19 @@ int tunnel(struct vtun_host *host)
 	int null_fd, pid, opt;
 	int fd[2] = { -1, -1 };
 	char dev[VTUN_DEV_LEN] = "";
+	int interface_already_open = 0;
+
+	if ( (host->persist == VTUN_PERSIST_KEEPIF) &&
+	     (host->loc_fd >= 0) )
+	     interface_already_open = 1;
+
 
 	/* Initialize device. */
 	if (host->dev) {
 		strncpy(dev, host->dev, VTUN_DEV_LEN);
 		dev[VTUN_DEV_LEN - 1] = '\0';
 	}
-	if (!((host->persist == VTUN_PERSIST_KEEPIF) &&
-	      (host->loc_fd >= 0))) {
+	if (! interface_already_open) {
 		switch (host->flags & VTUN_TYPE_MASK) {
 		case VTUN_TTY:
 			if ((fd[0] = pty_open(dev)) < 0) {
@@ -118,6 +123,7 @@ int tunnel(struct vtun_host *host)
 			}
 			break;
 		}
+		host->loc_fd = fd[0];
 	}
 	host->sopt.dev = strdup(dev);
 
@@ -152,8 +158,7 @@ int tunnel(struct vtun_host *host)
 		break;
 	}
 
-	if (!((host->persist == VTUN_PERSIST_KEEPIF) &&
-	      (host->loc_fd != -1))) {
+	if (! interface_already_open) {
 		/* do this only the first time when in persist = keep_if mode */
 		switch ((pid = fork())) {
 		case -1:
@@ -197,7 +202,6 @@ int tunnel(struct vtun_host *host)
 
 			exit(0);
 		}
-		host->loc_fd = fd[0];
 	}
 
 	switch (host->flags & VTUN_TYPE_MASK) {

@@ -3,7 +3,9 @@
 @owner root
 @group wheel
 
+@cwd /
+
 @exec install -c -d -m 755 -o root -g wheel /modules
 
 @mode 555
-/modules/if_tap.ko
+modules/if_tap.ko

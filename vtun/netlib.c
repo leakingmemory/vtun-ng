@@ -209,7 +209,7 @@ int local_addr(struct sockaddr_in *addr, struct vtun_host *host, int con)
      if( con ){
         /* Use address of the already connected socket. */
         opt = sizeof(struct sockaddr_in);
-        if( getsockname(host->rmt_fd, addr, &opt) < 0 ){
+        if( getsockname(host->rmt_fd, (struct sockaddr *)addr, &opt) < 0 ){
            syslog(LOG_ERR,"Can't get local socket address");
            return -1; 
         }

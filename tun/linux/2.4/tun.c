@@ -166,6 +166,7 @@ int tun_net_init(struct net_device *dev)
 static unsigned int tun_chr_poll(struct file *file, poll_table * wait)
 {  
 	struct tun_struct *tun = (struct tun_struct *)file->private_data;
+	unsigned int mask = POLLOUT | POLLWRNORM;
 
 	if (!tun)
 		return -EBADFD;
@@ -175,9 +176,9 @@ static unsigned int tun_chr_poll(struct file *file, poll_table * wait)
 	poll_wait(file, &tun->read_wait, wait);
  
 	if (skb_queue_len(&tun->readq))
-		return POLLIN | POLLRDNORM;
+		mask |= POLLIN | POLLRDNORM;
 
-	return POLLOUT | POLLWRNORM;
+	return mask;
 }
 
 /* Get packet from user space buffer(already verified) */
@@ -403,7 +404,7 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 	tun->attached = 1;
 
 	strcpy(ifr->ifr_name, tun->name);
-	return 0;   
+	return 0;
 }
 
 static int tun_chr_ioctl(struct inode *inode, struct file *file, 
@@ -491,9 +492,14 @@ static int tun_chr_fasync(int fd, struct file *file, int on)
 	if ((ret = fasync_helper(fd, file, on, &tun->fasync)) < 0)
 		return ret; 
  
-	if (on)
+	if (on) {
 		tun->flags |= TUN_FASYNC;
-	else 
+		if (!file->f_owner.pid) {
+			file->f_owner.pid  = current->pid;
+			file->f_owner.uid  = current->uid;
+			file->f_owner.euid = current->euid;
+		}
+	} else 
 		tun->flags &= ~TUN_FASYNC;
 
 	return 0;
@@ -514,6 +520,8 @@ static int tun_chr_close(struct inode *inode, struct file *file)
 
 	DBG(KERN_INFO "%s: tun_chr_close\n", tun->name);
 
+    tun_chr_fasync(-1, file, 0);
+
 	rtnl_lock();
 
 	/* Detach from net device */
@@ -526,8 +534,8 @@ static int tun_chr_close(struct inode *inode, struct file *file)
 	if (!(tun->flags & TUN_PERSIST)) {
 		dev_close(&tun->dev);
 		unregister_netdevice(&tun->dev);
-		MOD_DEC_USE_COUNT;
 		kfree(tun);
+		MOD_DEC_USE_COUNT;
 	}
 
 	rtnl_unlock();
@@ -556,7 +564,7 @@ static struct miscdevice tun_miscdev=
 int __init tun_init(void)
 {
 	printk(KERN_INFO "Universal TUN/TAP device driver %s " 
-	       "(C)1999-2000 Maxim Krasnyansky\n", TUN_VER);
+	       "(C)1999-2001 Maxim Krasnyansky\n", TUN_VER);
 
 	if (misc_register(&tun_miscdev)) {
 		printk(KERN_ERR "tun: Can't register misc device %d\n", TUN_MINOR);

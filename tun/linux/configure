@@ -951,11 +951,11 @@ TDIR=`echo $KVER | cut -d '.' -f 1,2`
     fi
 
 
+CPPFLAGS="$CPPFLAGS -D__KERNEL__ -I $KDIR/include"
 cat > conftest.$ac_ext <<EOF
-#line 956 "configure"
+#line 957 "configure"
 #include "confdefs.h"
- #define __KERNEL__ 
-     #include "$KDIR/include/linux/fs.h" 
+ #include <linux/fs.h> 
 int main() {
  kill_fasync(NULL, 1, 1) 
 ; return 0; }

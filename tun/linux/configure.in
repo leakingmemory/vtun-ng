@@ -59,9 +59,9 @@ AC_TEST_FILES(tun.c if_tun.h, $TDIR, ,
 )
 
 dnl Check for new kill_fasync call
+CPPFLAGS="$CPPFLAGS -D__KERNEL__ -I $KDIR/include"
 AC_TRY_COMPILE( 
-   [ #define __KERNEL__ 
-     #include "$KDIR/include/linux/fs.h" ], 
+   [ #include <linux/fs.h> ], 
    [ kill_fasync(NULL, 1, 1) ],
    AC_DEFINE(NEW_FASYNC)
 )

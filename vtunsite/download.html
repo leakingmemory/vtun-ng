@@ -23,12 +23,12 @@
    <p>
    <table border="0" cellpadding="0" cellspacing="0" width="95%">
        <tr>
-       <td align="center" valign="top" width="50%">
+       <td align="center" valign="top" width="50%" rowspan="2">
 	   <table border="1" cellpadding="0" cellspacing="0" width="98%">
               <tr>
                  <td align="center" valign="top" bgcolor="#446DC4">
 		    <font color="#FFFFFF" face="Verdana">
-		    <b>Stable (2.5)</b>
+		    <b>Stable (2.6)</b>
 		    </font>
 	 	 </td>
               </tr>
@@ -99,7 +99,6 @@
 		      </li>
                     </ul>
 		    </font>
- 		    <br>
                  </td>
               </tr>
            </table>
@@ -109,7 +108,7 @@
               <tr>
                  <td align="center" valign="top" bgcolor="#446DC4">
 		    <font color="#FFFFFF" face="Verdana">
-		    <b>Development</b>
+		    <b>Development (3.X)</b>
 		    </font>
 	 	 </td>
               </tr>
@@ -118,29 +117,58 @@
 		    <font face="Verdana">
  		    <ul>
                       <li>
-			<font face="Verdana" color="#000000">Version 3.X.</font>
+			<font face="Verdana" color="#000000">Source</font>
 			<dl>
-			   Currently available from CVS only. 
+			   <a href="http://prdownloads.sourceforge.net/vtun/vtun-2.9.90.tar.gz">vtun-2.9.90.tar.gz</a>
 			</dl>
    		      </li>
-		      <p>	
+		      <p>
                       <li>
-			<font face="Verdana" color="#000000">Previous 2.X releases</font>
+			<font face="Verdana" color="#000000">Linux RPM packages</font>
 			<dl>
-			   <a href="ftp://vtun.sourceforge.net/pub/vtun">ftp</a>  (<font color=red>Down </font>when checked 20030406).
+			   <a href="http://prdownloads.sourceforge.net/vtun/vtun-2.9.90-1.src.rpm">Vtun 2.9.90 Source RPM</a><br>
 			</dl>
-		      </li>
+   		      </li>
                     </ul>
 		    </font>
 	            <br><br><br><br>
-	            <br><br><br><br>
-	            <br><br><br><br>
-	            <br><br>
                  </td>
               </tr>
            </table>
        </td>
        </tr>
+
+       <tr>
+       <td align="center" valign="top" width="50%">
+	   <table border="1" cellpadding="1" cellspacing="0" width="98%">
+              <tr>
+                 <td align="center" valign="top" bgcolor="#446DC4">
+		    <font color="#FFFFFF" face="Verdana">
+		    <b>A Word of Caution</b>
+		    </font>
+	 	 </td>
+              </tr>
+              <tr>
+                 <td bgcolor="#E7E7E7">
+		    <font color="#000000" face="Verdana">
+
+<p>Please, please try to use the packages on this page.  Do <b>not</b>
+trust third-party packages to work with your system as well as these
+ones do, and do not expect the same level of support.  If your OS
+is not listed, please consider compiling from source before using
+third-party packages, as the level of assistance you may receive could
+be much higher.</p>
+
+<p>Yes, you will need a tun RPM for these vtun RPMs, and if you are
+packaging a tun-based VPN app, please set a dependency on the tun RPM.
+Please send me (bishop) email if you can't figure out why.</p>
+		    </font>
+	            <br><br><br><br>
+                 </td>
+              </tr>
+           </table>
+        </td>
+      </tr>
    </table>
    <br><br>
    <img SRC="/cgi-bin/count.cgi?df=vtun_download&ft=1&dd=C&srgb=0;0;0&prgb=0;115;198" alt=""> 

@@ -338,8 +338,10 @@ int linkfd(struct vtun_host *host)
 
 	lfd_host = host;
 
+#ifdef HAVE_GETPRIORITY
 	old_prio = getpriority(PRIO_PROCESS, 0);
 	setpriority(PRIO_PROCESS, 0, LINKFD_PRIO);
+#endif
 
 	/* Build modules stack */
 	if (host->flags & VTUN_ZLIB)
@@ -397,7 +399,9 @@ int linkfd(struct vtun_host *host)
 	sigaction(SIGINT,&sa,&sa_oldint);
 	sigaction(SIGHUP, &sa_oldhup, NULL);
 
+#ifdef HAVE_GETPRIORITY
 	setpriority(PRIO_PROCESS, 0, old_prio);
+#endif
 
 	return linker_term;
 }

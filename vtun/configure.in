@@ -87,8 +87,14 @@ AC_C_INLINE
 dnl Check for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS(sys/resource.h netdb.h sched.h resolv.h arpa/inet.h)
-AC_CHECK_HEADERS(netinet/ip.h netinet/in.h netinet/tcp.h netinet/in_systm.h)
+AC_CHECK_HEADERS(netinet/ip.h netinet/in.h netinet/tcp.h netinet/udp.h netinet/in_systm.h)
 AC_CHECK_HEADERS(libutil.h sys/sockio.h)
+
+AC_CHECK_FUNC(nanosleep)
+AC_CHECK_FUNC(usleep)
+AC_CHECK_FUNC(sleep)
+AC_CHECK_FUNC(getpriority)
+AC_CHECK_FUNC(setpriority)
 
 dnl Check for libsocket
 AC_SEARCH_LIBS(socket, socket)

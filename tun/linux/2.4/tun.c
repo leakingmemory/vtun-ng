@@ -349,8 +349,8 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 			return -EBUSY;
 
 		/* Check permissions */
-		if (!capable(CAP_NET_ADMIN) && tun->owner)
-			if (tun->owner != current->uid || tun->owner != current->euid)
+		if (!capable(CAP_NET_ADMIN) && tun->owner != -1)
+			if (tun->owner != current->uid && tun->owner != current->euid)
 				return -EPERM;
 	} else {
 		char *name;
@@ -363,6 +363,7 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 		skb_queue_head_init(&tun->readq);
 		init_waitqueue_head(&tun->read_wait);
 
+		tun->owner = -1;
 		tun->dev.init = tun_net_init;
 		tun->dev.priv = tun;
 
@@ -385,6 +386,7 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 			return -EEXIST;
 		if (register_netdevice(&tun->dev))
 			return -EBUSY;
+		MOD_INC_USE_COUNT;
 
 		tun->name = tun->dev.name;
 	}
@@ -518,12 +520,13 @@ static int tun_chr_close(struct inode *inode, struct file *file)
 	file->private_data = NULL;
 	tun->attached = 0;
 
-	/* Drop TX queue */
+	/* Drop read queue */
 	skb_queue_purge(&tun->readq);
 
 	if (!(tun->flags & TUN_PERSIST)) {
 		dev_close(&tun->dev);
 		unregister_netdevice(&tun->dev);
+		MOD_DEC_USE_COUNT;
 		kfree(tun);
 	}
 
@@ -545,9 +548,9 @@ static struct file_operations tun_fops = {
 
 static struct miscdevice tun_miscdev=
 {
-        TUN_MINOR,
-        "net/tun",
-        &tun_fops
+	TUN_MINOR,
+	"net/tun",
+	&tun_fops
 };
 
 int __init tun_init(void)

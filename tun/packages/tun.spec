@@ -9,8 +9,7 @@
 %define	_buildshell	%([ -x /bin/bash2 ] && echo /bin/bash2 || echo /bin/bash )
 
 # for UnitedLinux badness
-%define isUL %(rpm -q unitedlinux-release > /dev/null 2>/dev/null && echo 1 || \
-echo 0)
+%define isUL %(rpm -q unitedlinux-release > /dev/null 2>/dev/null && echo 1 || echo 0)
 
 Name: %{name}
 Version: %{version}

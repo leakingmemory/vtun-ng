@@ -3,7 +3,7 @@
  *
  *  Multithreaded STREAMS tun pseudo device driver. 
  *
- *  Copyright (C) 1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ *  Copyright (C) 1999-2000 Maxim Krasnyansky <max_mk@yahoo.com>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -159,7 +159,7 @@ int _init(void)
   }
 
   cmn_err(CE_CONT, "Universal TUN/TAP device driver ver %s"
-		   "(C) 1999,2000 Maxim Krasnyansky\n", TUN_VER);
+		   "(C) 1999-2000 Maxim Krasnyansky\n", TUN_VER);
   DBG(CE_CONT,"tun: _init\n");
   return status;
 }
@@ -308,8 +308,9 @@ static int tunclose(queue_t *rq)
        
 	/* Free PPA */
 	tun_ppa[ppa->id] = NULL;
-	kmem_free((char *)ppa, sizeof(struct tunppa));
 	rw_exit(&tun_ppa_lock); 
+
+	kmem_free((char *)ppa, sizeof(struct tunppa));
      } else {
 	/* Unlink Stream from PPA list */
 	rw_enter(&tun_ppa_lock, RW_WRITER);
@@ -1046,5 +1047,6 @@ static void tun_frame(queue_t *wq, mblk_t *mp)
      /* Free original message */
      freemsg(mp);
   }
+
   rw_exit(&tun_ppa_lock);
 }

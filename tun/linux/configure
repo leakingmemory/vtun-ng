@@ -13,6 +13,8 @@ ac_default_prefix=/usr/local
 # Any additions from configure.in:
 ac_help="$ac_help
 --with-kernel=DIR     Kernel source location"
+ac_help="$ac_help
+--enable-debug        Enable debuging"
 
 # Initialize some variables set by options.
 # The variables have the same names as the options, with
@@ -527,12 +529,12 @@ fi
 
 
 
-for ac_prog in gawk mawk nawk awk
+for ac_prog in mawk gawk nawk awk
 do
 # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
 echo $ac_n "checking for $ac_word""... $ac_c" 1>&6
-echo "configure:536: checking for $ac_word" >&5
+echo "configure:538: checking for $ac_word" >&5
 if eval "test \"`echo '$''{'ac_cv_prog_AWK'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
@@ -592,7 +594,7 @@ ac_configure=$ac_aux_dir/configure # This should be Cygnus configure.
 # SVR4 /usr/ucb/install, which tries to use the nonexistent group "staff"
 # ./install, which can be erroneously created by make from ./install.sh.
 echo $ac_n "checking for a BSD compatible install""... $ac_c" 1>&6
-echo "configure:596: checking for a BSD compatible install" >&5
+echo "configure:598: checking for a BSD compatible install" >&5
 if test -z "$INSTALL"; then
 if eval "test \"`echo '$''{'ac_cv_path_install'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
@@ -653,6 +655,16 @@ else
   KDIR=/usr/src/linux
 
 fi
+
+# Check whether --enable-debug or --disable-debug was given.
+if test "${enable_debug+set}" = set; then
+  enableval="$enable_debug"
+  cat >> confdefs.h <<\EOF
+#define TUN_DEBUG 1
+EOF
+
+
+fi
       
 
 # Check kernel sources
@@ -668,7 +680,7 @@ fi
     if test "$ac_file_found" = "yes" ; then
 	:
     else
-	{ echo "configure: error: Linux kernel source not found in $KERNEL " 1>&2; exit 1; }
+	{ echo "configure: error: Linux kernel source not found in $KDIR " 1>&2; exit 1; }
 
     fi
        
@@ -684,7 +696,7 @@ fi
     if test "$ac_file_found" = "yes" ; then
 	:
     else
-	{ echo "configure: error: Linux kernel $KERNEL is not configured " 1>&2; exit 1; }
+	{ echo "configure: error: Linux kernel $KDIR is not configured " 1>&2; exit 1; }
 
     fi
  

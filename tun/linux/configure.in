@@ -28,6 +28,10 @@ AC_ARG_WITH(kernel,
    --with-kernel=DIR     Kernel source location,
    KDIR="$withval",
    KDIR=/usr/src/linux
+)
+AC_ARG_ENABLE(debug,
+   --enable-debug        Enable debuging,
+   AC_DEFINE(TUN_DEBUG, 1)
 )      
 
 # Check kernel sources

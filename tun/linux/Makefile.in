@@ -17,18 +17,20 @@
 CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
 
 INSTALL = @INSTALL@
-DEPMOD  = /sbin/depmod
+
+DEFS = @DEFS@
 
 KDIR = @KDIR@
 KVER = @KVER@
 ARCH = @ARCH@
-MDIR = /lib/modules/$(KVER)/net
 
+DEPMOD  = /sbin/depmod
+MDIR = /lib/modules/$(KVER)/net
 HPATH  = $(KDIR)/include
 
 include $(KDIR)/.config
 
-CFLAGS = -O2 -DMODULE -D__KERNEL__ -I$(HPATH) -I. \
+CFLAGS = $(DEFS) -O2 -DMODULE -D__KERNEL__ -I$(HPATH) -I. \
 	 -Wall -Wstrict-prototypes -fomit-frame-pointer -fno-strict-aliasing 
 
 ifdef CONFIG_SMP

@@ -197,6 +197,8 @@ int udp_session(struct vtun_host *host, time_t timeout)
      /* Close TCP socket and replace with UDP socket */	
      close(host->rmt_fd); 
      host->rmt_fd = s;	
+
+     syslog(LOG_INFO,"UDP connection initialized.");
      return s;
 }
 

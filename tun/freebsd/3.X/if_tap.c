@@ -42,12 +42,9 @@
  */
 
 /*
- *
- *	$Id$
- *
+ * $Id$
  */
 
-#if NTAP > 0
 #include <sys/param.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
@@ -785,5 +782,3 @@ tappoll(dev, events, p)
 	splx(s);
 	return (revents);
 } /* tappoll */
-
-#endif  /* NTAP */

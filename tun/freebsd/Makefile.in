@@ -14,6 +14,9 @@
 #
 #  $Id$
 #
+#  Based on original Makefile for if_tap module
+#    Copyright (c) 1999 Maksim Yevmenkin <m_evmenkin@yahoo.com>
+#
 CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
 
 INSTALL = @INSTALL@

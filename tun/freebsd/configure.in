@@ -14,7 +14,7 @@ dnl  GNU General Public License for more details.
 dnl
 dnl  $Id$
 dnl
-dnl Process this file with autoconf to produce a configure script.
+dnl  Process this file with autoconf to produce a configure script.
 dnl
 AC_INIT()
 AC_SUBST(KDIR)
@@ -62,6 +62,11 @@ case $KVER in
 	;;
 
    4.*)
+	AC_DEFINE(_KERNEL)
+	TDIR=4.X
+	VNODE="perl @/kern/vnode_if.pl -h @/kern/vnode_if.src"
+	;;
+   5.*)
 	AC_DEFINE(_KERNEL)
 	TDIR=4.X
 	VNODE="perl @/kern/vnode_if.pl -h @/kern/vnode_if.src"

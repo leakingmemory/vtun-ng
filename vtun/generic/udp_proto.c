@@ -56,7 +56,7 @@
 #include "vtun.h"
 #include "lib.h"
 
-/* Functions to read/write TCP and UDP frames. */
+/* Functions to read/write UDP frames. */
 int udp_write(int fd, char *buf, int len)
 {
      unsigned short nlen, cnt; 
@@ -95,8 +95,8 @@ int udp_write(int fd, char *buf, int len)
 int udp_read(int fd, char *buf)
 {
      unsigned short hdr, flen;
-     unsigned int rlen;
      struct iovec iv[2];
+     int rlen;
 
      /* Read frame */
      iv[0].iov_len  = sizeof(short);

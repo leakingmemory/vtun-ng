@@ -28,7 +28,7 @@
 #ifdef TUN_DEBUG
 #define DBG	 cmn_err
 #else
-#define DBG( a... )
+#define DBG( ... )
 #endif
 
 /* PPA structure, one per TUN iface */ 

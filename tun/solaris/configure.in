@@ -24,6 +24,16 @@ AC_ARG_ENABLE(debug,
 )
 
 AC_PROG_INSTALL
+AC_PROG_CC
+AC_CANONICAL_SYSTEM
+
+if test "$GCC" = "yes"; then
+	CFLAGS='-O2 -Wall'
+else
+	CFLAGS='-xarch=v9 -xcode=abs32 -xregs=no%appl -xO3'
+fi
+
+echo $target_cpu
 
 AC_DEFINE_UNQUOTED(TUN_VER, "$TUN_VER")
 

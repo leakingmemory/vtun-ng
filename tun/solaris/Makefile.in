@@ -19,11 +19,11 @@
 #
 CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
 
-CC = gcc
+CC = @CC@
 LD = ld
 
 DEFS = @DEFS@
-CFLAGS = $(DEFS) -O2 -Wall -D_KERNEL -I.
+CFLAGS = @CFLAGS@ -D_KERNEL -I.
 
 ADD_DRV = /usr/sbin/add_drv
 REM_DRV = /usr/sbin/rem_drv
@@ -37,7 +37,7 @@ module: tun.o
 	$(LD) -r -o tun tun.o
 
 tun.o: tun.c if_tun.h
-	$(CC) $(CFLAGS) -c tun.c
+	$(CC) $(CFLAGS) $(DEFS) -c tun.c
 
 inst: module 
 	$(INSTALL) -m 644 -o root -g root if_tun.h /usr/include/net 

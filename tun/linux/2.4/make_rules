@@ -19,8 +19,8 @@ module:
 
 ifeq ($(UPGRADE), 1)
 kernel:
-	$(INSTALL) -v -m 644 -o root -g root tun.c $(KDIR)/drivers/net
-	$(INSTALL) -v -m 644 -o root -g root if_tun.h $(KDIR)/include/linux
+	@$(INSTALL) -v -m 644 -o root -g root tun.c $(KDIR)/drivers/net
+	@$(INSTALL) -v -m 644 -o root -g root if_tun.h $(KDIR)/include/linux
 else
 kernel:
 	@echo "Kernel driver upgrade is not required";

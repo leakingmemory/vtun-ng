@@ -34,7 +34,7 @@ Summary: Virtual tunnel over TCP/IP networks.
 Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 #Packager: Dag Wieers <dag@mind.be> 
 Packager: Bishop Clark (LC957) <bishop@platypus.bc.ca>
-BuildRoot: %{tmpdir}/%{name}-%{version}-root-%(id -u -n)
+BuildRoot: %{?_tmppath:%{_tmppath}}%{!?_tmppath:%{tmpdir}}/%{name}-%{version}-root-%(id -u -n)
 Obsoletes: vppp
 %{!?NO_USE_LZO:Buildrequires: lzo-devel}
 %{!?_without_ssl:BuildRequires: openssl-devel }

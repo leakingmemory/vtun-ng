@@ -52,3 +52,5 @@ Alexander Bergolth <leo@strike.wu-wien.ac.at> - Initial multiple connection
 	source address option. Ideas. Suggestions.
 
 Hubert Feyrer <feyrer@rfhs8012.fh-regensburg.de> - NetBSD package.
+
+Hiroharu Tamaru <tamaru@ap.t.u-tokyo.ac.jp> - Updated FreeBSD 4.0 TUN driver support. 

@@ -1,3 +1,7 @@
+ver 2.1:
+	 Final stable 2.1 release.
+         Small cleanups.
+
 ver 2.1b5:
 	 Fixed local address substitution for TCP connection.
 	 Fast, optimized udp_read function.

@@ -82,4 +82,6 @@ AC_MSG_RESULT(Linking kernel source to @)
 ln -s $KDIR @
 ln -s $KDIR/$ARCH/include machine
 
+AC_DEFINE_UNQUOTED(TUN_VER, "$TUN_VER")
+
 AC_OUTPUT(Makefile)

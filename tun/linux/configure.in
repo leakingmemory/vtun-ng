@@ -59,4 +59,6 @@ AC_TEST_FILES(tun.c if_tun.h, $TDIR, ,
 
 AC_LINK_FILES($TDIR/tun.c $TDIR/if_tun.h, tun.c if_tun.h)
 
+AC_DEFINE_UNQUOTED(TUN_VER, "$TUN_VER")
+
 AC_OUTPUT(Makefile)

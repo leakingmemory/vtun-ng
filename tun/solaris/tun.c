@@ -51,8 +51,6 @@ static	int  tunwsrv(queue_t *wq);
 
 static  void tun_frame(queue_t *wq, mblk_t *mpi, int q);
 
-#define TUN_VER "0.6"
-
 static struct module_info tunminfo = {
   125,		/* mi_idnum  - Module ID number	*/
   "tun",	/* mi_idname - Module name 	*/
@@ -123,7 +121,7 @@ static	struct dev_ops tun_ops = {
 
 static struct modldrv modldrv = {
   &mod_driverops,	/* Type of module(driver) */
-  "Universal TUN/TAP driver "TUN_VER,
+  "TUN/TAP driver "TUN_VER,
   &tun_ops		/* driver ops */
 };
 

@@ -731,6 +731,11 @@ TDIR=`echo $KVER | cut -d '.' -f 1,2`
 
 
 
+cat >> confdefs.h <<EOF
+#define TUN_VER "$TUN_VER"
+EOF
+
+
 trap '' 1 2 15
 cat > confcache <<\EOF
 # This file is a shell script that caches the results of configure

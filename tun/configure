@@ -997,6 +997,11 @@ esac
 subdirs="$OS_DIR"
 
 
+
+REL=`echo '$Name$' | tr -d '$:- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+TUN_VER="$REL `date '+%m/%d/%Y'`"; export TUN_VER
+
+
 trap '' 1 2 15
 cat > confcache <<\EOF
 # This file is a shell script that caches the results of configure

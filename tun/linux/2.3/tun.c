@@ -20,8 +20,6 @@
  *    Modifications for 2.3.99-pre5 kernel.
  */
 
-#define VER "0.5 04/19/2000"
-
 #include <linux/module.h>
 
 #include <linux/errno.h>
@@ -457,7 +455,7 @@ static struct file_operations tun_fops = {
 int tun_init(void)
 {
    printk(KERN_INFO "Universal TUN/TAP device driver %s " 
-		    "(c) Maxim Krasnyansky\n", VER);
+		    "(c) Maxim Krasnyansky\n", TUN_VER);
 
    if( register_chrdev(TUN_MAJOR,"tun", &tun_fops) ){
       printk(KERN_ERR "tun: Can't register char device %d\n", TUN_MAJOR);

@@ -745,6 +745,14 @@ EOF
 	TDIR=4.X
 	VNODE="perl @/kern/vnode_if.pl -h @/kern/vnode_if.src"
 	;;
+   5.*)
+	cat >> confdefs.h <<\EOF
+#define _KERNEL 1
+EOF
+
+	TDIR=4.X
+	VNODE="perl @/kern/vnode_if.pl -h @/kern/vnode_if.src"
+	;;
 esac
 
 
@@ -768,6 +776,11 @@ esac
 echo "$ac_t""Linking kernel source to @" 1>&6
 ln -s $KDIR @
 ln -s $KDIR/$ARCH/include machine
+
+cat >> confdefs.h <<EOF
+#define TUN_VER "$TUN_VER"
+EOF
+
 
 trap '' 1 2 15
 cat > confcache <<\EOF

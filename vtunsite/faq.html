@@ -79,6 +79,7 @@ VTun - Frequently Asked Questions
 <dl><a href="#2.6"> 2.6 Why do I get "Can't allocate tun device" or "Can't allocate tap device" error messages ? </a></dl> 
 <dl><a href="#2.7"> 2.7 Why do I get "LZO compression is not supported" error message ? </a></dl> 
 <dl><a href="#2.8"> 2.8 Why do I get "expecting WORD at line xxx" error message ? </a></dl> 
+<dl><a href="#2.9"> 2.9 Why do I get the messsage "kernel: application bug: vtund(XXXX) has SIGCHLD set to SIG_IGN but calls wait()" in my system log? </a></dl>
 </ul> 
 <br> 
 <b>1. General Questions</b><br> 
@@ -263,6 +264,15 @@ VTun - Frequently Asked Questions
 &nbsp;VTun passwords must be alpha characters or a mixture of alpha and<br> 
 &nbsp;numerical characters.<br> 
 <br> 
+<a name="2.9"> 2.9 Why do I get the messsage "kernel: application bug: vtund(XXXX) has SIGCHLD set to SIG_IGN but calls wait()" in my system log? </a><br>
+
+&nbsp;Red Hat Linux users will notice this message.  It's been spotted<br>
+&nbsp;only on Red Hat Linux, but cannot be provoked easily enough on<br>
+&nbsp;any other system.  We're advising people not to worry, but<br>
+&nbsp;definitely appreciate discussion on this topic that can result<br>
+&nbsp;in a fix that removes the warning.<br>
+<br>
+
 &nbsp;If you have any unanswered question please send it to the mailing list <br> 
 &nbsp;vtun-users@lists.sf.net<br> 
 <br></p> 

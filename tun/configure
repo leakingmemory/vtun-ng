@@ -881,7 +881,7 @@ else
   fi
 fi
 
-for ac_prog in mawk gawk nawk awk
+for ac_prog in gawk mawk nawk awk
 do
 # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -998,7 +998,7 @@ subdirs="$OS_DIR"
 
 
 
-REL=`echo '$Name$' | tr -d '$:- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+REL=`echo '$Name$' | tr -d '$:\- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
 TUN_VER="$REL `date '+%m/%d/%Y'`"; export TUN_VER
 
 

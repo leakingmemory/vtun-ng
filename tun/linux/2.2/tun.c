@@ -93,9 +93,9 @@ static int tun_net_xmit(struct sk_buff *skb, struct device *dev)
       dev->tbusy = 1;
 
    if( tun->flags & TUN_FASYNC )
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,2,14)
+#ifdef NEW_FASYNC 
       kill_fasync(&tun->fasync, SIGIO, POLL_IN);
-#else      
+#else     
       kill_fasync(&tun->fasync, SIGIO);
 #endif
 

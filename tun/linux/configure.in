@@ -21,6 +21,7 @@ AC_SUBST(KDIR)
 AC_SUBST(KVER)
 AC_SUBST(ARCH)
 
+AC_PROG_CC
 AC_PROG_AWK
 AC_PROG_INSTALL
 
@@ -55,6 +56,14 @@ TDIR=`echo $KVER | cut -d '.' -f 1,2`
 
 AC_TEST_FILES(tun.c if_tun.h, $TDIR, ,
    AC_MSG_ERROR( Unsupported kernel version. )
+)
+
+dnl Check for new kill_fasync call
+AC_TRY_COMPILE( 
+   [ #define __KERNEL__ 
+     #include "$KDIR/include/linux/fs.h" ], 
+   [ kill_fasync(NULL, 1, 1) ],
+   AC_DEFINE(NEW_FASYNC)
 )
 
 AC_LINK_FILES($TDIR/tun.c $TDIR/if_tun.h, tun.c if_tun.h)

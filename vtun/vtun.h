@@ -85,8 +85,10 @@ struct vtun_host {
 	char *passwd;
 	char *dev;
 
-	llist up;
-	llist down;
+        llist linkup;
+        llist linkdown;
+        llist ifup;
+        llist ifdown;
 
 	int flags;
 	int timeout;

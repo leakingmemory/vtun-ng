@@ -196,13 +196,17 @@ int tunnel(struct vtun_host *host)
 				break;
 			}
 
-			/* Run list of up commands */
-			set_title("%s running up commands", host->host);
-			llist_trav(&host->up, run_cmd, &host->sopt);
+			/* Run list of ifup commands */
+			set_title("%s running ifup commands", host->host);
+			llist_trav(&host->ifup, run_cmd, &host->sopt);
 
 			exit(0);
 		}
 	}
+
+	/* Run list of linkup commands */
+	set_title("%s running linkup commands", host->host);
+	llist_trav(&host->linkup, run_cmd, &host->sopt);
 
 	switch (host->flags & VTUN_TYPE_MASK) {
 	case VTUN_TTY:
@@ -238,11 +242,14 @@ int tunnel(struct vtun_host *host)
 
 	opt = linkfd(host);
 
-	set_title("%s running down commands", host->host);
-	llist_trav(&host->down, run_cmd, &host->sopt);
+	set_title("%s running linkdown commands", host->host);
+	llist_trav(&host->linkdown, run_cmd, &host->sopt);
 
 	if (!(host->persist == VTUN_PERSIST_KEEPIF)) {
 		set_title("%s closing", host->host);
+
+		set_title("%s running ifdown commands", host->host);
+		llist_trav(&host->ifdown, run_cmd, &host->sopt);
 
 		/* Gracefully destroy interface */
 		switch (host->flags & VTUN_TYPE_MASK) {

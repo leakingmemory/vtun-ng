@@ -1,0 +1,50 @@
+1. Compilation and Installation.
+In order to compile VTun yourself you need:
+  - Good C compiler (gcc, egcs, etc)
+  - Lexical Analyzer (flex, lex)
+  - YACC (yacc, bison, byacc)
+  - Zlib compression library
+  - SSleay encryption library ftp://ftp.pca.dfn.de/pub/tools/net/ssleay
+Optional:
+  - LZO compression library   http://wildsau.idv.uni-linz.ac.at/mfx/lzo.html
+
+In order to use Ethernet and TUN(plain IP tunnel) you need:
+  - Universal TUN/TAP driver http://vtun.netpedia.net/tun
+
+To configure VTun run:
+  ./configure 
+
+Configure assumes that Crypto library and include files are located in 
+/usr/include and /usr/lib. If you use different locations you have to 
+supply path to those files. 
+For example if libcrypto.a is in /usr/lib/crypto and md5.h and blowfish.h
+are in /usr/include/ssl run:
+  ./configure --with-crypto-lib=/usr/lib/ssl 
+	      --with-crypto-headers=/usr/include/ssl
+
+In order to compile LZO compression module you have to specify path to LZO
+header files and library.
+For example if liblzo.a is in /usr/lib/lzo and lzo1x.h is in /usr/include/lzo
+run:
+  ./configure --with-lzo-lib=/usr/lib/lzo 
+	      --with-lzo-headers=/usr/include/lzo
+
+By default VTun will be configured to work under /usr/local.
+If you want to install it under usual location run:
+  ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var
+
+To compile and install run:
+  make install
+
+Read manual page for 'vtund' and example of the config file for the 
+configuration and other details.
+
+VTun has the mailing list vtun@office.satix.net 
+To receive information about mailing list and how to subscribe to it 
+send an e-mail to vtun-request@office.satix.net with the word 'help' in 
+the Subject. 
+
+If you have any suggestions, ideas, wishes send them to 
+vtun@office.satix.net
+ 
+Maxim Krasnyansky <max_mk@yahoo.com> 

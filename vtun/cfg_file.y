@@ -1,0 +1,422 @@
+%{
+/*  
+    VTun - Virtual Tunnel over TCP/IP network.
+
+    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+
+    VTun has been derived from VPPP package by Maxim Krasnyansky. 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ */
+
+/*
+ * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ */ 
+
+#include "config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <syslog.h>
+#include <stdarg.h>
+
+#include "vtun.h"
+
+int lineno = 1;
+
+struct vtun_host default_host;
+struct vtun_host *parse_host;
+
+llist  *parse_cmds;
+struct vtun_cmd parse_cmd;
+
+llist host_list;
+
+int cfg_error(const char *fmt, ...);
+int add_cmd(llist *cmds, char *prog, char *args, int flags);
+void *cp_cmd(void *d, void *u);
+int free_cmd(void *d, void *u);
+
+void free_host_list(void);
+
+int yyparse(void);
+int yylex(void);	
+int yyerror(char *s); 
+
+#define YYERROR_VERBOSE 1
+
+%}
+
+%union {
+   char *str;
+   int  num;
+   struct { int num1; int num2; } dnum;
+}
+%expect 14
+
+%token K_OPTIONS K_DEFAULT K_PORT K_PERSIST K_TIMEOUT K_PASSWD 
+%token K_PROG K_PPP K_SPEED K_IFCFG K_FWALL K_ROUTE K_DEVICE
+%token K_TYPE K_PROT K_COMPRESS K_ENCRYPT K_KALIVE K_STAT
+%token K_UP K_DOWN 
+
+%token <str> K_HOST K_ERROR
+%token <str> WORD IPADDR NMADDR PATH STRING
+%token <num> NUM 
+%token <dnum> DNUM
+
+%%
+config: 
+  | config statement 
+  ;
+
+statement: '\n'
+  | K_OPTIONS   '{' options '}' 
+
+  | K_DEFAULT   { 
+		  parse_host = &default_host; 
+                }        
+    '{' host_options '}' 
+  | K_HOST      { 
+		  if( !(parse_host = malloc(sizeof(struct vtun_host))) ){
+		     yyerror("No memory for the host");
+		     YYABORT;
+		  }
+
+		  /* Fill new host struct with default values.
+		   * MUST dup strings to be able to reread config.
+		   */
+	  	  memcpy(parse_host, &default_host, sizeof(struct vtun_host));
+		  parse_host->host = strdup($1);
+		  parse_host->passwd = NULL;
+
+		  llist_copy(&default_host.up,&parse_host->up,cp_cmd,NULL);
+		  llist_copy(&default_host.down,&parse_host->down,cp_cmd,NULL);
+
+		  /* Add host to the list */
+		  llist_add(&host_list,(void *)parse_host);
+		}    
+    '{' host_options '}' 
+  | K_ERROR	{
+		  cfg_error("Invalid clause '%s'",$1);
+		  YYABORT;
+		}
+  ;
+
+options:
+    option
+  | options option
+  ;
+
+/* Don't override command line options */
+option:  '\n'
+  | K_PORT NUM 		{ 
+			  if(vtun.port == -1)
+			     vtun.port = $2;
+			} 
+  | K_PERSIST NUM 	{ 
+			  if(vtun.persist == -1) 
+			     vtun.persist = $2; 	
+			}
+  | K_TIMEOUT NUM 	{  
+			  if(vtun.timeout == -1)
+			     vtun.timeout = $2; 	
+			}
+  | K_PPP   PATH	{
+			  free(vtun.ppp);
+			  vtun.ppp = strdup($2);
+			}
+  | K_IFCFG PATH	{
+			  free(vtun.ifcfg);
+			  vtun.ifcfg = strdup($2);
+			}
+  | K_ROUTE PATH 	{   
+			  free(vtun.route);  
+			  vtun.route = strdup($2); 	
+			}		
+  | K_FWALL PATH 	{   
+			  free(vtun.fwall);  
+			  vtun.fwall = strdup($2); 	
+			}
+  | K_ERROR		{
+			  cfg_error("Unknown option '%s'",$1);
+			  YYABORT;
+			}
+  ;
+
+host_options:
+    host_option
+  | host_options host_option
+  ;
+
+/* Host options. Must free strings first, because they 
+ * could be strduped from default_host */
+host_option: '\n'
+  | K_PASSWD WORD 	{ 
+			  free(parse_host->passwd);  
+			  parse_host->passwd = strdup($2); 	
+			}	
+  | K_DEVICE WORD 	{ 
+			  free(parse_host->dev);  
+			  parse_host->dev = strdup($2); 
+			}	
+  | K_SPEED NUM 	{ 
+			  if( $2 ){ 
+			     parse_host->spd_in = parse_host->spd_out = $2;
+			     parse_host->flags |= VTUN_SHAPE;
+			  } else 
+			     parse_host->flags &= ~VTUN_SHAPE;
+				
+			}
+  | K_SPEED DNUM 	{ 
+			  if( yylval.dnum.num1 || yylval.dnum.num2 ){ 
+			     parse_host->spd_out = yylval.dnum.num1;
+		             parse_host->spd_in = yylval.dnum.num2; 	
+			     parse_host->flags |= VTUN_SHAPE;
+			  } else 
+			     parse_host->flags &= ~VTUN_SHAPE;
+			}
+  | K_COMPRESS compress	
+
+  | K_ENCRYPT NUM 	{  
+			  if( $2 ) 
+			     parse_host->flags |= VTUN_ENCRYPT; 	
+			  else	
+			     parse_host->flags &= ~VTUN_ENCRYPT; 	
+			}
+  | K_KALIVE NUM	{  
+			  if( $2 ) 
+			     parse_host->flags |= VTUN_KEEP_ALIVE; 	
+			  else	
+			     parse_host->flags &= ~VTUN_KEEP_ALIVE; 	
+			}
+  | K_STAT NUM		{  
+			  if( $2 ) 
+			     parse_host->flags |= VTUN_STAT; 	
+			  else	
+			     parse_host->flags &= ~VTUN_STAT; 	
+			}
+  | K_TYPE NUM 		{  
+			  parse_host->flags &= ~VTUN_TYPE_MASK;
+			  parse_host->flags |= $2;
+			}	
+  | K_PROT NUM 		{  
+			  parse_host->flags &= ~VTUN_PROT_MASK;
+			  parse_host->flags |= $2;
+			}
+  | K_UP 	        { 
+			  parse_cmds = &parse_host->up; 
+   			  llist_free(parse_cmds, free_cmd, NULL);   
+			} '{' command_options '}' 
+  | K_DOWN 	        { 
+			  parse_cmds = &parse_host->down; 
+   			  llist_free(parse_cmds, free_cmd, NULL);   
+			} '{' command_options '}' 
+  | K_ERROR		{
+			  cfg_error("Unknown option '%s'",$1);
+			  YYABORT;
+			} 
+  ;
+
+compress:  
+  NUM	 		{ 
+			  if( $1 ){  
+      			     parse_host->flags |= VTUN_ZLIB; 
+			     parse_host->zlevel = $1;
+			  } else
+			     parse_host->flags &= ~(VTUN_ZLIB | VTUN_LZO); 
+			}
+  | DNUM		{
+			  parse_host->flags |= yylval.dnum.num1;
+		          parse_host->zlevel = yylval.dnum.num2;
+  			}
+  | K_ERROR		{
+			  cfg_error("Unknown compression '%s'",$1);
+			  YYABORT;
+			} 
+  ;
+
+command_options: /* empty */
+  | command_option
+  | command_options command_option
+  ;
+
+command_option: '\n' 
+  | K_PROG		{
+			  memset(&parse_cmd, 0, sizeof(struct vtun_cmd));
+			} 
+ 	prog_options    {
+			  add_cmd(parse_cmds, parse_cmd.prog, 
+				  parse_cmd.args, parse_cmd.flags);
+			}
+  | K_PPP STRING 	{   
+			  add_cmd(parse_cmds, strdup(vtun.ppp), strdup($2), 
+					VTUN_CMD_DELAY);
+			}		
+  | K_IFCFG STRING 	{   
+			  add_cmd(parse_cmds, strdup(vtun.ifcfg),strdup($2),
+					VTUN_CMD_WAIT);
+			}
+  | K_ROUTE STRING 	{   
+			  add_cmd(parse_cmds, strdup(vtun.route),strdup($2),
+					VTUN_CMD_WAIT);
+			}
+  | K_FWALL STRING 	{   
+			  add_cmd(parse_cmds, strdup(vtun.fwall),strdup($2),
+					VTUN_CMD_WAIT);
+			}
+  | K_ERROR		{
+			  cfg_error("Unknown cmd '%s'",$1);
+			  YYABORT;
+			} 
+  ;
+
+prog_options:
+    prog_option
+  | prog_options prog_option
+  ;
+
+prog_option:
+  PATH  		{
+			  parse_cmd.prog = strdup($1);
+			}
+  | STRING 		{
+			  parse_cmd.args = strdup($1);
+			}
+  | NUM		   	{
+			  parse_cmd.flags = $1;
+			}
+  ;
+%%
+
+int yyerror(char *s) 
+{
+   syslog(LOG_ERR, "%s line %d\n", s, lineno);
+   return 0;
+}
+
+int cfg_error(const char *fmt, ...)
+{
+   char buf[255];
+   va_list ap;
+
+   /* print the argument string */
+   va_start(ap, fmt);
+   vsnprintf(buf,sizeof(buf),fmt,ap);
+   va_end(ap);
+
+   yyerror(buf);
+   return 0;
+}
+
+int add_cmd(llist *cmds, char *prog, char *args, int flags)
+{
+   struct vtun_cmd *cmd;
+   if( !(cmd = malloc(sizeof(struct vtun_cmd))) ){
+      yyerror("No memory for the command");
+      return -1;
+   }
+   memset(cmd, 0, sizeof(struct vtun_cmd)); 		   			
+
+   cmd->prog = prog;
+   cmd->args = args;
+   cmd->flags = flags;
+   llist_add(cmds, cmd);
+
+   return 0;
+}		
+
+void *cp_cmd(void *d, void *u)
+{
+   struct vtun_cmd *cmd = d, *cmd_copy; 
+
+   if( !(cmd_copy = malloc(sizeof(struct vtun_cmd))) ){
+      yyerror("No memory to copy the command");
+      return NULL;
+   }
+ 
+   cmd_copy->prog=strdup(cmd->prog);
+   cmd_copy->args=strdup(cmd->args);
+   cmd_copy->flags = cmd->flags;
+   return cmd_copy;
+}
+
+int free_cmd(void *d, void *u)
+{
+   struct vtun_cmd *cmd = d; 
+   free(cmd->prog);
+   free(cmd->args);
+   free(cmd);
+   return 0;
+}
+
+int free_host(void *d, void *u)
+{
+   struct vtun_host *h = d;
+
+   if(u && !strcmp(h->host, u))
+      return 1;
+
+   free(h->host);   
+   free(h->passwd);   
+   
+   llist_free(&h->up, free_cmd, NULL);   
+   llist_free(&h->down, free_cmd, NULL);
+
+   return 0;   
+}
+
+/* Find host in the hosts list.
+ * NOTE: This function can be called only once since it deallocates hosts list.
+ */ 
+inline struct vtun_host* find_host(char *host)
+{
+   return (struct vtun_host *)llist_free(&host_list, free_host, host);
+}
+
+inline void free_host_list(void)
+{
+   llist_free(&host_list, free_host, NULL);
+}
+
+/* 
+ * Read config file. 
+ */ 
+int read_config(char *file) 
+{
+   static int cfg_loaded = 0;
+   extern FILE *yyin;
+
+   if( cfg_loaded ){
+      free_host_list();
+      syslog(LOG_INFO,"Reloading configuration file");
+   }	 
+   cfg_loaded = 1;
+
+   llist_init(&host_list);
+
+   /* Initialize default options */
+   memset(&default_host, 0, sizeof(default_host));
+   default_host.flags = VTUN_TTY | VTUN_TCP; 
+
+   if( !(yyin = fopen(file,"r")) ){
+      syslog(LOG_ERR,"Can not open %s", file);
+      return -1;      
+   }
+
+   yyparse();
+
+   free_host(&default_host, NULL);
+
+   fclose(yyin);
+  
+   return !llist_empty(&host_list);     
+}

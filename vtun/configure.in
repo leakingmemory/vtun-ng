@@ -1,0 +1,89 @@
+dnl Process this file with autoconf to produce a configure script.
+AC_INIT(lib.c)
+AC_CONFIG_HEADER(config.h)
+
+dnl Guess host type.
+AC_CANONICAL_HOST
+
+dnl Check for programs.
+AC_PROG_YACC
+AC_PROG_LEX
+AC_PROG_CC
+AC_PROG_INSTALL
+
+dnl Checks for typedefs, structures, and compiler characteristics.
+AC_C_CONST
+AC_C_INLINE
+
+dnl Check for header files.
+AC_HEADER_STDC
+AC_CHECK_HEADERS(sys/resource.h netdb.h sched.h resolv.h arpa/inet.h)
+AC_CHECK_HEADERS(netinet/ip.h netinet/in.h netinet/tcp.h netinet/in_systm.h)
+AC_CHECK_HEADERS(libutil.h)
+
+dnl Check for libsocket
+AC_SEARCH_LIBS(socket, socket)
+
+dnl Check for libnsl
+AC_SEARCH_LIBS(inet_ntoa, nsl)
+
+dnl Check for libresolv
+AC_SEARCH_LIBS(gethostbyname, resolv nsl)
+
+dnl Check for librt
+AC_SEARCH_LIBS(nanosleep, rt)
+AC_SEARCH_LIBS(nanosleep, posix4)
+
+dnl Check for setproctitle in libutil.
+AC_SEARCH_LIBS(setproctitle, util bsd, AC_DEFINE(HAVE_SETPROC_TITLE) )
+
+dnl Check for zlib.
+AC_CHECK_LIB(z,deflate,
+	LIBS="$LIBS -lz"
+	AC_DEFINE(HAVE_ZLIB),
+	echo Zlib not found. ZLIB compression module will not be compiled. 
+)
+
+dnl Check for lzo.
+echo checking for LZO Library and Header files ...
+AC_ARG_WITH(lzo-headers,
+	--with-lzo-headers=DIR     LZO Include files location,
+	CFLAGS="$CFLAGS -I$withval" 
+	CPPFLAGS="$CPPFLAGS -I$withval" 
+)
+AC_ARG_WITH(lzo-lib,
+	--with-lzo-lib=DIR         LZO Library location,
+	LIBS="$LIBS -L$withval" 
+)
+
+AC_CHECK_HEADERS(lzo1x.h,
+	AC_CHECK_LIB(lzo, lzo1x_decompress,
+	      LIBS="$LIBS -llzo"
+	      AC_DEFINE(HAVE_LZO),
+	      echo LZO library not found. LZO compression module will not be compiled. 
+	)
+	,
+	echo LZO includes not found. LZO compression module will not be compiled. 
+)
+
+echo checking for Crypto Library and Header files ...
+AC_ARG_WITH(crypto-headers,
+	--with-crypto-headers=DIR  Crypto Include files location,
+	CFLAGS="$CFLAGS -I$withval" 
+	CPPFLAGS="$CPPFLAGS -I$withval" 
+)
+AC_ARG_WITH(crypto-lib,
+	--with-crypto-lib=DIR      Crypto Library location,
+	LIBS="$LIBS -L$withval" 
+)
+
+AC_CHECK_HEADERS(md5.h blowfish.h,,
+	echo Crypto includes not found. Can not compile encryption module.
+        exit 1 
+)
+AC_CHECK_LIB(crypto,BF_set_key,,
+	echo Crypto library not found. Can not compile encryption module. 
+        exit 1 
+)
+
+AC_OUTPUT(Makefile)

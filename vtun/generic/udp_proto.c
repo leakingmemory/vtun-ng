@@ -76,7 +76,7 @@ int udp_write(int fd, char *buf, int len)
 	cnt = 1;
      }
 
-     while(1) {
+     while( 1 ){
         register int err;
 	err = writev(fd, iv, cnt); 
 	if( err < 0 ){
@@ -94,48 +94,29 @@ int udp_write(int fd, char *buf, int len)
 
 int udp_read(int fd, char *buf)
 {
-     unsigned short len, flen, cnt;
+     unsigned short hdr, flen;
+     unsigned int rlen;
      struct iovec iv[2];
-
-     /* Get frame size */
-     while(1) {
-	register int err;     
-        if( (err = recv(fd, &len, sizeof(short), MSG_PEEK)) > 0)
-	   break;
-	if( err < 0 && ( errno == EAGAIN || errno == EINTR ) )
-	   continue;
-	return err;
-     }
-
-     len = ntohs(len);
-     flen = len & VTUN_FSIZE_MASK;
-
-     if( flen > VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD ) {
-     	/* Oversized frame, drop it.  
-	 * On UDP socket read will drop remaining part of the frame */
-        read(fd, buf, VTUN_FRAME_SIZE);
-	return VTUN_BAD_FRAME;
-     }	
 
      /* Read frame */
      iv[0].iov_len  = sizeof(short);
-     iv[0].iov_base = (char *) &flen;
-     if( len & ~VTUN_FSIZE_MASK ) {
-	/* Read flags only */
-	cnt = 1;
-     } else {	
-        iv[1].iov_len  = flen;
-        iv[1].iov_base = buf;
-	cnt = 2;
-     }
+     iv[0].iov_base = (char *) &hdr;
+     iv[1].iov_len  = VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD;
+     iv[1].iov_base = buf;
 
-     while(1) {
-	register int err;     
-	errno = 0;
-        if( (err = readv(fd, iv, cnt)) > 0) 
-	   return len;
-	if( err < 0 && ( errno == EAGAIN || errno == EINTR ) )
-	   continue;
-	return err;
+     while( 1 ){
+        if( (rlen = readv(fd, iv, 2)) < 0 ){ 
+	   if( errno == EAGAIN || errno == EINTR )
+	      continue;
+	   else
+     	      return -1;
+	}
+        hdr = ntohs(hdr);
+        flen = hdr & VTUN_FSIZE_MASK;
+
+        if( rlen < 2 || (rlen-2) != flen )
+	   return VTUN_BAD_FRAME;
+
+	return hdr;
      }
 }		

@@ -1920,7 +1920,7 @@ echo "configure:1919: checking for SSL Library and Header files ... " >&5
     echo $ac_n "checking "for md5.h blowfish.h"""... $ac_c" 1>&6
 echo "configure:1922: checking "for md5.h blowfish.h"" >&5 
     ac_hdr_found=no
-    for p in $SSL_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include; do
+    for p in $SSL_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include; do
 	
     ac_file_found=yes
     for f in md5.h blowfish.h; do
@@ -2008,7 +2008,7 @@ echo "configure:2007: checking for LZO Library and Header files ... " >&5
     echo $ac_n "checking "for lzo1x.h"""... $ac_c" 1>&6
 echo "configure:2010: checking "for lzo1x.h"" >&5 
     ac_hdr_found=no
-    for p in $LZO_HDR_DIR /usr/include/lzo /usr/include; do
+    for p in $LZO_HDR_DIR /usr/include/lzo /usr/include /usr/local/include; do
 	
     ac_file_found=yes
     for f in lzo1x.h; do
@@ -2227,7 +2227,7 @@ esac
 echo "$ac_t""" 1>&6
 
 
-REL=`echo '$Name$' | tr -d '$:\- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+REL=`echo '$Name$' | tr -d '$: \-' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
 
 
 cat >> confdefs.h <<EOF

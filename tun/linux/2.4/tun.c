@@ -347,6 +347,11 @@ static int tun_set_iff(struct file *file, struct ifreq *ifr)
 
 		if (dev->init != tun_net_init || tun->attached)
 			return -EBUSY;
+
+		/* Check permissions */
+		if (!capable(CAP_NET_ADMIN) && tun->owner)
+			if (tun->owner != current->uid || tun->owner != current->euid)
+				return -EPERM;
 	} else {
 		char *name;
 
@@ -449,6 +454,13 @@ static int tun_chr_ioctl(struct inode *inode, struct file *file,
 
 		DBG(KERN_INFO "%s: persist %s\n",
 		    tun->name, arg ? "disabled" : "enabled");
+		break;
+
+	case TUNSETOWNER:
+		/* Set owner of the device */
+		tun->owner = (uid_t) arg;
+
+		DBG(KERN_INFO "%s: owner set to %d\n", tun->owner);
 		break;
 
 #ifdef TUN_DEBUG

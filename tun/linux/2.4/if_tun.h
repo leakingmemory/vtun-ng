@@ -32,9 +32,10 @@
 #endif
 
 struct tun_struct {
-	char 				*name;
+	char 			*name;
 	unsigned long 		flags;
-	int					attached;
+	int			attached;
+	uid_t			owner;
 
 	wait_queue_head_t	read_wait;
 	struct sk_buff_head	readq;
@@ -66,12 +67,12 @@ struct tun_struct {
 
 /* TUN device flags */
 #define TUN_TUN_DEV 	0x0001	
-#define TUN_TAP_DEV		0x0002
+#define TUN_TAP_DEV	0x0002
 #define TUN_TYPE_MASK   0x000f
 
-#define TUN_FASYNC		0x0010
+#define TUN_FASYNC	0x0010
 #define TUN_NOCHECKSUM	0x0020
-#define TUN_NO_PI		0x0040
+#define TUN_NO_PI	0x0040
 #define TUN_ONE_QUEUE	0x0080
 #define TUN_PERSIST 	0x0100	 
 
@@ -80,6 +81,7 @@ struct tun_struct {
 #define TUNSETDEBUG   (('T'<< 8) | 201) 
 #define TUNSETIFF     (('T'<< 8) | 202) 
 #define TUNSETPERSIST (('T'<< 8) | 203) 
+#define TUNSETOWNER   (('T'<< 8) | 204)
 
 /* TUNSETIFF ifr flags */
 #define IFF_TUN			0x0001

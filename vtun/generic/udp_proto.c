@@ -79,8 +79,12 @@ int udp_write(int fd, char *buf, int len)
      while(1) {
         register int err;
 	err = writev(fd, iv, cnt); 
-	if( err < 0 && ( errno == EAGAIN || errno == EINTR ) )
-	   continue;
+	if( err < 0 ){
+	   if( errno == EAGAIN || errno == EINTR )
+	      continue;
+	   if( errno == ENOBUFS )
+	      return 0;
+	}
 	/* Even if we wrote only part of the frame
          * we can't use second write since it will produce 
          * another UDP frame */  

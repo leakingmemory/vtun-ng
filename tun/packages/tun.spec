@@ -1,7 +1,7 @@
 %define name	tun
 %define version	1.1
 %define release	1
-%define prefix	/
+%define kernel  2.2.16-22
 
 Name: %{name}
 Version: %{version}
@@ -14,7 +14,6 @@ Summary: Universal TUN/TAP device driver.
 Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: Maxim Krasnyansky <max_mk@yahoo.com>
 BuildRoot: /var/tmp/%{name}-%{version}-build
-Prefix: %{prefix}
 
 %description
   TUN/TAP provides packet reception and transmission for user space programs. 
@@ -31,13 +30,12 @@ Prefix: %{prefix}
 make 
 
 %install
-make
-install -m 755 -o root -g root -d $RPM_BUILD_ROOT/lib/modules/net
-install -m 644 -o root -g root linux/tun.o $RPM_BUILD_ROOT/lib/modules/net
+install -m 755 -o root -g root -d $RPM_BUILD_ROOT/lib/modules/%{kernel}/net
+install -m 644 -o root -g root linux/tun.o $RPM_BUILD_ROOT/lib/modules/%{kernel}/net
 
 install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev
 install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev/net
-mknod $RPM_BUILD_ROOT/net/dev/tun c 10 200
+mknod $RPM_BUILD_ROOT/dev/net/tun c 10 200
 mknod $RPM_BUILD_ROOT/dev/tun0 c 90 0
 mknod $RPM_BUILD_ROOT/dev/tun1 c 90 1
 mknod $RPM_BUILD_ROOT/dev/tun2 c 90 2
@@ -57,11 +55,11 @@ depmod -a
 %files
 %defattr(644,root,root)
 %doc FAQ README
-%attr(644,root,root) %{prefix}/lib/modules/net/tun.o
-%attr(600,root,root) %{prefix}/dev/net/tun
-%attr(600,root,root) %{prefix}/dev/tun0
-%attr(600,root,root) %{prefix}/dev/tun1
-%attr(600,root,root) %{prefix}/dev/tun2
-%attr(600,root,root) %{prefix}/dev/tap0
-%attr(600,root,root) %{prefix}/dev/tap1
-%attr(600,root,root) %{prefix}/dev/tap2
+%attr(644,root,root) /lib/modules/%{kernel}/net/tun.o
+%attr(600,root,root) /dev/net/tun
+%attr(600,root,root) /dev/tun0
+%attr(600,root,root) /dev/tun1
+%attr(600,root,root) /dev/tun2
+%attr(600,root,root) /dev/tap0
+%attr(600,root,root) /dev/tap1
+%attr(600,root,root) /dev/tap2

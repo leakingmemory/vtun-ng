@@ -90,17 +90,7 @@ Explanation is the same as with above case. Use TCP for PPP tunnels or
 use TUN instead of PPP, since tun device is completely the same with 
 ppp device for the kernel. 
 
-1.18 Why do tunnels over TCP sometimes become slow after long or heavy use ?
-People usually report this problem for PPP over TCP on Linux. I can't
-fully explain it and need help to fix it. It seems that it is a
-kernel TCP stack problem. I've inspected every possible case
-(pty driver, VTun's linkfd and modules, etc) and haven't found the
-reason. I have personally seen it only with the old 2.0.xx Linux kernels. 
-Another possible cause is that some firewall setups could affect 
-TCP speed. 
-Again, any help regarding this problem is highly appreciated.
-
-1.19 Why do routes specified after 'ppp' command in config file produce errors and don't install correctly ?  
+1.18 Why do routes specified after 'ppp' command in config file produce errors and don't install correctly ?  
 Actually there is no straight way to determine when pppd has established 
 connection with the other end. VTun execute those route commands right 
 after the launch of pppd and if PPP link is not established, route 
@@ -108,8 +98,8 @@ commands will fail. Since version 2.0b3, VTun delays 10 seconds before
 issuing the route commands, which should fix almost all cases.  
 I'll think about more elegant way to fix this problem.
 
-1.20 How secure is VTun ?
-Well. VTun doesn't try to be MOST secure tunneling software in the 
+1.19 How secure is VTun ?
+Well. VTun doesn't try to be the MOST secure tunneling software in the 
 world, it tries to be fast, stable, reach of features, easy to use 
 and secure enough instead.
 VTun uses Challenge Based Authentication and doesn't transfer passwords 
@@ -118,14 +108,14 @@ and BlowFish algorithm for actual data encryption.
 There could be some weaknesses in key generation method, we will try 
 to address them in future releases. 
 
-1.21 Who has developed so nice and cool software ?
+1.20 Who has developed so nice and cool software ?
 Thanks :). You can find list of VTun team members on the web site or
 in the 'Credits' file in VTun package.  
 
-1.22 I don't like VTun where can I send complains ?
+1.21 I don't like VTun where can I send complains ?
 You can send them to /dev/null. 
 
-1.23 Where can I get more information about VTun ?
+1.22 Where can I get more information about VTun ?
 VTun package contains: 
    Manual page for vtund.
    Fully documented config file.
@@ -142,7 +132,7 @@ This usually means that vtund on other side has dropped connection,
 check logs on other side.
 
 2.3 Why do I get "couldn't find any suitable secret (password)" pppd error message ?
-New versions of pppd use authentication be default.
+New versions of pppd use authentication by default.
 Just add "noauth" option to ppp command.
 
 2.4 Why do I get "XXXX returned error Y" error message ?

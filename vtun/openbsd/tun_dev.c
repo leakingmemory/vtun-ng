@@ -87,6 +87,7 @@ int tun_read(int fd, char *buf, int len)
     iv[0].iov_len = sizeof(type);
     iv[1].iov_base = buf;
     iv[1].iov_len = len;
+
     if( (r = readv(fd, iv, 2)) > 0 )
        return r - sizeof(type);
     else

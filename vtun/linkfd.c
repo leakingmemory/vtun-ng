@@ -277,8 +277,12 @@ int lfd_linker(void)
 	   lfd_host->stat.comp_in += len; 
 	   if( (len=lfd_run_up(len,buf,&out)) == -1 )
 	      break;	
-	   if( len && dev_write(fd2,out,len) < 0 )
-	      break; 
+	   if( len && dev_write(fd2,out,len) < 0 ){
+              if( errno != EAGAIN && errno != EINTR )
+                 break;
+              else
+                 continue;
+           }
 	   lfd_host->stat.byte_in += len; 
 	}
 

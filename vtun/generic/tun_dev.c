@@ -60,7 +60,7 @@ int tun_alloc(char *dev)
 /* Read/write frames from TUN device */
 int tun_write(int fd, char *buf, int len)
 {
-    return write_n(fd, buf, len);
+    return write(fd, buf, len);
 }
 
 int tun_read(int fd, char *buf, int len)

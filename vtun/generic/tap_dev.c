@@ -60,7 +60,7 @@ int tap_alloc(char *dev)
 /* Write frames to TAP device */
 int tap_write(int fd, char *buf, int len)
 {
-    return write_n(fd, buf, len);
+    return write(fd, buf, len);
 }
 
 /* Read frames from TAP device */

@@ -124,7 +124,7 @@ static	struct dev_ops tun_ops = {
 
 static struct modldrv modldrv = {
   &mod_driverops,	/* Type of module(driver) */
-  "Universal TUN/TAP device driver v"TUN_VER,
+  "Universal TUN/TAP driver "TUN_VER,
   &tun_ops		/* driver ops */
 };
 
@@ -867,6 +867,29 @@ static void tun_promiscoff_req(queue_t *wq, mblk_t *mp)
   tundlokack(wq, mp, DL_PROMISCOFF_REQ);
 }
 
+void tun_physaddr_req(queue_t *wq, mblk_t *mp)
+{
+  union   DL_primitives   *dlp;
+  struct  ether_addr addr;
+  int size;
+
+  if( MBLKL(mp) < DL_PHYS_ADDR_REQ_SIZE ){
+     tundlerrack(wq, mp, DL_PHYS_ADDR_REQ, DL_BADPRIM, 0);
+     return;
+  }
+
+  bzero(&addr, sizeof(addr));
+
+  size = sizeof(dl_phys_addr_ack_t) + ETHERADDRL;
+  if( !(mp = tunchmsg(mp, size, M_PCPROTO, DL_PHYS_ADDR_ACK)) )
+     return;
+  dlp = (union DL_primitives *)mp->b_rptr;
+  dlp->physaddr_ack.dl_addr_length = ETHERADDRL;
+  dlp->physaddr_ack.dl_addr_offset = sizeof(dl_phys_addr_ack_t);
+  bcopy(&addr, (caddr_t)(mp->b_rptr + sizeof(dl_phys_addr_ack_t)), ETHERADDRL);
+  qreply(wq, mp);
+}
+
 static void tunproto(queue_t *wq, mblk_t *mp)
 {
   union DL_primitives *dlp = (union DL_primitives *)mp->b_rptr;
@@ -903,6 +926,10 @@ static void tunproto(queue_t *wq, mblk_t *mp)
 
      case DL_PROMISCOFF_REQ:
 	tun_promiscoff_req(wq,mp);
+	break;
+
+     case DL_PHYS_ADDR_REQ:
+	tun_physaddr_req(wq,mp);
 	break;
 
      case DL_ENABMULTI_REQ:

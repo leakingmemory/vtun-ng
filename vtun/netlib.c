@@ -155,7 +155,7 @@ int udp_session(struct vtun_host *host, time_t timeout)
      setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); 
     
      /* Set local address and port */
-     local_addr(&saddr, host);
+     local_addr(&saddr, host, 1);
      if( bind(s,(struct sockaddr *)&saddr,sizeof(saddr)) ){
         syslog(LOG_ERR,"Can't bind to the socket");
         return -1;
@@ -201,39 +201,44 @@ int udp_session(struct vtun_host *host, time_t timeout)
 }
 
 /* Set local address */
-int local_addr(struct sockaddr_in *addr, struct vtun_host *host)
+int local_addr(struct sockaddr_in *addr, struct vtun_host *host, int con)
 {
      struct hostent * hent;
+     int opt;
 
-     memset(addr, 0, sizeof(struct sockaddr_in));
-
-    /* We can't use getsockname to get an addr of already connected 
-     * socket because it reports port and family only. 
-     */
-
-     switch( host->src_addr.type ){
-        case VTUN_ADDR_IFACE:
-           if( !( addr->sin_addr.s_addr = getifaddr(host->src_addr.name)) ){
-              syslog(LOG_ERR,"Can't get address of interface %s", 
+     if( con ){
+        /* Use address of the already connected socket. */
+        opt = sizeof(struct sockaddr_in);
+        if( getsockname(host->rmt_fd, addr, &opt) < 0 ){
+           syslog(LOG_ERR,"Can't get local socket address");
+           return -1; 
+        }
+     } else {
+        memset(addr, 0, sizeof(struct sockaddr_in));
+        addr->sin_family = AF_INET;
+        switch( host->src_addr.type ){
+           case VTUN_ADDR_IFACE:
+              if( !( addr->sin_addr.s_addr = getifaddr(host->src_addr.name)) ){
+                 syslog(LOG_ERR,"Can't get address of interface %s", 
 					host->src_addr.name);
-              return -1;
-           }
-	   break;
-        case VTUN_ADDR_NAME:
-           if( !(hent = gethostbyname(host->src_addr.name)) ){
-              syslog(LOG_ERR,"Can't resolv local address %s", 
+                 return -1;
+              }
+	      break;
+           case VTUN_ADDR_NAME:
+              if( !(hent = gethostbyname(host->src_addr.name)) ){
+                 syslog(LOG_ERR,"Can't resolv local address %s", 
 					host->src_addr.name);
-              return -1;
-           }
-           addr->sin_addr.s_addr = *(unsigned long *)hent->h_addr; 
-	   break;
-        default:
-           addr->sin_addr.s_addr = INADDR_ANY; 
-           break;
+                 return -1;
+              }
+              addr->sin_addr.s_addr = *(unsigned long *)hent->h_addr; 
+	      break;
+           default:
+              addr->sin_addr.s_addr = INADDR_ANY; 
+              break;
+        }
      }
-
-     addr->sin_family = AF_INET;
-     addr->sin_port = htons(host->src_addr.port);
+     if( host->src_addr.port )	
+        addr->sin_port = htons(host->src_addr.port);
 
      host->sopt.laddr = strdup(inet_ntoa(addr->sin_addr));
 

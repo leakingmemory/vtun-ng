@@ -82,7 +82,7 @@ void client(struct vtun_host *host)
 	   break;
 
 	/* Set local address */
-	local_addr(&my_addr, host);
+	local_addr(&my_addr, host, 0);
 
 	/* We have to create socket again every time
 	 * we want to connect, since STREAM sockets 

@@ -63,8 +63,8 @@ void connection(int sock, struct sockaddr_in *addr)
 	sa.sa_flags=SA_NOCLDWAIT;;
         sigaction(SIGHUP,&sa,NULL);
 
-	syslog(LOG_INFO,"Session %s[%s] opened ", host->host, ip);
-
+	syslog(LOG_INFO,"Session %s[%s:%d] opened ", host->host, ip, 
+					ntohs(addr->sin_port) );
         host->rmt_fd = sock; 
 	
         host->sopt.laddr = strdup("0.0.0.0");
@@ -80,7 +80,8 @@ void connection(int sock, struct sockaddr_in *addr)
 	/* Unlock host. (locked in auth_server) */	
 	unlock_host(host);
      } else {
-        syslog(LOG_INFO,"Denied connection from %s", ip);
+        syslog(LOG_INFO,"Denied connection from %s:%d", ip,
+					ntohs(addr->sin_port) );
      }
      close(sock);
 

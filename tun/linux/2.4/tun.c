@@ -38,11 +38,11 @@
 #include <linux/if.h>
 #include <linux/if_arp.h>
 #include <linux/if_ether.h>
-#include <linux/if_tun.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
+#include "if_tun.h"
 
 #ifdef TUN_DEBUG
 static int debug=0;

@@ -23,6 +23,10 @@
 
 #ifdef __KERNEL__
 
+#ifndef TUN_MAJOR
+#define TUN_MAJOR 90
+#endif
+
 #ifdef TUN_DEBUG
 #define DBG  if(tun->debug)printk
 #define DBG1 if(debug==2)printk

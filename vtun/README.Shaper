@@ -19,6 +19,6 @@ capabilities of your system. On P200 with HZ=100, I've got accurate
 shaping on 1024 kbits, with HZ=1024 everything fine on 8192 kbits.   
 
 If you have any suggestions, ideas, wishes send them to 
-vtun@office.satix.net
+vtun-users@lists.sourceforge.net
  
 Maxim Krasnyansky <max_mk@yahoo.com> 

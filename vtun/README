@@ -50,12 +50,12 @@ To compile and install run:
 Read manual page for 'vtund' and example of the config file for the 
 configuration and other details.
 
-VTun has the mailing list vtun@office.satix.net 
-To receive information about mailing list and how to subscribe to it 
-send an e-mail to vtun-request@office.satix.net with the word 'help' in 
-the Subject. 
+VTun has the mailing lists vtun-users@lists.sourceforge.net and
+vtun-devel@lists.sourceforge.net
+To receive information about the mailing lists and how to subscribe
+please visit http://vtun.sourceforge.net/mlist.html
 
 If you have any suggestions, ideas, wishes send them to 
-vtun@office.satix.net
+vtun-users@lists.sourceforge.net
  
 Maxim Krasnyansky <max_mk@yahoo.com> 

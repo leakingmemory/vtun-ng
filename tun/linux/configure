@@ -1285,8 +1285,8 @@ rm -f conftest.s*
 EOF
 
 cat >> $CONFIG_STATUS <<EOF
-ac_sources="$TDIR/tun.c $TDIR/if_tun.h"
-ac_dests="tun.c if_tun.h"
+ac_sources="$TDIR/tun.c $TDIR/if_tun.h $TDIR/make_rules"
+ac_dests="tun.c if_tun.h make_rules"
 EOF
 
 cat >> $CONFIG_STATUS <<\EOF

@@ -99,7 +99,7 @@ case $TDIR in
         ;;
 esac
 
-AC_LINK_FILES($TDIR/tun.c $TDIR/if_tun.h, tun.c if_tun.h)
+AC_LINK_FILES($TDIR/tun.c $TDIR/if_tun.h $TDIR/make_rules, tun.c if_tun.h make_rules)
 
 AC_OUTPUT(Makefile)
 

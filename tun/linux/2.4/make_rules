@@ -14,33 +14,14 @@
 #
 #  $Id$
 #
-CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
 
-INSTALL = @INSTALL@
+module:
 
-DEFS = @DEFS@
-
-KDIR = @KDIR@
-KVER = @KVER@
-ARCH = @ARCH@
-UPGRADE = @UPGRADE@
-
-DEPMOD  = /sbin/depmod
-MDIR = /lib/modules/$(KVER)/net
-HPATH  = $(KDIR)/include
-
-include make_rules
-
-all: module
-
-dev:
-	./create_dev $(KVER)
-
-inst: kernel dev
-
-clean:
-	rm -f *.o *~
-
-distclean:
-	rm -f tun.c if_tun.h make_rules
-	rm -f $(CONFIGURE_FILES)
+ifeq ($(UPGRADE), 1)
+kernel:
+	$(INSTALL) -v -m 644 -o root -g root tun.c $(KDIR)/drivers/net
+	$(INSTALL) -v -m 644 -o root -g root if_tun.h $(KDIR)/include/linux
+else
+kernel:
+	@echo "Kernel driver upgrade is not required";
+endif

@@ -14,33 +14,26 @@
 #
 #  $Id$
 #
-CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
-
-INSTALL = @INSTALL@
-
-DEFS = @DEFS@
-
-KDIR = @KDIR@
-KVER = @KVER@
-ARCH = @ARCH@
-UPGRADE = @UPGRADE@
-
-DEPMOD  = /sbin/depmod
-MDIR = /lib/modules/$(KVER)/net
-HPATH  = $(KDIR)/include
-
-include make_rules
-
 all: module
 
-dev:
-	./create_dev $(KVER)
+include $(KDIR)/arch/$(ARCH)/Makefile
+include $(KDIR)/.config
 
-inst: kernel dev
+CFLAGS = $(DEFS) -O2 -DMODULE -D__KERNEL__ -I$(HPATH) -I. \
+	 -Wall -Wstrict-prototypes -fomit-frame-pointer -fno-strict-aliasing 
 
-clean:
-	rm -f *.o *~
+ifdef CONFIG_SMP
+CFLAGS += -D__SMP__
+endif
 
-distclean:
-	rm -f tun.c if_tun.h make_rules
-	rm -f $(CONFIGURE_FILES)
+ifdef CONFIG_MODVERSIONS
+CFLAGS += -DMODVERSIONS -include $(HPATH)/linux/modversions.h
+endif
+
+module: tun.o
+tun.o: tun.c if_tun.h
+
+kernel: module
+	$(INSTALL) -d -m 755 -o root -g root $(MDIR)
+	$(INSTALL) -m 644 -o root -g root tun.o $(MDIR)
+	$(DEPMOD) -a 

@@ -2188,6 +2188,9 @@ case $host_os in
 	*solaris*)
 	     OS_DIR="svr4"
 	     ;;
+	*freebsd4*)
+	     OS_DIR="freebsd"
+	     ;;
 	*)
 	     OS_DIR="generic"
 	     ;;

@@ -21,9 +21,11 @@ YES.
 1.5 Where can I download VTun package ?
 You can download complete VTun package from the following web sites:
 Primary:
-  http://vtun.netpedia.net
+  http://vtun.sourceforge.net
 Mirrors:
   http://vtun.saol.com
+  http://vtun.speedway.net
+  http://vtun.euronet.be
 
 1.6 Can I establish VTun tunnel with Windows machine ?
 Unfortunately there is no VTun client for Windows yet.
@@ -52,7 +54,7 @@ VTun doesn't have any limit on number of tunnels.
 1.12 What do I need to run VTun ?
 You should install and configure VTun package and read documentation.
 Usually you'll need: 
-   Universal TUN/TAP device driver (http://vtun.netpedia.net/tun)
+   Universal TUN/TAP device driver (http://vtun.sourceforge.net/tun)
    PPP driver and pppd.
 
 1.13 What hardware do I need to run VTun ?
@@ -72,7 +74,7 @@ Real life examples:
 1.14 VTun supports many tunnel types, which type should I use ?
 Well, it is not very easy to answer this question in the FAQ.
 Please read documentation which comes with VTun package and visit 
-VTun web site http://vtun.netpedia.net
+VTun web site http://vtun.sourceforge.net
 
 1.15 Where can I find configuration recommendations and examples ?
 VTun package contains several config file samples.
@@ -147,7 +149,7 @@ Just add "nomagic" option to ppp command.
 This error means that Universal TUN/TAP driver module is not loaded
 or you do not have correct /dev/tunXX or /dev/tapXX device nodes.
 Make sure you have installed and configured Universal TUN/TAP device
-driver (http://vtun.netpedia.net/tun)
+driver (http://vtun.sourceforge.net/tun)
 
 2.7 Why do I get "LZO compression is not supported" error message ?
 This error means that LZO compression is not compiled in.

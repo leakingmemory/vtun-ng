@@ -13,7 +13,7 @@ Optional packages:
   - SOCKS library:
 	 Socks5 by NEC (recommended)	http://www.socks.nec.com 
 	 Dante Socks4/5 	http://www.inet.no/dante 
-  - Universal TUN/TAP driver 	http://vtun.netpedia.net/tun
+  - Universal TUN/TAP driver 	http://vtun.sourceforge.net/tun
     (REQUIRED for Ethernet(TAP) and IP(TUN) tunnels)
 
 To configure VTun run:

@@ -12,8 +12,8 @@ Version: %{version}
 Release: %{release}
 Copyright: GPL
 Group: Networking/Tunnels
-Url: http://vtun.netpedia.net/
-Source: http://vtun.netpedia.net/%{name}-%{version}.tar.gz
+Url: http://vtun.sourceforge.net/
+Source: http://vtun.sourceforge.net/%{name}-%{version}.tar.gz
 Summary: Virtual tunnel over TCP/IP networks.
 Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: Dag Wieers <dag@mind.be>

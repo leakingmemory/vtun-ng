@@ -72,11 +72,13 @@ int tunnel(struct vtun_host *host)
 {
      int null_fd, pid, opt;
      int fd[2]={-1, -1};
-     char dev[12]="";
+     char dev[VTUN_DEV_LEN]="";
 
      /* Initialize device. */
-     if( host->dev )
-        strcpy(dev, host->dev); 
+     if( host->dev ){
+        strncpy(dev, host->dev, VTUN_DEV_LEN);
+	dev[VTUN_DEV_LEN-1]='\0';
+     }
      switch( host->flags & VTUN_TYPE_MASK ){
 	case VTUN_TTY:
 	   if( (fd[0]=pty_alloc(dev)) < 0 ){

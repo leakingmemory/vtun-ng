@@ -38,6 +38,9 @@
 
 /* Statistic interval in seconds */
 #define VTUN_STAT_IVAL  5*60  /* 5 min */
+
+/* Max lenght of device name */
+#define VTUN_DEV_LEN  20 
  
 /* End of configurable part */
 

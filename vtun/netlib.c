@@ -124,7 +124,9 @@ unsigned long getifaddr(char * ifname)
      if( (s = socket(AF_INET, SOCK_DGRAM, 0)) == -1 )
         return -1;
 
-     strcpy(ifr.ifr_name, ifname);
+     strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name)-1);
+     ifr.ifr_name[sizeof(ifr.ifr_name)-1]='\0';
+
      if( ioctl(s, SIOCGIFADDR, &ifr) < 0 ){
         close(s);
         return -1;

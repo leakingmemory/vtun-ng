@@ -97,6 +97,9 @@ struct vtun_host {
    int  rmt_fd;
    int  loc_fd;
 
+   /* Persist mode */
+   int  persist;
+
    /* Multiple connections */
    int  multi;
 
@@ -154,6 +157,14 @@ extern llist host_list;
 #define VTUN_MULTI_DENY		0  /* no */ 
 #define VTUN_MULTI_ALLOW	1  /* yes */
 #define VTUN_MULTI_KILL		2
+
+/* keep interface in persistant mode */
+#define VTUN_PERSIST_KEEPIF     2
+
+/* Values for the signal flag */
+
+#define VTUN_SIG_TERM 1
+#define VTUN_SIG_HUP  2
 
 /* Global options */
 struct vtun_opts {

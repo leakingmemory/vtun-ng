@@ -46,11 +46,11 @@
 #include "compat.h"
 #include "netlib.h"
 
-static int client_term;
+static volatile sig_atomic_t client_term;
 static void sig_term(int sig)
 {
      syslog(LOG_INFO,"Terminated");
-     client_term = 1;
+     client_term = VTUN_SIG_TERM;
 }
 
 void client(struct vtun_host *host)
@@ -74,9 +74,9 @@ void client(struct vtun_host *host)
      sigaction(SIGTERM,&sa,NULL);
  
      client_term = 0; reconnect = 0;
-     while( (!client_term) || (client_term == 2) ){
-	if( reconnect && (client_term != 2) ){
-	   if( vtun.persist || (host->flags & VTUN_PERSIST) ){
+     while( (!client_term) || (client_term == VTUN_SIG_HUP) ){
+	if( reconnect && (client_term != VTUN_SIG_HUP) ){
+	   if( vtun.persist || host->persist ){
 	      /* Persist mode. Sleep and reconnect. */
 	      sleep(5);
            } else {

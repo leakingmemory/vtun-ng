@@ -162,14 +162,14 @@ static void sig_term(int sig)
 {
      syslog(LOG_INFO, "Closing connection");
      io_cancel();
-     linker_term = 1;
+     linker_term = VTUN_SIG_TERM;
 }
 
 static void sig_hup(int sig)
 {
      syslog(LOG_INFO, "Reestablishing connection");
      io_cancel();
-     linker_term = 2;
+     linker_term = VTUN_SIG_HUP;
 }
 
 /* Statistic dump */
@@ -310,7 +310,11 @@ int lfd_linker(void)
      }
      if( !linker_term && errno )
 	syslog(LOG_INFO,"%s (%d)", strerror(errno), errno);
-	
+
+     if (linker_term == VTUN_SIG_TERM) {
+       lfd_host->persist = 0;
+     }
+
      /* Notify other end about our close */
      proto_write(fd1, buf, VTUN_CONN_CLOSE);
      lfd_free(buf);

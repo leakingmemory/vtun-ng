@@ -79,34 +79,37 @@ int tunnel(struct vtun_host *host)
         strncpy(dev, host->dev, VTUN_DEV_LEN);
 	dev[VTUN_DEV_LEN-1]='\0';
      }
-     switch( host->flags & VTUN_TYPE_MASK ){
-	case VTUN_TTY:
-	   if( (fd[0]=pty_open(dev)) < 0 ){
-	      syslog(LOG_ERR,"Can't allocate pseudo tty. %s(%d)", strerror(errno), errno);
-	      return -1;
-           }
-	   break;
+     if( ! (( host->persist == VTUN_PERSIST_KEEPIF ) &&
+	    ( host->loc_fd >= 0 )) ) {
+        switch( host->flags & VTUN_TYPE_MASK ){
+           case VTUN_TTY:
+	      if( (fd[0]=pty_open(dev)) < 0 ){
+		 syslog(LOG_ERR,"Can't allocate pseudo tty. %s(%d)", strerror(errno), errno);
+		 return -1;
+	      }
+	      break;
 
-	case VTUN_PIPE:
-	   if( pipe_open(fd) < 0 ){
- 	      syslog(LOG_ERR,"Can't create pipe. %s(%d)", strerror(errno), errno);
-   	      return -1;
-	   }
-	   break;
+           case VTUN_PIPE:
+	      if( pipe_open(fd) < 0 ){
+		 syslog(LOG_ERR,"Can't create pipe. %s(%d)", strerror(errno), errno);
+		 return -1;
+	      }
+	      break;
 
-	case VTUN_ETHER:
-	   if( (fd[0]=tap_open(dev)) < 0 ){
- 	      syslog(LOG_ERR,"Can't allocate tap device. %s(%d)", strerror(errno), errno);
-   	      return -1;
-	   }
-	   break;
+           case VTUN_ETHER:
+	      if( (fd[0]=tap_open(dev)) < 0 ){
+		 syslog(LOG_ERR,"Can't allocate tap device %s. %s(%d)", dev, strerror(errno), errno);
+		 return -1;
+	      }
+	      break;
 
-	case VTUN_TUN:
-	   if( (fd[0]=tun_open(dev)) < 0 ){
- 	      syslog(LOG_ERR,"Can't allocate tun device. %s(%d)", strerror(errno), errno);
-   	      return -1;
-	   }
-	   break;
+	   case VTUN_TUN:
+	      if( (fd[0]=tun_open(dev)) < 0 ){
+		 syslog(LOG_ERR,"Can't allocate tun device %s. %s(%d)", dev, strerror(errno), errno);
+		 return -1;
+	      }
+	      break;
+	}
      }
      host->sopt.dev = strdup(dev);
 
@@ -127,7 +130,9 @@ int tunnel(struct vtun_host *host)
         case VTUN_UDP:
 	   if( (opt = udp_session(host)) == -1){
 	      syslog(LOG_ERR,"Can't establish UDP session");
-	      close(fd[0]); close(fd[1]);
+	      close(fd[1]);
+	      if( ! ( host->persist == VTUN_PERSIST_KEEPIF ) )
+		 close(fd[0]);
 	      return 0;
 	   } 	
 
@@ -137,97 +142,107 @@ int tunnel(struct vtun_host *host)
 	   break;
      }
 
-     switch( (pid=fork()) ){
-	case -1:
-	   syslog(LOG_ERR,"Couldn't fork()");
-	   close(fd[0]); close(fd[1]);
-	   return 0;
-	case 0:
-     	   switch( host->flags & VTUN_TYPE_MASK ){
-	      case VTUN_TTY:
-	         /* Open pty slave (becomes controlling terminal) */
-	         if( (fd[1] = open(dev, O_RDWR)) < 0){
-	            syslog(LOG_ERR,"Couldn't open slave pty");
-	            exit(0);
-	         }
-		 /* Fall through */
-	      case VTUN_PIPE:
-	         null_fd = open("/dev/null", O_RDWR);
-	         close(fd[0]);
-	         close(0); dup(fd[1]);
-                 close(1); dup(fd[1]);
-	         close(fd[1]);
+     if( ! (( host->persist == VTUN_PERSIST_KEEPIF ) &&
+	    ( host->loc_fd != -1 )) ){
+        /* do this only the first time when in persist = keep_if mode */
+        switch( (pid=fork()) ){
+	   case -1:
+	      syslog(LOG_ERR,"Couldn't fork()");
+	      if( ! ( host->persist == VTUN_PERSIST_KEEPIF ) )
+		 close(fd[0]);
+	      close(fd[1]);
+	      return 0;
+ 	   case 0:
+	      switch( host->flags & VTUN_TYPE_MASK ){
+	         case VTUN_TTY:
+		    /* Open pty slave (becomes controlling terminal) */
+		    if( (fd[1] = open(dev, O_RDWR)) < 0){
+		       syslog(LOG_ERR,"Couldn't open slave pty");
+		       exit(0);
+		    }
+		    /* Fall through */
+	         case VTUN_PIPE:
+		    null_fd = open("/dev/null", O_RDWR);
+		    close(fd[0]);
+		    close(0); dup(fd[1]);
+		    close(1); dup(fd[1]);
+		    close(fd[1]);
 
-	         /* Route stderr to /dev/null */
-	         close(2); dup(null_fd);
-	         close(null_fd);
-	         break;
-	      case VTUN_ETHER:
-	      case VTUN_TUN:
-		 break;
-	   }
+		    /* Route stderr to /dev/null */
+		    close(2); dup(null_fd);
+		    close(null_fd);
+		    break;
+	         case VTUN_ETHER:
+	         case VTUN_TUN:
+		    break;
+	      }
 
-	   /* Run list of up commands */
-	   set_title("%s running up commands", host->host);
-	   llist_trav(&host->up, run_cmd, &host->sopt);
+	      /* Run list of up commands */
+	      set_title("%s running up commands", host->host);
+	      llist_trav(&host->up, run_cmd, &host->sopt);
 
-   	   exit(0);           
-	default:
-	   switch( host->flags & VTUN_TYPE_MASK ){
-	      case VTUN_TTY:
-	         set_title("%s tty", host->host);
-
-		 dev_read  = pty_read;
-  		 dev_write = pty_write; 
-	         break;
-
-	      case VTUN_PIPE:
-		 /* Close second end of the pipe */
-		 close(fd[1]);
-	         set_title("%s pipe", host->host);
-
-		 dev_read  = pipe_read;
-  		 dev_write = pipe_write; 
-	  	 break;
-
-	      case VTUN_ETHER:
-	         set_title("%s ether %s", host->host, dev);
-
-		 dev_read  = tap_read;
-  		 dev_write = tap_write; 
-	   	 break;
-
-	      case VTUN_TUN:
-	         set_title("%s tun %s", host->host, dev);
-
-		 dev_read  = tun_read;
-  		 dev_write = tun_write; 
-	   	 break;
-     	   }
-
-	   host->loc_fd = fd[0];
-	   opt = linkfd(host);
-
-	   set_title("%s running down commands", host->host);
-	   llist_trav(&host->down, run_cmd, &host->sopt);
-
-	   set_title("%s closing", host->host);
-
-	   /* Gracefully destroy interface */
-	   switch( host->flags & VTUN_TYPE_MASK ){
-	      case VTUN_TUN:
-		 tun_close(fd[0], dev);
-	         break;
-
-	      case VTUN_ETHER:
-	         tap_close(fd[0], dev);
-	         break;
-           }
-
-	   /* Close all fds */
-	   close(host->loc_fd); close(host->rmt_fd);
-	   close(fd[0]); close(fd[1]);	
-
-	   return opt;
+	      exit(0);           
+	}
+	host->loc_fd = fd[0];
      }
+
+     switch( host->flags & VTUN_TYPE_MASK ){
+        case VTUN_TTY:
+	   set_title("%s tty", host->host);
+
+	   dev_read  = pty_read;
+	   dev_write = pty_write; 
+	   break;
+
+        case VTUN_PIPE:
+	   /* Close second end of the pipe */
+	   close(fd[1]);
+	   set_title("%s pipe", host->host);
+
+	   dev_read  = pipe_read;
+	   dev_write = pipe_write; 
+	   break;
+
+        case VTUN_ETHER:
+	   set_title("%s ether %s", host->host, dev);
+
+	   dev_read  = tap_read;
+	   dev_write = tap_write; 
+	   break;
+
+        case VTUN_TUN:
+	   set_title("%s tun %s", host->host, dev);
+
+	   dev_read  = tun_read;
+	   dev_write = tun_write; 
+	   break;
+     }
+
+     opt = linkfd(host);
+
+     set_title("%s running down commands", host->host);
+     llist_trav(&host->down, run_cmd, &host->sopt);
+
+     if(! ( host->persist == VTUN_PERSIST_KEEPIF ) ) {
+        set_title("%s closing", host->host);
+
+	/* Gracefully destroy interface */
+	switch( host->flags & VTUN_TYPE_MASK ){
+           case VTUN_TUN:
+	      tun_close(fd[0], dev);
+	      break;
+
+           case VTUN_ETHER:
+	      tap_close(fd[0], dev);
+	      break;
+	}
+
+       	close(host->loc_fd);
+     }
+
+     /* Close all other fds */
+     close(host->rmt_fd);
+     close(fd[1]);
+
+     return opt;
 }

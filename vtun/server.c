@@ -140,6 +140,7 @@ void listener(void)
 
 	switch( fork() ){
 	   case 0:
+	      close(s);
 	      connection(s1);
 	      break;
 	   case -1:

@@ -81,6 +81,7 @@ int main(int argc, char *argv[], char *env[])
      default_host.timeout = VTUN_CONNECT_TIMEOUT;
      default_host.ka_interval = 30;
      default_host.ka_failure  = 4;
+     default_host.loc_fd = default_host.rmt_fd = -1;
 
      /* Start logging to syslog and stderr */
      openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);

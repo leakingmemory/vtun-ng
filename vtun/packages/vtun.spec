@@ -1,5 +1,5 @@
 %define name	vtun
-%define version	2.4
+%define version	2.5b1
 %define release	1
 
 # By default, builds without socks-support.

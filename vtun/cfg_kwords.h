@@ -79,5 +79,6 @@ struct kword cfg_param[] = {
    { "kill",	 VTUN_MULTI_KILL },
    { "inetd",	 VTUN_INETD },
    { "stand",	 VTUN_STAND_ALONE },
+   { "keep",     VTUN_PERSIST_KEEPIF },
    { NULL , 0 }
 };

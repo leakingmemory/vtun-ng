@@ -124,11 +124,12 @@ This option is ignored by the client.
 .IP \fBtimeout\ \fIsecounds\fR
 Connect timeout.
 
-.IP \fBpersist\fR\ \fByes\fR|\fBno\fR
-persist mode.  If \fByes\fR, client will try to reconnect
-to the server after connection termination.  If \fBno\fR,
-client will exit (default).
-This option is ignored by server.
+.IP \fBpersist\fR\ \fByes\fR|\fBkeep\fR|\fBno\fR
+persist mode.  If \fByes\fR, the client will try to reconnect to the server
+after connection termination.  If \fBkeep\fR, the client will not remove
+and re-add the \fBtun\fIXX\fR or \fBtap\fIXX\fR device when reconnecting.
+If \fBno\fR, the client will exit (default).
+This option is ignored by the server.
 
 .IP \fBcompress\ \fImethod\fR[\fB:\fIlevel\fR]
 specifies compression method to use.  Compression \fImethod\fRs includes:

@@ -1,6 +1,7 @@
 ver 2.1b4:
 	 Removed host name size limitation.
 	 Parser and Makefile fixes.
+	 CVS source tree access.
 
 ver 2.1b3:
 	 Locking code rewrite, should fix race conditions. 

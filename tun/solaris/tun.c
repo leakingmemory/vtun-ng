@@ -589,11 +589,13 @@ static void tun_detach_req(queue_t *wq, mblk_t *mp)
      return;
   }
 
-  /* Unlink from PPA list */
-  for(prev = &ppa->p_str; (tmp = *prev); prev = &tmp->p_next)
-     if( tmp == str ) break;
-  *prev = tmp->p_next;
-  DBG(CE_CONT,"tun: str %p detached from PPA %p\n", str, ppa);
+  if (ppa != NULL) {
+    /* Unlink from PPA list */
+    for(prev = &ppa->p_str; (tmp = *prev); prev = &tmp->p_next)
+       if( tmp == str ) break;
+    *prev = tmp->p_next;
+    DBG(CE_CONT,"tun: str %p detached from PPA %p\n", str, ppa);
+  }
 
   str->ppa = NULL;
   str->state = DL_UNATTACHED;

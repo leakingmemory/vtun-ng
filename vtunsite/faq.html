@@ -304,6 +304,26 @@ VTun - Frequently Asked Questions
 &nbsp;a serious concern.  (Of course, we're open to debate!)<br>
 
 <br>
+<a name="3.2"> 3.2 I have this problem with a binary built wihout SSL ...</a><br> 
+<br>
+&nbsp;This is difficult to say, but you have to stop right there.<br>
+<br>
+&nbsp;The no-SSL binary isn't supported.  Yes, the XOR code will<br>
+&nbsp;remain in the product, and yes, we do intend to consider the<br>
+&nbsp;implications of the code when we continue development, but we<br>
+&nbsp;don't advocate ever building a no-SSL VTun, and we will not<br>
+&nbsp;spend time supporting a configuration which we so reluctantly<br>
+&nbsp;leave in place.  There's a longer story to this, but the result<br>
+&nbsp;is the same: we will normally avoid issues related to no-SSL<br>
+&nbsp;builds.<br>
+<br>
+&nbsp;Having said that, let me affirm that we do (and will) accept<br>
+&nbsp;modifications to the sections of code that only get exercised in<br>
+&nbsp;non-SSL builds, and we will continue to consider the non-SSL code<br>
+&nbsp;when we continue development.  We will review new code and merge<br>
+&nbsp;it into the product so that others can benefit, but we will not<br>
+&nbsp;support or advocate that variant ourselves.<br>
+<br>
 
 &nbsp;If you have any unanswered question please send it to the mailing list <br> 
 &nbsp;vtun-users@lists.sf.net<br> 
@@ -321,7 +341,7 @@ VTun - Frequently Asked Questions
    </table>
    <br><br>
    <font face="Verdana"> 
-      Copyright (C) 1999-2001 Maxim Krasnyansky
+      Copyright (C) 1999-2004 Maxim Krasnyansky
    </font>
 </center>
 </body>

@@ -1,10 +1,27 @@
 %define name	vtun
+# this will be bumped for 3.0.0, trust me.
 %define version	2.5
-%define release	1
+%define release	3
+
+#this part NEEDS to be expanded
+%define IsSuSE	%( [ -f /etc/SuSE-release ] && echo 1 || echo 0 )
+%if %{IsSuSE}
+ %define rc_dir   /etc/init.d
+ %define lock_dir /var/lock/subsys/vtunnel
+ %define log_dir  /var/log/vtunnel
+%else
+ %define rc_dir /etc/rc.d/init.d
+ %define lock_dir /var/lock/vtund
+ %define log_dir  /var/log/vtund
+%endif
 
 # By default, builds without socks-support.
 # To build with socks-support, issue:
 #   rpm --define "USE_SOCKS yes" ...
+
+# By default, builds with LZO support (available for any RPM system)
+# To disable LZO, issue:
+#   rpm --define "NO_USE_LZO yes" ...
 
 Name: %{name}
 Version: %{version}
@@ -15,51 +32,73 @@ Url: http://vtun.sourceforge.net/
 Source: http://vtun.sourceforge.net/%{name}-%{version}.tar.gz
 Summary: Virtual tunnel over TCP/IP networks.
 Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
-Packager: Dag Wieers <dag@mind.be>
+#Packager: Dag Wieers <dag@mind.be> 
+Packager: Bishop Clark (LC957) <bishop@platypus.bc.ca>
 BuildRoot: /var/tmp/%{name}-%{version}-build
 Obsoletes: vppp
-Buildrequires: lzo-devel
+Buildrequires: %{!?NO_USE_LZO:lzo-devel}
 
 %description
-VTun provides the method for creating Virtual Tunnels over TCP/IP networks
-and allows to shape, compress, encrypt traffic in that tunnels. 
-Supported type of tunnels are: PPP, IP, Ethernet and most of other serial 
-protocols and programs.
+VTun provides the method for creating Virtual Tunnels over TCP/IP
+networks and allows to shape, compress, encrypt traffic in that
+tunnels.  Supported type of tunnels are: PPP, IP, Ethernet and most of
+other serial protocols and programs.
 
-VTun is easily and highly configurable, it can be used for various network
-tasks like VPN, Mobil IP, Shaped Internet access, IP address saving, etc.
-It is completely user space implementation and does not require modification
-to any kernel parts. 
+VTun is easily and highly configurable: it can be used for various
+network tasks like VPN, Mobil IP, Shaped Internet access, IP address
+saving, etc.  It is completely a user space implementation and does
+not require modification to any kernel parts.
 
-This package is build with%{!?USE_SOCKS:out} SOCKS-support.
+This package is built with%{!?USE_SOCKS:out} SOCKS-support.
+%{?NO_USE_LZO:This package is built without LZO support.}
 
 %prep
 
 %setup -n %{name}
 %configure			   \
-            --prefix=/usr 	   \
+            --prefix=%{_exec_prefix} 	   \
 	    --sysconfdir=/etc 	   \
-	    --localstatedir=/var   \
+	    --localstatedir=%{_var}   \
+%{?NO_USE_LZO: --disable-lzo} \
 %{?USE_SOCKS: --enable-socks}
 
 %build
-make
+make %{?IsSuSE: LOCK_DIR=%{lock_dir} STAT_DIR=/var/log/vtunnel}
 
 %install
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT/usr/sbin
-install -d $RPM_BUILD_ROOT/usr/man/man8
-install -d $RPM_BUILD_ROOT/usr/man/man5
-install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
-install -d $RPM_BUILD_ROOT/var/log/vtund
-install -d $RPM_BUILD_ROOT/var/lock/vtund
-install scripts/vtund.rc.red_hat $RPM_BUILD_ROOT/etc/rc.d/init.d/vtund
-
-make install SBIN_DIR=$RPM_BUILD_ROOT/usr/sbin \
-        MAN_DIR=$RPM_BUILD_ROOT/usr/man \
+install -d $RPM_BUILD_ROOT%{_sbindir}
+install -d $RPM_BUILD_ROOT%{_mandir}/man8
+install -d $RPM_BUILD_ROOT%{_mandir}/man5
+install -d $RPM_BUILD_ROOT%{rc_dir}
+install -d $RPM_BUILD_ROOT%{log_dir}
+install -d $RPM_BUILD_ROOT%{lock_dir}
+ if [ x%{IsSuSE} = x1 ]; then
+install scripts/vtund.rc.suse $RPM_BUILD_ROOT%{rc_dir}/vtund
+ else 
+install scripts/vtund.rc.red_hat $RPM_BUILD_ROOT%{rc_dir}/vtund
+ fi
+make install SBIN_DIR=$RPM_BUILD_ROOT%{_sbindir} \
+        MAN_DIR=$RPM_BUILD_ROOT%{_mandir} \
         ETC_DIR=$RPM_BUILD_ROOT/etc \
-        VAR_DIR=$RPM_BUILD_ROOT/var \
+        VAR_DIR=$RPM_BUILD_ROOT%{_var} \
+  %{?IsSuSE:        LOCK_DIR=%{lock_dir} } \
 	INSTALL_OWNER=
+
+if [ x%{IsSuSE} = x1 ]; then
+# SuSE RC.CONFIG templates
+install -d $RPM_BUILD_ROOT/var/adm/fillup-templates
+
+#install -m 644 scripts/vtund.rc.suse.config $RPM_BUILD_ROOT/var/adm/fillup-templates/rc.config.vtund
+#  file does not exist.  Needs to go into CVS.  Watch the file name change.
+#  remove this comment before final roll. - B
+
+# rc
+install -m 744 scripts/vtund.rc.suse.rcvtund $RPM_BUILD_ROOT%{rc_dir}/vtund
+#  file does not exist.  Needs to go into CVS.  Watch the file name change.
+#  remove this comment before final roll. - B
+ln -sf ../..%{rc_dir}/vtund $RPM_BUILD_ROOT%{_sbindir}/rcvtund
+fi
 
 %clean
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
@@ -68,16 +107,23 @@ make install SBIN_DIR=$RPM_BUILD_ROOT/usr/sbin \
 %defattr(644,root,root)
 %doc ChangeLog Credits FAQ README README.Setup README.Shaper TODO
 %doc TODO vtund.conf 
-%attr(755,root,root) %config /etc/rc.d/init.d/vtund
+%attr(755,root,root) %config %{rc_dir}/vtund
 %attr(600,root,root) %config(noreplace) /etc/vtund.conf
-%attr(755,root,root) /usr/sbin/vtund
-%attr(755,root,root) %dir /var/log/vtund
-%attr(755,root,root) %dir /var/lock/vtund
-/usr/man/man8/vtund.8*
-/usr/man/man8/vtun.8*
-/usr/man/man5/vtund.conf.5*
+%attr(755,root,root) %{_sbindir}/vtund
+%attr(755,root,root) %dir %{log_dir}
+%attr(755,root,root) %dir %{lock_dir}
+%{_mandir}/man8/vtund.8*
+#%{_mandir}/man8/vtun.8*
+%{_mandir}/man5/vtund.conf.5*
 
 %changelog
+* Mon Jan 21 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-3
+- Macros updating as per 2.5 for better cross-distro build
+- Added NO_USE_LZO compile option as per Willems Luc
+- very initial SuSE 7.3 support as per Willems Luc
+- removed packaging of vtun->vtund symlink in man8 as per build
+  behaviour
+
 * Mon Jan 14 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-2
 - noreplace to vtund.conf to prevent Freshen from clobbering config.
 - added buildrequires to prevent failed builds.

@@ -116,3 +116,6 @@ Kevin P. Fleming <kevin@labsysgrp.com>
 
 Robert R. Wal <rrw@hell.pl>
 	Added support for iproute command.
+
+Willems Luc <willems.luc@pandora.be>
+	Initial SuSE packaging.  Testing.

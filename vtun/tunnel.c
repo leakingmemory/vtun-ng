@@ -108,6 +108,7 @@ int tunnel(struct vtun_host *host)
 	   }
 	   break;
      }
+     host->sopt.dev = strdup(dev);
 
      /* Initialize protocol. */
      switch( host->flags & VTUN_PROT_MASK ){
@@ -203,8 +204,6 @@ int tunnel(struct vtun_host *host)
   		 dev_write = tun_write; 
 	   	 break;
      	   }
-
-     	   host->sopt.dev = strdup(dev);
 	   host->loc_fd = fd[0];
 	   opt = linkfd(host);
 

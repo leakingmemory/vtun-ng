@@ -60,7 +60,7 @@ static struct module_info tunminfo = {
   21,		/* mi_minpsz - Min packet size 	*/
   2048,		/* mi_maxpsz - Max packet size 	*/
   (32 * 1024),	/* mi_hiwat  - Hi-water mark 	*/
-  1		/* mi_lowat  _ Lo-water mark 	*/
+  21		/* mi_lowat  _ Lo-water mark 	*/
 };
 
 static struct qinit tunrinit = {
@@ -105,7 +105,7 @@ static struct cb_ops tun_cb_ops = {
   nochpoll,		/* cb_chpoll */
   ddi_prop_op,		/* cb_prop_op */
   &tun_info,		/* cb_stream */
-  (D_MP | D_MTQPAIR | D_MTOUTPERIM | D_MTOCEXCL)	/* cb_flag */
+  D_NEW | D_MP | D_MTQPAIR | D_MTOUTPERIM | D_MTOCEXCL	/* cb_flag */
 };
 
 static	struct dev_ops tun_ops = {
@@ -253,7 +253,6 @@ static int tunopen(queue_t *rq, dev_t *dev, int flag, int sflag, cred_t *credp)
 
      rq->q_ptr = WR(rq)->q_ptr = (char *)str;
   }
-
   DBG(CE_CONT,"tun: tunopen str %p minor %d", str, minordev);
 
   qprocson(rq);
@@ -267,26 +266,29 @@ static int tunclose(queue_t *rq)
 
   qprocsoff(rq);
 
-  DBG(CE_CONT,"tun: tunclose str %p min %d ppa %p\n",str,str->minor,str->ppa);
+  DBG(CE_CONT,"tun: tunclose str %p min %d\n", str, str->minor);
 
   if( (ppa = str->ppa) ){
      if( str->flags & TUN_CONTROL ){
-  	DBG(CE_CONT,"tun: closing control stream %p\n", str);
+  	DBG(CE_CONT,"tun: closing control str %p PPA %p\n", str, ppa);
 	
 	/* Unlink all protocol Streams from the PPA */
 	for(tmp = ppa->p_str; tmp; tmp = tmp->p_next){
 	   flushq(WR(tmp->rq), FLUSHDATA);
 	   tmp->ppa = NULL;
+  	   DBG(CE_CONT,"tun: str %p detached from PPA %p\n", tmp, ppa);
 	}
        
 	/* Free PPA */
 	tun_ppa[ppa->id] = NULL;
 	kmem_free((char *)ppa, sizeof(struct tunppa));
+  	DBG(CE_CONT,"tun: PPA %p removed\n", ppa);
      } else {
 	/* Unlink Stream from the PPA list */
 	for(prev = &ppa->p_str; (tmp = *prev); prev = &tmp->p_next)
      	   if( tmp==str ) break;
         *prev = tmp->p_next;
+  	DBG(CE_CONT,"tun: str %p detached from PPA %p\n", str, ppa);
      }
   }
 
@@ -440,7 +442,7 @@ static void tunioctl(queue_t *wq, mblk_t *mp)
 
         tuniocack(wq, mp, M_IOCACK, ppa->id, 0);
 
-  	DBG(CE_CONT,"tun: new PPA %d, control stream %p\n", p, str);
+  	DBG(CE_CONT,"tun: new PPA %d control str %p\n", ppa->id, str);
         break;
 
      case TUNSETPPA:
@@ -462,7 +464,7 @@ static void tunioctl(queue_t *wq, mblk_t *mp)
 
         tuniocack(wq, mp, M_IOCACK, p, 0);
 
-  	DBG(CE_CONT,"tun: stream %p attached to PPA %d \n", str, p);
+  	DBG(CE_CONT,"tun: str %p attached to PPA %d \n", str, p);
         break;
 
      case DLIOCRAW:          /* Raw M_DATA mode */
@@ -535,69 +537,6 @@ static void tundlerrack(queue_t *wq, mblk_t *mp, uint32_t  errprim,
   dlp->error_ack.dl_errno = errno;
   dlp->error_ack.dl_unix_errno = uerrno;
   qreply(wq, mp);
-}
-
-static mblk_t * tun_unitdata_ind(mblk_t *mp, int type)
-{
-  dl_unitdata_ind_t *ud_ind;
-  struct tundladdr *dla;
-  mblk_t *nmp;
-  int size;
-
-  DBG(CE_CONT,"tun: tun_unitdata_ind \n");
-
-  /* Allocate new mblk */
-  size = sizeof(dl_unitdata_ind_t) + TUN_ADDR_LEN + TUN_ADDR_LEN;
-  if( !(nmp = allocb(size, BPRI_LO)) ){
-     freemsg(mp);
-     return NULL;
-  }
-  DB_TYPE(nmp) = (uint8_t)M_PROTO;
-  nmp->b_wptr = nmp->b_datap->db_lim;
-  nmp->b_rptr = nmp->b_wptr - size;
-
-  /* Construct DL_UNITDATA_IND message */
-  ud_ind = (dl_unitdata_ind_t *)nmp->b_rptr;
-  ud_ind->dl_primitive = DL_UNITDATA_IND;
-  ud_ind->dl_dest_addr_length = TUN_ADDR_LEN;
-  ud_ind->dl_dest_addr_offset = sizeof(dl_unitdata_ind_t);
-  ud_ind->dl_src_addr_length = TUN_ADDR_LEN;
-  ud_ind->dl_src_addr_offset = sizeof(dl_unitdata_ind_t) + TUN_ADDR_LEN;
-  ud_ind->dl_group_address = 0;
-
-  dla = (struct tundladdr *)(nmp->b_rptr + ud_ind->dl_dest_addr_offset);
-  dla->sap = (uint16_t)type;
-  dla = (struct tundladdr *)(nmp->b_rptr + ud_ind->dl_src_addr_offset);
-  dla->sap = (uint16_t)type;
-
-  nmp->b_cont = mp;
-  return nmp;
-}
-
-static void tun_unitdata_req(queue_t *wq, mblk_t *mp)
-{
-  struct tunstr *str = (struct tunstr *)wq->q_ptr;
-  struct tunppa *ppa = str->ppa; 
-  mblk_t *nmp;
-
-  DBG(CE_CONT,"tun: tun_unitdata_req str %p\n", str);
-
-  if(str->state != DL_IDLE || !ppa ){
-     tundlerrack(wq, mp, DL_UNITDATA_REQ, DL_OUTSTATE, 0);
-     return;
-  }
-
-  if( !(nmp = mp->b_cont) ){
-     tundlerrack(wq, mp, DL_UNITDATA_REQ, DL_BADDATA, 0);
-     return;
-  }
-
-  /* Drop unidata_req part of the message */
-  mp->b_cont = NULL;
-  freeb(mp);  
-
-  /* Route frame */
-  tun_frame(wq, nmp); 
 }
 
 static dl_info_ack_t tun_dl_info = {
@@ -692,7 +631,7 @@ static void tun_attach_req(queue_t *wq, mblk_t *mp)
 
   tundlokack(wq, mp, DL_ATTACH_REQ);
 
-  DBG(CE_CONT,"tun: stream %p attached to PPA %d \n", str, p);
+  DBG(CE_CONT,"tun: str %p attached to PPA %d \n", str, p);
 }
 
 static void tun_detach_req(queue_t *wq, mblk_t *mp)
@@ -716,6 +655,7 @@ static void tun_detach_req(queue_t *wq, mblk_t *mp)
   for(prev = &ppa->p_str; (tmp = *prev); prev = &tmp->p_next)
      if( tmp == str ) break;
   *prev = tmp->p_next;
+  DBG(CE_CONT,"tun: str %p detached from PPA %p\n", str, ppa);
 
   str->ppa = NULL;
   str->state = DL_UNATTACHED;
@@ -761,7 +701,7 @@ static void tun_bind_req(queue_t *wq, mblk_t *mp)
   str->sap = sap;
   str->state = DL_IDLE;
 
-  DBG(CE_CONT,"tun: stream %p bound to sap %d\n", str, sap);
+  DBG(CE_CONT,"tun: str %p bound to sap %d\n", str, sap);
 
   dladdr.sap = sap;
 
@@ -808,7 +748,7 @@ static void tun_promiscon_req(queue_t *wq, mblk_t *mp)
 
   DBG(CE_CONT,"tun: tun_promiscon_req str %p\n", str);
 
-  if(MBLKL(mp) < DL_PROMISCON_REQ_SIZE){
+  if( MBLKL(mp) < DL_PROMISCON_REQ_SIZE ){
      tundlerrack(wq, mp, DL_PROMISCON_REQ, DL_BADPRIM, 0);
      return;
   }
@@ -872,14 +812,17 @@ void tun_physaddr_req(queue_t *wq, mblk_t *mp)
   union   DL_primitives   *dlp;
   struct  ether_addr addr;
   int size;
+#ifdef TUN_DEBUG
+  struct tunstr *str = (struct tunstr *)wq->q_ptr;
+
+  DBG(CE_CONT,"tun: tun_physaddr_req str %p\n", str);
+#endif
 
   if( MBLKL(mp) < DL_PHYS_ADDR_REQ_SIZE ){
      tundlerrack(wq, mp, DL_PHYS_ADDR_REQ, DL_BADPRIM, 0);
      return;
   }
-
   bzero(&addr, sizeof(addr));
-
   size = sizeof(dl_phys_addr_ack_t) + ETHERADDRL;
   if( !(mp = tunchmsg(mp, size, M_PCPROTO, DL_PHYS_ADDR_ACK)) )
      return;
@@ -888,6 +831,146 @@ void tun_physaddr_req(queue_t *wq, mblk_t *mp)
   dlp->physaddr_ack.dl_addr_offset = sizeof(dl_phys_addr_ack_t);
   bcopy(&addr, (caddr_t)(mp->b_rptr + sizeof(dl_phys_addr_ack_t)), ETHERADDRL);
   qreply(wq, mp);
+}
+
+static void tun_unitdata_req(queue_t *wq, mblk_t *mp)
+{
+  struct tunstr *str = (struct tunstr *)wq->q_ptr;
+  struct tunppa *ppa = str->ppa; 
+  mblk_t *nmp;
+
+  DBG(CE_CONT,"tun: tun_unitdata_req str %p data %d\n", str, msgdsize(mp));
+
+  if(str->state != DL_IDLE || !ppa ){
+     tundlerrack(wq, mp, DL_UNITDATA_REQ, DL_OUTSTATE, 0);
+     return;
+  }
+
+  if( !(nmp = mp->b_cont) ){
+     tundlerrack(wq, mp, DL_UNITDATA_REQ, DL_BADDATA, 0);
+     return;
+  }
+
+  /* Drop unidata_req part of the message */
+  mp->b_cont = NULL;
+  freeb(mp);  
+
+  /* Route frame */
+  tun_frame(wq, nmp); 
+}
+
+static mblk_t * tun_unitdata_ind(mblk_t *mp, int type)
+{
+  dl_unitdata_ind_t *ud_ind;
+  struct tundladdr *dla;
+  mblk_t *nmp;
+  int size;
+
+  DBG(CE_CONT,"tun: tun_unitdata_ind \n");
+
+  /* Allocate new mblk */
+  size = sizeof(dl_unitdata_ind_t) + TUN_ADDR_LEN + TUN_ADDR_LEN;
+  if( !(nmp = allocb(size, BPRI_LO)) ){
+     freemsg(mp);
+     return NULL;
+  }
+  DB_TYPE(nmp) = (uint8_t)M_PROTO;
+  nmp->b_wptr = nmp->b_datap->db_lim;
+  nmp->b_rptr = nmp->b_wptr - size;
+
+  /* Construct DL_UNITDATA_IND message */
+  ud_ind = (dl_unitdata_ind_t *)nmp->b_rptr;
+  ud_ind->dl_primitive = DL_UNITDATA_IND;
+  ud_ind->dl_dest_addr_length = TUN_ADDR_LEN;
+  ud_ind->dl_dest_addr_offset = sizeof(dl_unitdata_ind_t);
+  ud_ind->dl_src_addr_length = TUN_ADDR_LEN;
+  ud_ind->dl_src_addr_offset = sizeof(dl_unitdata_ind_t) + TUN_ADDR_LEN;
+  ud_ind->dl_group_address = 0;
+
+  dla = (struct tundladdr *)(nmp->b_rptr + ud_ind->dl_dest_addr_offset);
+  dla->sap = (uint16_t)type;
+  dla = (struct tundladdr *)(nmp->b_rptr + ud_ind->dl_src_addr_offset);
+  dla->sap = (uint16_t)type;
+
+  nmp->b_cont = mp;
+  return nmp;
+}
+/* Route frames */
+#define SNIFFER(a) ( (a & TUN_ALL_SAP) || (a & TUN_ALL_PHY) )
+static void tun_frame(queue_t *wq, mblk_t *mp)
+{
+  struct tunstr *str = (struct tunstr *)wq->q_ptr;
+  register struct tunppa *ppa;
+  register struct tunstr *tmp;
+  mblk_t *nmp;
+
+  if( !(ppa = str->ppa) ){
+     /* Stream is not attached to PPA. Ignore frame. */
+     DBG(CE_CONT,"tun: unattached str %p, dropping frame\n", str);
+
+     freemsg(mp);
+     return; 
+  }
+
+  /* Check for the sniffers */
+  for( tmp=ppa->p_str; tmp; tmp = tmp->p_next ){
+     if( SNIFFER(tmp->flags) && canputnext(tmp->rq) ){
+	if( !(nmp = dupmsg(mp)) )
+	   continue;
+
+  	DBG(CE_CONT,"tun: frame %d -> sniffer %p\n", msgdsize(nmp), tmp);
+
+        if( tmp->flags & TUN_RAW ){
+           putnext(tmp->rq, nmp);
+	   continue;
+	}          
+
+        if( (tmp->flags & TUN_FAST) ){
+           putnext(tmp->rq, nmp);
+	   continue;
+	}
+
+        if( (nmp=tun_unitdata_ind(nmp, ETHERTYPE_IP)) )
+           putnext(tmp->rq, nmp);
+     }
+  }
+
+  if( !(str->flags & TUN_CONTROL) ){
+     /* Data from the Protocol stream send it to 
+      * the Control stream */ 
+     DBG(CE_CONT,"tun: frame %d -> control str\n", msgdsize(mp));
+     if( canputnext(ppa->rq) ){
+	putnext(ppa->rq, mp);
+     } else {
+        putq(wq, mp);
+     }
+  } else {
+     /* Data from the Control stream.  
+      * Route frame to the Protocol streams. */
+     for( tmp=ppa->p_str; tmp; tmp = tmp->p_next ){
+        if( tmp->sap==ETHERTYPE_IP &&  canputnext(tmp->rq) ){
+	   if( !(nmp = dupmsg(mp)) )
+	      continue;
+
+  	   DBG(CE_CONT,"tun: frame %d -> proto %p\n", msgdsize(nmp), tmp);
+
+           if( tmp->flags & TUN_RAW ){
+              putnext(tmp->rq, nmp);
+	      continue;
+	   }          
+
+           if( (tmp->flags & TUN_FAST) ){
+              putnext(tmp->rq, nmp);
+	      continue;
+	   }
+
+           if( (nmp=tun_unitdata_ind(nmp, ETHERTYPE_IP)) )
+              putnext(tmp->rq, nmp);
+	}
+     }
+     /* Free original message */
+     freemsg(mp);
+  }
 }
 
 static void tunproto(queue_t *wq, mblk_t *mp)
@@ -937,84 +1020,5 @@ static void tunproto(queue_t *wq, mblk_t *mp)
      default:
         tundlerrack(wq, mp, prim, DL_UNSUPPORTED, 0);
         break;
-  }
-}
-
-/* Route frames */
-#define SNIFFER(a) ( (a & TUN_ALL_SAP) || (a & TUN_ALL_PHY) )
-
-static void tun_frame(queue_t *wq, mblk_t *mp)
-{
-  struct tunstr *str = (struct tunstr *)wq->q_ptr;
-  register struct tunppa *ppa;
-  register struct tunstr *tmp;
-  mblk_t *nmp;
-
-  if( !(ppa = str->ppa) ){
-     /* Stream is not attached to PPA. Ignore frame. */
-     DBG(CE_CONT,"tun: data from unattached str %p\n", str);
-
-     freemsg(mp);
-     return; 
-  }
-
-  /* Check for the sniffers */
-  for( tmp=ppa->p_str; tmp; tmp = tmp->p_next ){
-     if( SNIFFER(tmp->flags) && canputnext(tmp->rq) ){
-	if( !(nmp = dupmsg(mp)) )
-	   continue;
-
-  	DBG(CE_CONT,"tun: sending pkt to str %p\n", tmp);
-
-        if( tmp->flags & TUN_RAW ){
-           putnext(tmp->rq, nmp);
-	   continue;
-	}          
-
-        if( (tmp->flags & TUN_FAST) ){
-           putnext(tmp->rq, nmp);
-	   continue;
-	}
-
-        if( (nmp=tun_unitdata_ind(nmp, ETHERTYPE_IP)) )
-           putnext(tmp->rq, nmp);
-     }
-  }
-
-  if( !(str->flags & TUN_CONTROL) ){
-     /* Data from the Protocol stream send it to 
-      * the Control stream 
-      */ 
-     if( canputnext(ppa->rq) ){
-	putnext(ppa->rq, mp);
-     } else {
-        putq(wq, mp);
-     }
-  } else {
-     /* Data from the Control stream.  
-      * Route frame to the Protocol streams. */
-     for( tmp=ppa->p_str; tmp; tmp = tmp->p_next ){
-        if( tmp->sap==ETHERTYPE_IP &&  canputnext(tmp->rq) ){
-	   if( !(nmp = dupmsg(mp)) )
-	      continue;
-
-  	   DBG(CE_CONT,"tun: sending frame to str %p\n", tmp);
-
-           if( tmp->flags & TUN_RAW ){
-              putnext(tmp->rq, nmp);
-	      continue;
-	   }          
-
-           if( (tmp->flags & TUN_FAST) ){
-              putnext(tmp->rq, nmp);
-	      continue;
-	   }
-
-           if( (nmp=tun_unitdata_ind(nmp, ETHERTYPE_IP)) )
-              putnext(tmp->rq, nmp);
-	}
-     }
-     /* Free original message */
-     freemsg(mp);
   }
 }

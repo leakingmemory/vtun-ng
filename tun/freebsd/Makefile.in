@@ -34,13 +34,31 @@ KMOD = if_tap
 SRCS = if_tap.c if_tap.h vnode_if.h
 OBJS = ${SRCS:N*.h:R:S/$/.o/g}
 
+all: ${KMOD}.ko
 
 vnode_if.h:
 	$(VNODE)
 
-clean:
-	rm -f $(SRCS) *.o
+${KMOD}.kld:  ${SRCS} ${OBJS}
+.if ${OBJFORMAT} == elf
+	gensetdefs ${OBJS}
+	${CC} ${CFLAGS} -c setdef0.c
+	${CC} ${CFLAGS} -c setdef1.c
+	${LD} ${LDFLAGS} -r -o ${.TARGET} setdef0.o ${OBJS} setdef1.o
+.else
+	${LD} ${LDFLAGS} -r -o ${.TARGET} ${OBJS}
+.endif
 
-distclean: clean
-	rm -f if_tap.h if_tap.c @ machine
+${KMOD}.ko:   ${KMOD}.kld
+	${LD} -Bshareable ${LDFLAGS} -o ${.TARGET} ${KMOD}.kld
+
+install:  all
+	${INSTALL} ${COPY} -o ${KMODOWN} -g ${KMODGRP} -m ${KMODMODE} \
+		${_INSTALLFLAGS} ${KMOD}.ko ${DESTDIR}
+
+clean:
+	rm -f *.o
+
+distclean:
+	rm -f *.h *.c *.ko *.kld @ machine
 	rm -f $(CONFIGURE_FILES)

@@ -61,6 +61,6 @@ inst: module dev
 clean:
 	rm -f *.o *~
 
-distclean: clean
+distclean:
 	rm -f tun.c if_tun.h
 	rm -f $(CONFIGURE_FILES)

@@ -69,7 +69,7 @@ struct tapinfo {
 #define	TAPSIFINFO	_IOW('t', 91, struct tapinfo)
 #define	TAPGIFINFO	_IOR('t', 92, struct tapinfo)
 
-#ifndef KERNEL
+#ifdef KERNEL
 
 struct tap_softc {
 	struct arpcom	arpcom;			/* ethernet common data      */

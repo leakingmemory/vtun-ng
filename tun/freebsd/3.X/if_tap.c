@@ -47,12 +47,7 @@
  *
  */
 
-#include "tap.h"
 #if NTAP > 0
-
-#include "opt_devfs.h"
-#include "opt_inet.h"
-
 #include <sys/param.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
@@ -67,9 +62,11 @@
 #include <sys/filedesc.h>
 #include <sys/kernel.h>
 #include <sys/sysctl.h>
+
 #ifdef DEVFS
 #include <sys/devfsext.h>
 #endif /*DEVFS*/
+
 #include <sys/conf.h>
 #include <sys/uio.h>
 #include <sys/vnode.h>
@@ -90,18 +87,15 @@
 #include <netns/ns_if.h>
 #endif /* NS */
 
-#include "bpfilter.h"
 #if NBPFILTER > 0
 #include <net/bpf.h>
 #endif /* NBPFILTER */
 
-#include "if_tap.h"
-
-#include "opt_bdg.h"
 #ifdef BRIDGE
 #include <net/bridge.h>
 #endif /* BRIDGE */
 
+#include "if_tap.h"
 
 /* pseudo device */
 static void tapattach	__P((void *));

@@ -44,6 +44,7 @@ AC_ARG_ENABLE(bridge,
    --enable-bridge        Enable bridge,
    AC_DEFINE(BRIDGE, 1)
 )
+AC_DEFINE(INET, 1)
 
 # Check kernel sources
 AC_TEST_FILES(Makefile kern/kern_conf.c, $KDIR,  ,
@@ -55,13 +56,13 @@ KVER=`uname -r | cut -d '-' -f 1`
 
 case $KVER in
    3.*)
-	DEFS="$DEFS -DKERNEL"
+	AC_DEFINE(KERNEL)
 	TDIR=3.X
 	VNODE="sh @/kern/vnode_if.sh @/kern/vnode_if.src"
 	;;
 
    4.*)
-	DEFS="$DEFS -D_KERNEL"
+	AC_DEFINE(_KERNEL)
 	TDIR=4.X
 	VNODE="perl @/kern/vnode_if.pl -h @/kern/vnode_if.src"
 	;;

@@ -37,9 +37,6 @@
  *	$Id$
  *
  */
-
-#include "opt_inet.h"
-
 #include <sys/param.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
@@ -68,13 +65,11 @@
 #include <netinet/in.h>
 #endif
 
-#include "opt_bdg.h"
 #ifdef BRIDGE
 #include <net/bridge.h>
 #endif /* BRIDGE */
 
 #include "if_tap.h"
-
 
 /* pseudo device */
 static void tapattach	__P((void *));

@@ -24,7 +24,7 @@
 
 #include "llist.h"
 
-/* __VER__ is substituted by 'make_release' */
+/* Version will be substituted by 'make_release' */
 #define VER "__VER__"
 
 /* Default VTUN port */

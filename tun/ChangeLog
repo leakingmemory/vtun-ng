@@ -1,5 +1,8 @@
 Universal TUN/TAP device driver ChangeLog.
 
+ver 1.2:
+	Linux driver update: Persistent devices, one queue mode.
+
 ver 1.1:
 	Massive Linux driver update: 2.4.x kernel support. New cloning 
 	interface, protocol indication. Statistics counting fixes.

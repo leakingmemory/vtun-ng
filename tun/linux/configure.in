@@ -32,10 +32,10 @@ AC_ARG_WITH(kernel,
 
 # Check kernel sources
 AC_TEST_FILES(Makefile include/linux/if.h, $KDIR,  ,
-   AC_MSG_ERROR( Linux kernel source not found in $KERNEL )
+   AC_MSG_ERROR( Linux kernel source not found in $KDIR )
 )       
 AC_TEST_FILES(.config include/linux/version.h, $KDIR,  ,
-   AC_MSG_ERROR( Linux kernel $KERNEL is not configured )
+   AC_MSG_ERROR( Linux kernel $KDIR is not configured )
 ) 
       
 ARCH=`uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \

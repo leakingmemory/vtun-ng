@@ -48,9 +48,8 @@ static	int  tunopen(queue_t *, dev_t *, int, int, cred_t *);
 static	int  tunclose(queue_t *);
 static	int  tunwput(queue_t *wq, mblk_t *mb);
 static	int  tunwsrv(queue_t *wq);
-static  void tun_ioctl(queue_t *wq, mblk_t *mb);
-static  void tun_proto(queue_t *wq, mblk_t *mp);
-static  void tun_frame(queue_t *wq, mblk_t *mp);
+
+static  void tun_frame(queue_t *wq, mblk_t *mpi, int q);
 
 #define TUN_VER "0.5"
 
@@ -302,76 +301,6 @@ static int tunclose(queue_t *rq)
   return 0;
 }
 
-static int tunwput(queue_t *wq, mblk_t *mp)
-{
-#ifdef TUN_DEBUG
-  struct tunstr *str = (struct tunstr *)wq->q_ptr;
-
-  DBG(CE_CONT, "tun: tunwput str %p\n", str);
-#endif
-
-  switch( DB_TYPE(mp) ){
-     case M_DATA:
-	tun_frame(wq, mp);
-	break;
-
-     case M_PROTO:
-     case M_PCPROTO:
-	tun_proto(wq, mp);
-	break;
-
-     case M_IOCTL:
-	qwriter(wq, mp, tun_ioctl, PERIM_OUTER);
-	break;
-
-     case M_FLUSH:
-	/* Flush queues */
-        if(*mp->b_rptr & FLUSHW) {
-           flushq(wq, FLUSHALL);
-           *mp->b_rptr &= ~FLUSHW;
-        }
-        if(*mp->b_rptr & FLUSHR)
-           qreply(wq, mp);
-        else
-           freemsg(mp);
-
-	break;
-
-     default:
-        freemsg(mp);
-        break;
-  }
-  return 0;
-}
-
-static int tunwsrv(queue_t *wq)
-{
-  mblk_t *mp;
-#ifdef TUN_DEBUG
-  struct tunstr *str = (struct tunstr *)wq->q_ptr;
-
-  DBG(CE_CONT,"tun: tunwsrv str %p\n", str);
-#endif
-
-  while( (mp = getq(wq)) )
-     switch( DB_TYPE(mp) ){
- 	 case M_DATA:
-	    tun_frame(wq, mp);
-	    break;
-
-	 case M_PROTO:
-	 case M_PCPROTO:
-	    tun_proto(wq, mp);
-   	    break;
-
-	 default:
-	    freemsg(mp);
-	    break;
-     }
-  return 0;
-}
-
-/* Reply on IOCTL */
 static void tuniocack(queue_t *wq, mblk_t *mp, int ack, int ret, int err)
 {
   struct iocblk *ioc = (struct iocblk *)mp->b_rptr; 
@@ -853,10 +782,10 @@ static void tun_unitdata_req(queue_t *wq, mblk_t *mp)
 
   /* Drop unidata_req part of the message */
   mp->b_cont = NULL;
-  freeb(mp);  
+  freemsg(mp);  
 
   /* Route frame */
-  tun_frame(wq, nmp); 
+  tun_frame(wq, nmp, TUN_QUEUE); 
 }
 
 static mblk_t * tun_unitdata_ind(mblk_t *mp, int type)
@@ -895,9 +824,9 @@ static mblk_t * tun_unitdata_ind(mblk_t *mp, int type)
   nmp->b_cont = mp;
   return nmp;
 }
+
 /* Route frames */
-#define SNIFFER(a) ( (a & TUN_ALL_SAP) || (a & TUN_ALL_PHY) )
-static void tun_frame(queue_t *wq, mblk_t *mp)
+static void tun_frame(queue_t *wq, mblk_t *mp, int q)
 {
   struct tunstr *str = (struct tunstr *)wq->q_ptr;
   register struct tunppa *ppa;
@@ -911,6 +840,8 @@ static void tun_frame(queue_t *wq, mblk_t *mp)
      freemsg(mp);
      return; 
   }
+
+  DBG(CE_CONT,"tun: tun_frame str %p PPA %d\n", str, ppa->id);
 
   /* Check for the sniffers */
   for( tmp=ppa->p_str; tmp; tmp = tmp->p_next ){
@@ -942,7 +873,13 @@ static void tun_frame(queue_t *wq, mblk_t *mp)
      if( canputnext(ppa->rq) ){
 	putnext(ppa->rq, mp);
      } else {
-        putq(wq, mp);
+	if( q == TUN_QUEUE ){
+           DBG(CE_CONT,"tun: queueing frame %d\n", msgdsize(mp));
+	   putbq(wq, mp);
+	} else {
+           DBG(CE_CONT,"tun: dropping frame %d\n", msgdsize(mp));
+           freemsg(mp);
+	}
      }
   } else {
      /* Data from the Control stream.  
@@ -973,7 +910,7 @@ static void tun_frame(queue_t *wq, mblk_t *mp)
   }
 }
 
-static void tun_proto(queue_t *wq, mblk_t *mp)
+static void tun_dlpi(queue_t *wq, mblk_t *mp)
 {
   union DL_primitives *dlp = (union DL_primitives *)mp->b_rptr;
   uint32_t prim = dlp->dl_primitive;
@@ -999,20 +936,16 @@ static void tun_proto(queue_t *wq, mblk_t *mp)
         tun_unbind_req(wq, mp);
         break;
 
-     case DL_UNITDATA_REQ:
-	tun_unitdata_req(wq, mp);
-	break;
-
      case DL_PROMISCON_REQ:
-	tun_promiscon_req(wq,mp);
+	tun_promiscon_req(wq, mp);
 	break;
 
      case DL_PROMISCOFF_REQ:
-	tun_promiscoff_req(wq,mp);
+	tun_promiscoff_req(wq, mp);
 	break;
 
      case DL_PHYS_ADDR_REQ:
-	tun_physaddr_req(wq,mp);
+	tun_physaddr_req(wq, mp);
 	break;
 
      case DL_ENABMULTI_REQ:
@@ -1021,4 +954,86 @@ static void tun_proto(queue_t *wq, mblk_t *mp)
         tundlerrack(wq, mp, prim, DL_UNSUPPORTED, 0);
         break;
   }
+}
+
+static int tunwput(queue_t *wq, mblk_t *mp)
+{
+  union DL_primitives *dlp;
+  uint32_t prim;
+#ifdef TUN_DEBUG
+  struct tunstr *str = (struct tunstr *)wq->q_ptr;
+
+  DBG(CE_CONT, "tun: tunwput str %p\n", str);
+#endif
+
+  switch( DB_TYPE(mp) ){
+     case M_DATA:
+	tun_frame(wq, mp, TUN_QUEUE);
+	break;
+
+     case M_PROTO:
+     case M_PCPROTO:
+        dlp = (union DL_primitives *)mp->b_rptr;
+        prim = dlp->dl_primitive;
+
+        switch( prim ){
+	   case DL_UNITDATA_REQ:
+              tun_unitdata_req(wq, mp);
+              break;
+	   default:
+	      /* Queue other DLPI messages for wsrv */
+	      putq(wq, mp);
+	      break;
+	}
+	break;
+
+     case M_IOCTL:
+	qwriter(wq, mp, tun_ioctl, PERIM_OUTER);
+	break;
+
+     case M_FLUSH:
+	/* Flush queues */
+        if(*mp->b_rptr & FLUSHW) {
+           flushq(wq, FLUSHALL);
+           *mp->b_rptr &= ~FLUSHW;
+        }
+        if(*mp->b_rptr & FLUSHR)
+           qreply(wq, mp);
+        else
+           freemsg(mp);
+
+	break;
+
+     default:
+        freemsg(mp);
+        break;
+  }
+  return 0;
+}
+
+static int tunwsrv(queue_t *wq)
+{
+  mblk_t *mp;
+#ifdef TUN_DEBUG
+  struct tunstr *str = (struct tunstr *)wq->q_ptr;
+
+  DBG(CE_CONT,"tun: tunwsrv str %p\n", str);
+#endif
+
+  while( (mp = getq(wq)) )
+     switch( DB_TYPE(mp) ){
+ 	 case M_DATA:
+	    tun_frame(wq, mp, TUN_DROP);
+	    break;
+
+	 case M_PROTO:
+	 case M_PCPROTO:
+	    tun_dlpi(wq, mp);
+   	    break;
+
+	 default:
+	    freemsg(mp);
+	    break;
+     }
+  return 0;
 }

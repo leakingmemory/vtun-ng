@@ -62,10 +62,15 @@ struct tunstr {
 #define TUN_ALL_SAP	0x0020
 #define TUN_ALL_MUL	0x0040
 
+#define SNIFFER(a) ( (a & TUN_ALL_SAP) || (a & TUN_ALL_PHY) )
+
 struct tundladdr {
   u_short sap;
 };
-#define TUN_ADDR_LEN  (sizeof(struct tundladdr))
+#define TUN_ADDR_LEN  	(sizeof(struct tundladdr))
+
+#define TUN_QUEUE	0
+#define TUN_DROP	1
 
 #endif /* _KERNEL */
 

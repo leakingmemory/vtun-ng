@@ -1,0 +1,280 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="Author" content="Maxim Krasnyansky">
+<meta name="Keywords" content="vpn, ip, ppp, slip, ethernet, virtual, tunnel, vtun, vtund, network, Maxim, Krasnyansky, Maksim, Krasnyanskiy">
+<meta name="Description" content="The easiest way to create Virtual Tunnels over TCP/IP network">
+
+<title>
+   VTun - FAQ
+</title>
+</head>
+
+<body bgcolor="#FFFFFF" vlink="#446DC4" link="#000000" text="#446DC4">
+
+<center>
+   <br>
+   <img src="vtun_s.gif" width="336" height="71" alt="* VTun *">
+   <br>
+   <font face="Verdana"><b>
+     Frequently Asked Questions<br>
+   </b></font>
+   <br>
+   <table border="0" cellpadding="0" cellspacing="0" width="95%">
+	<tr>
+        <td align="center" valign="top">
+	   <table border="1" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                 <td align="center" valign="top" bgcolor="#446DC4">
+		    <font color="#FFFFFF" face="Verdana">
+		    <b>FAQ</b>
+		    </font>
+	 	 </td>
+              </tr>
+              <tr>
+                 <td bgcolor="#E7E7E7" align="center">
+	           <table border="0" cellpadding="0" cellspacing="0" width="98%">
+		   <tr><td align="left" valign="top">
+		   <font color="#000000" face="Verdana">
+
+
+VTun - Frequently Asked Questions 
+ 
+<p align="justify"> 
+<b>1. General Questions</b> 
+<ul> 
+<dl><a href="#1.1"> 1.1 What is VTun ? </a></dl> 
+<dl><a href="#1.2"> 1.2 What does VTun stand for ? </a></dl> 
+<dl><a href="#1.3"> 1.3 Whom do I contact for support ? </a></dl> 
+<dl><a href="#1.4"> 1.4 Is VTun Y2K compliant? </a></dl> 
+<dl><a href="#1.5"> 1.5 Where can I download VTun package ? </a></dl> 
+<dl><a href="#1.6"> 1.6 Can I establish VTun tunnel with Windows machine ? </a></dl> 
+<dl><a href="#1.7"> 1.7 Can I establish VTun tunnel with Cisco ? </a></dl> 
+<dl><a href="#1.8"> 1.8 Does VTun support PPTP, L2TP, IPsec ? </a></dl> 
+<dl><a href="#1.9"> 1.9 What platforms are supported by VTun ? </a></dl> 
+<dl><a href="#1.10"> 1.10 Does VTun server support multiple clients ? </a></dl> 
+<dl><a href="#1.11"> 1.11 How many tunnels can VTun handle ? </a></dl> 
+<dl><a href="#1.12"> 1.12 What do I need to run VTun ? </a></dl> 
+<dl><a href="#1.13"> 1.13 What hardware do I need to run VTun ? </a></dl> 
+<dl><a href="#1.14"> 1.14 VTun supports many tunnel types, which type should I use ? </a></dl> 
+<dl><a href="#1.15"> 1.15 Where can I find configuration recommendations and examples ? </a></dl> 
+<dl><a href="#1.16"> 1.16 Why ZLIB compression does not work with UDP protocol ? </a></dl> 
+<dl><a href="#1.17"> 1.17 Why PPP tunnel is unstable over UDP ?   </a></dl> 
+<dl><a href="#1.18"> 1.18 Why do routes specified after 'ppp' command in config file produce errors and don't install correctly ?   </a></dl> 
+<dl><a href="#1.19"> 1.19 How secure is VTun ? </a></dl> 
+<dl><a href="#1.20"> 1.20 Who has developed so nice and cool software ? </a></dl> 
+<dl><a href="#1.21"> 1.21 I don't like VTun where can I send complains ? </a></dl> 
+<dl><a href="#1.22"> 1.22 Where can I get more information about VTun ? </a></dl> 
+<dl><a href="#1.23"> 1.23 Can I use vtun over SSH ? </a></dl> 
+</ul> 
+<b>2. Error Messages</b> 
+<ul> 
+<dl><a href="#2.1"> 2.1 Why do I see no vtund log and error messages ? </a></dl> 
+<dl><a href="#2.2"> 2.2 Why do I get "Input/output error" pppd error message ? </a></dl> 
+<dl><a href="#2.3"> 2.3 Why do I get "couldn't find any suitable secret (password)" pppd error message ? </a></dl> 
+<dl><a href="#2.4"> 2.4 Why do I get "XXXX returned error Y" error message ? </a></dl> 
+<dl><a href="#2.5"> 2.5 Why do I get "Serial line is looped back" pppd error message ? </a></dl> 
+<dl><a href="#2.6"> 2.6 Why do I get "Can't allocate tun device" or "Can't allocate tap device" error messages ? </a></dl> 
+<dl><a href="#2.7"> 2.7 Why do I get "LZO compression is not supported" error message ? </a></dl> 
+<dl><a href="#2.8"> 2.8 Why do I get "expecting WORD at line xxx" error message ? </a></dl> 
+</ul> 
+<br> 
+<b>1. General Questions</b><br> 
+<a name="1.1"> 1.1 What is VTun ? </a><br> 
+&nbsp;VTun is the easiest way to create Virtual Tunnels over TCP/IP networks<br> 
+&nbsp;with traffic shaping, compression, and encryption. <br> 
+&nbsp;It supports IP, PPP, SLIP, Ethernet and other tunnel types.<br> 
+&nbsp;VTun is easily and highly configurable, it can be used for various<br> 
+&nbsp;network tasks.<br> 
+<br> 
+<a name="1.2"> 1.2 What does VTun stand for ? </a><br> 
+&nbsp;Virtual TUNnel.<br> 
+<br> 
+<a name="1.3"> 1.3 Whom do I contact for support ? </a><br> 
+&nbsp;Please send your suggestions, questions and problem descriptions to<br> 
+&nbsp;VTun mailing list vtun-users@lists.sf.net<br> 
+<br> 
+<a name="1.4"> 1.4 Is VTun Y2K compliant? </a><br> 
+&nbsp;YES.<br> 
+<br> 
+<a name="1.5"> 1.5 Where can I download VTun package ? </a><br> 
+&nbsp;You can download complete VTun package from the following web sites:<br> 
+&nbsp;Primary:<br> 
+&nbsp;&nbsp;&nbsp;http://vtun.sourceforge.net<br> 
+&nbsp;Mirrors:<br> 
+&nbsp;&nbsp;&nbsp;http://vtun.saol.com<br> 
+&nbsp;&nbsp;&nbsp;http://vtun.speedway.net<br> 
+&nbsp;&nbsp;&nbsp;http://vtun.euronet.be<br> 
+<br> 
+<a name="1.6"> 1.6 Can I establish VTun tunnel with Windows machine ? </a><br> 
+&nbsp;Unfortunately there is no VTun client for Windows yet.<br> 
+&nbsp;We a looking for a guru who will port VTun to Windows.<br> 
+<br> 
+<a name="1.7"> 1.7 Can I establish VTun tunnel with Cisco ? </a><br> 
+&nbsp;No. VTun doesn't support tunneling with Cisco.<br> 
+<br> 
+<a name="1.8"> 1.8 Does VTun support PPTP, L2TP, IPsec ? </a><br> 
+&nbsp;VTun uses it's own simple and efficient protocol with TCP or UDP.<br> 
+&nbsp;It doesn't support PPTP, L2TP, IPsec.<br> 
+<br> 
+<a name="1.9"> 1.9 What platforms are supported by VTun ? </a><br> 
+&nbsp;VTun was developed on Linux and then ported to several other OS:<br> 
+&nbsp;&nbsp;&nbsp; Linux (any glibc based distribution)<br> 
+&nbsp;&nbsp;&nbsp; Solaris<br> 
+&nbsp;&nbsp;&nbsp; FreeBSD, OpenBSD, NetBSD and other BSD clones.<br> 
+<br> 
+<a name="1.10"> 1.10 Does VTun server support multiple clients ? </a><br> 
+&nbsp;Sure. Number of the clients is limited only by the capabilities of <br> 
+&nbsp;your machine.<br> 
+<br> 
+<a name="1.11"> 1.11 How many tunnels can VTun handle ? </a><br> 
+&nbsp;Number of the tunnels is limited only by the capabilities of your<br> 
+&nbsp;machine.<br> 
+<br> 
+<a name="1.12"> 1.12 What do I need to run VTun ? </a><br> 
+&nbsp;You should install and configure VTun package and read documentation.<br> 
+&nbsp;Usually you'll need: <br> 
+&nbsp;&nbsp;&nbsp; Universal TUN/TAP device driver (http://vtun.sourceforge.net/tun)<br> 
+&nbsp;&nbsp;&nbsp; PPP driver and pppd.<br> 
+<br> 
+<a name="1.13"> 1.13 What hardware do I need to run VTun ? </a><br> 
+&nbsp;Hardware requirements depends on your configuration:<br> 
+&nbsp;&nbsp;&nbsp; 486DX2/66/16Mb will handle simple tunnels without compression <br> 
+&nbsp;&nbsp;&nbsp; and encryption.<br> 
+&nbsp;&nbsp;&nbsp; P200/64Mb will handle several medium speed tunnels with compression <br> 
+&nbsp;&nbsp;&nbsp; and encryption without any problem.<br> 
+&nbsp;&nbsp;&nbsp; Celeron 400/64Mb, perfectly encrypts and compresses high speed<br> 
+&nbsp;&nbsp;&nbsp; channels like 2Mbits.<br> 
+&nbsp;Real life examples:<br> 
+&nbsp;&nbsp;&nbsp; PII466/128Mb was compressing several 3-4Mbits tunnels.&nbsp;&nbsp;<br> 
+&nbsp;&nbsp;&nbsp; AlphaXL 266/64Mb was compressing and shaping about 10-50 tunnels <br> 
+&nbsp;&nbsp;&nbsp; from 64Kbit to 512Kbit.<br> 
+&nbsp;&nbsp;&nbsp; P200MMX/64Mb with about 100 tunnels over loopback.<br> 
+<br> 
+<a name="1.14"> 1.14 VTun supports many tunnel types, which type should I use ? </a><br> 
+&nbsp;Well, it is not very easy to answer this question in the FAQ.<br> 
+&nbsp;Please read documentation which comes with VTun package and visit <br> 
+&nbsp;VTun web site http://vtun.sourceforge.net<br> 
+<br> 
+<a name="1.15"> 1.15 Where can I find configuration recommendations and examples ? </a><br> 
+&nbsp;VTun package contains several config file samples.<br> 
+&nbsp;Please read README.Setup<br> 
+<br> 
+<a name="1.16"> 1.16 Why ZLIB compression does not work with UDP protocol ? </a><br> 
+&nbsp;UDP doesn't not provide reliable transport, and some frames could be <br> 
+&nbsp;lost on unreliable links. VTun does not have any retransmition or <br> 
+&nbsp;recovery algorithm for the lost UDP frames, because retransmition will<br> 
+&nbsp;be handled by Upper layers.<br> 
+&nbsp;You should use LZO compression with UDP protocol.&nbsp;&nbsp;&nbsp;&nbsp;<br> 
+<br> 
+<a name="1.17"> 1.17 Why PPP tunnel is unstable over UDP ?   </a><br> 
+&nbsp;Explanation is the same as with above case. Use TCP for PPP tunnels or <br> 
+&nbsp;use TUN instead of PPP, since tun device is completely the same with <br> 
+&nbsp;ppp device for the kernel. <br> 
+<br> 
+<a name="1.18"> 1.18 Why do routes specified after 'ppp' command in config file produce errors and don't install correctly ?   </a><br> 
+&nbsp;Actually there is no straight way to determine when pppd has established <br> 
+&nbsp;connection with the other end. VTun execute those route commands right <br> 
+&nbsp;after the launch of pppd and if PPP link is not established, route <br> 
+&nbsp;commands will fail. Since version 2.0b3, VTun delays 10 seconds before <br> 
+&nbsp;issuing the route commands, which should fix almost all cases.&nbsp;&nbsp;<br> 
+&nbsp;I'll think about more elegant way to fix this problem.<br> 
+<br> 
+<a name="1.19"> 1.19 How secure is VTun ? </a><br> 
+&nbsp;Well. VTun doesn't try to be the MOST secure tunneling software in the <br> 
+&nbsp;world, it tries to be fast, stable, rich of features, easy to use <br> 
+&nbsp;and secure enough instead.<br> 
+&nbsp;VTun uses Challenge Based Authentication and doesn't transfer passwords <br> 
+&nbsp;in clear text. Encryption module uses MD5 for 128 bits key generation <br> 
+&nbsp;and BlowFish algorithm for actual data encryption.<br> 
+&nbsp;There could be some weaknesses in key generation method, we will try <br> 
+&nbsp;to address them in future releases. <br> 
+<br> 
+<a name="1.20"> 1.20 Who has developed so nice and cool software ? </a><br> 
+&nbsp;Thanks :). You can find list of VTun team members on the web site or<br> 
+&nbsp;in the 'Credits' file in VTun package.&nbsp;&nbsp;<br> 
+<br> 
+<a name="1.21"> 1.21 I don't like VTun where can I send complains ? </a><br> 
+&nbsp;You can send them to /dev/null. <br> 
+<br> 
+<a name="1.22"> 1.22 Where can I get more information about VTun ? </a><br> 
+&nbsp;VTun package contains: <br> 
+&nbsp;&nbsp;&nbsp; Manual page for vtund.<br> 
+&nbsp;&nbsp;&nbsp; Manual page for configuration file.<br> 
+&nbsp;&nbsp;&nbsp; Fully documented config file.<br> 
+&nbsp;&nbsp;&nbsp; Several README files.<br> 
+<br> 
+<a name="1.23"> 1.23 Can I use vtun over SSH ? </a><br> 
+&nbsp;Yes, via the port forwarding feature of ssh.&nbsp;&nbsp;Don't enable vtun's<br> 
+&nbsp;encryption as ssh does its own encryption.&nbsp;&nbsp;Also, make sure to select<br> 
+&nbsp;the tcp protocol as SSH can forward tcp but not udp.&nbsp;&nbsp;An example<br> 
+&nbsp;session might look something like this:<br> 
+<br> 
+&nbsp;home$ ssh -L 5000:localhost:5000 work.megacorp.com<br> 
+&nbsp;(authenticate if necessary)<br> 
+&nbsp;work$ vtund -s home_tunnel_config<br> 
+&nbsp;...<br> 
+&nbsp;home$ vtund home_tunnel_config localhost<br> 
+<br> 
+<b>2. Error Messages</b><br> 
+<a name="2.1"> 2.1 Why do I see no vtund log and error messages ? </a><br> 
+&nbsp;On several Unices, FreeBSD for example, syslog doesn't log message <br> 
+&nbsp;with INFO priority, by default. <br> 
+&nbsp;You should add "*.info;" to the line with /var/log/messages in <br> 
+&nbsp;/etc/syslog.conf.<br> 
+<br> 
+<a name="2.2"> 2.2 Why do I get "Input/output error" pppd error message ? </a><br> 
+&nbsp;This usually means that vtund on other side has dropped connection,<br> 
+&nbsp;check logs on other side.<br> 
+<br> 
+<a name="2.3"> 2.3 Why do I get "couldn't find any suitable secret (password)" pppd error message ? </a><br> 
+&nbsp;New versions of pppd use authentication by default.<br> 
+&nbsp;Just add "noauth" option to ppp command.<br> 
+<br> 
+<a name="2.4"> 2.4 Why do I get "XXXX returned error Y" error message ? </a><br> 
+&nbsp;Usually this means that you use incorrect syntax for that command.<br> 
+&nbsp;Also please read question 1.19 about routes and pppd.<br> 
+<br> 
+<a name="2.5"> 2.5 Why do I get "Serial line is looped back" pppd error message ? </a><br> 
+&nbsp;Sometimes pppd incorrectly decides that pseudo terminal is looped back. <br> 
+&nbsp;Just add "nomagic" option to ppp command.<br> 
+<br> 
+<a name="2.6"> 2.6 Why do I get "Can't allocate tun device" or "Can't allocate tap device" error messages ? </a><br> 
+&nbsp;This error means that Universal TUN/TAP driver module is not loaded<br> 
+&nbsp;or you do not have correct /dev/tunXX or /dev/tapXX device nodes.<br> 
+&nbsp;Make sure you have installed and configured Universal TUN/TAP device<br> 
+&nbsp;driver (http://vtun.sourceforge.net/tun)<br> 
+<br> 
+<a name="2.7"> 2.7 Why do I get "LZO compression is not supported" error message ? </a><br> 
+&nbsp;This error means that LZO compression is not compiled in.<br> 
+&nbsp;You will have to download binary VTun package or recompile vtund with<br> 
+&nbsp;LZO support.<br> 
+<br> 
+<a name="2.8"> 2.8 Why do I get "expecting WORD at line xxx" error message ? </a><br> 
+&nbsp;This usually means that you are using password that contain only<br> 
+&nbsp;numerical characters.<br> 
+&nbsp;VTun passwords must be alpha characters or a mixture of alpha and<br> 
+&nbsp;numerical characters.<br> 
+<br> 
+&nbsp;If you have any unanswered question please send it to the mailing list <br> 
+&nbsp;vtun-users@lists.sf.net<br> 
+<br></p> 
+
+
+		   </font>
+		   </td></tr>
+	           </table>
+                 </td>
+              </tr>
+           </table>
+	</td>
+	</tr>
+   </table>
+   <br><br>
+   <font face="Verdana"> 
+      Copyright (C) 1999-2001 Maxim Krasnyansky
+   </font>
+</center>
+</body>
+</html>

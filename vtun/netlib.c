@@ -198,7 +198,7 @@ int udp_session(struct vtun_host *host, time_t timeout)
      close(host->rmt_fd); 
      host->rmt_fd = s;	
 
-     syslog(LOG_INFO,"UDP connection initialized.");
+     syslog(LOG_INFO,"UDP connection initialized");
      return s;
 }
 

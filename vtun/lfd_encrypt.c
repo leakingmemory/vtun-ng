@@ -57,7 +57,7 @@ int alloc_encrypt(struct vtun_host *host)
 
    BF_set_key(&key, ENC_KEY_SIZE, MD5(host->passwd,strlen(host->passwd),NULL));
 
-   syslog(LOG_INFO, "Encryption initialized.");
+   syslog(LOG_INFO, "BlowFish encryption initialized");
    return 0;
 }
 

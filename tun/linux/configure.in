@@ -24,8 +24,11 @@ AC_SUBST(ARCH)
 AC_SUBST(UPGRADE)
 
 AC_PROG_CC
+AC_CHECK_PROG(KGCC, kgcc, kgcc, $CC)
 AC_PROG_AWK
 AC_PROG_INSTALL
+
+CC=$KGCC
 
 AC_ARG_WITH(kernel,
    --with-kernel=DIR     Kernel source location,

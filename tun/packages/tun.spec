@@ -1,5 +1,5 @@
 %define name	tun
-%define version	1.0
+%define version	1.1
 %define release	1
 %define prefix	/
 
@@ -25,9 +25,9 @@ Prefix: %{prefix}
 
 %prep
 %setup -n %{name}-%{version}
+./configure
 
 %build
-./configure
 make 
 
 %install
@@ -36,6 +36,8 @@ install -m 755 -o root -g root -d $RPM_BUILD_ROOT/lib/modules/net
 install -m 644 -o root -g root linux/tun.o $RPM_BUILD_ROOT/lib/modules/net
 
 install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev
+install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev/net
+mknod $RPM_BUILD_ROOT/net/dev/tun c 10 200
 mknod $RPM_BUILD_ROOT/dev/tun0 c 90 0
 mknod $RPM_BUILD_ROOT/dev/tun1 c 90 1
 mknod $RPM_BUILD_ROOT/dev/tun2 c 90 2
@@ -44,8 +46,7 @@ mknod $RPM_BUILD_ROOT/dev/tap1 c 90 129
 mknod $RPM_BUILD_ROOT/dev/tap2 c 90 130
 
 %clean
-rm -rf $RPM_BUILD_ROOT
-rm -rf ../%{name}-%{version}
+[ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
 
 %post
 depmod -a
@@ -57,6 +58,7 @@ depmod -a
 %defattr(644,root,root)
 %doc FAQ README
 %attr(644,root,root) %{prefix}/lib/modules/net/tun.o
+%attr(600,root,root) %{prefix}/dev/net/tun
 %attr(600,root,root) %{prefix}/dev/tun0
 %attr(600,root,root) %{prefix}/dev/tun1
 %attr(600,root,root) %{prefix}/dev/tun2

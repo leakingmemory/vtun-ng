@@ -16,10 +16,10 @@
 #
 all: module
 
-include $(KDIR)/arch/$(ARCH)/Makefile
 include $(KDIR)/.config
+include $(KDIR)/arch/$(ARCH)/Makefile
 
-CFLAGS = $(DEFS) -O2 -DMODULE -D__KERNEL__ -I$(HPATH) -I. \
+CFLAGS := $(CFLAGS) $(DEFS) -O2 -DMODULE -D__KERNEL__ -I$(HPATH) -I. \
 	 -Wall -Wstrict-prototypes -fomit-frame-pointer -fno-strict-aliasing 
 
 ifdef CONFIG_SMP

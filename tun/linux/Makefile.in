@@ -17,6 +17,7 @@
 CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
 
 INSTALL = @INSTALL@
+CC = @CC@
 
 DEFS = @DEFS@
 

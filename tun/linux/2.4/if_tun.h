@@ -21,11 +21,11 @@
 /* Uncomment to enable debugging */
 /* #define TUN_DEBUG 1 */
 
-#ifdef __KERNEL__
-
 #ifndef TUN_MAJOR
-#define TUN_MAJOR 90
+#define TUN_MAJOR 195
 #endif
+
+#ifdef __KERNEL__
 
 #ifdef TUN_DEBUG
 #define DBG  if(tun->debug)printk
@@ -60,10 +60,6 @@ struct tun_struct {
 /* Number of devices */
 #define TUN_MAX_DEV	255
 
-#define TUN_TUN_MINOR	0
-#define TUN_TAP_MINOR   128
-#define TUN_MINOR_MASK  0x7f
-
 /* TX queue size */
 #define TUN_TXQ_SIZE	10
 
@@ -71,15 +67,30 @@ struct tun_struct {
 #define TUN_MAX_FRAME	4096
 
 /* TUN device flags */
-#define TUN_TUN_DEV 	0x01	
-#define TUN_TAP_DEV	0x02
-#define TUN_TYPE_MASK   0x0f
+#define TUN_TUN_DEV 	0x0001	
+#define TUN_TAP_DEV	0x0002
+#define TUN_TYPE_MASK   0x000f
 
-#define TUN_FASYNC	0x10
-#define TUN_NOCHECKSUM	0x20
+#define TUN_FASYNC	0x0010
+#define TUN_NOCHECKSUM	0x0020
+#define TUN_NO_PI	0x0040
+
+#define TUN_IFF_SET	0x1000
 
 /* Ioctl defines */
 #define TUNSETNOCSUM (('T'<< 8) | 200) 
 #define TUNSETDEBUG  (('T'<< 8) | 201) 
+#define TUNSETIFF    (('T'<< 8) | 202) 
+
+/* TUNSETIFF ifr flags */
+#define IFF_TUN		0x0001
+#define IFF_TAP		0x0002
+#define IFF_NO_PI	0x1000
+
+struct tun_pi {
+   unsigned short flags;
+   unsigned short proto;
+};
+#define TUN_PKT_STRIP	0x0001
 
 #endif /* __IF_TUN_H */

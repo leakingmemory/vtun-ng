@@ -951,20 +951,27 @@ TDIR=`echo $KVER | cut -d '.' -f 1,2`
     fi
 
 
+
+
+cat >> confdefs.h <<EOF
+#define TUN_VER "$TUN_VER"
+EOF
+
+
 case $TDIR in
      2.2)
  	echo $ac_n "checking for new kill_fasync call ""... $ac_c" 1>&6
-echo "configure:958: checking for new kill_fasync call " >&5
+echo "configure:965: checking for new kill_fasync call " >&5
         CPPFLAGS="$CPPFLAGS -D__KERNEL__ -I $KDIR/include"
 	cat > conftest.$ac_ext <<EOF
-#line 961 "configure"
+#line 968 "configure"
 #include "confdefs.h"
  #include <linux/fs.h> 
 int main() {
  kill_fasync(NULL, 1, 1) 
 ; return 0; }
 EOF
-if { (eval echo configure:968: \"$ac_compile\") 1>&5; (eval $ac_compile) 2>&5; }; then
+if { (eval echo configure:975: \"$ac_compile\") 1>&5; (eval $ac_compile) 2>&5; }; then
   rm -rf conftest*
   cat >> confdefs.h <<\EOF
 #define NEW_FASYNC 1
@@ -980,14 +987,39 @@ else
 fi
 rm -f conftest*
         ;;
+
+     2.4)
+ 	echo $ac_n "checking for kernel driver ""... $ac_c" 1>&6
+echo "configure:994: checking for kernel driver " >&5
+
+ 	# Check driver files 
+	
+    ac_file_found=yes
+    for f in drivers/net/tun.c include/linux/if_tun.h; do
+	if test ! -f $KDIR/$f; then
+    	   ac_file_found=no
+	   break;
+	fi
+    done
+
+    if test "$ac_file_found" = "yes" ; then
+	:
+    else
+	{ echo "configure: error: Universal TUN/TAP driver was no found in $KDIR " 1>&2; exit 1; }
+	
+    fi
+
+
+        O_VER=`grep '#.*TUN_VER' $KDIR/drivers/net/tun.c | tr -d '\000-\057A-z'`
+        N_VER=`grep '#.*TUN_VER' $TDIR/tun.c | tr -d '\000-\057A-z'`
+
+        if test $N_VER -le $O_VER; then
+	   echo "$ac_t"""up to date"" 1>&6
+        else  
+           echo "$ac_t"""upgrade"" 1>&6 
+        fi
+        ;;
 esac
-
-
-
-cat >> confdefs.h <<EOF
-#define TUN_VER "$TUN_VER"
-EOF
-
 
 trap '' 1 2 15
 cat > confcache <<\EOF

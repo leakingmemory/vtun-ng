@@ -24,6 +24,8 @@ KDIR = @KDIR@
 KVER = @KVER@
 ARCH = @ARCH@
 
+EXTERNAL_DRIVER = @EXTRN@
+
 DEPMOD  = /sbin/depmod
 MDIR = /lib/modules/$(KVER)/net
 HPATH  = $(KDIR)/include

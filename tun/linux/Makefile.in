@@ -55,7 +55,7 @@ dev:
 # Target 'install' conflicts with Makefile from arch/i386
 inst: module dev
 	$(INSTALL) -d -m 755 -o root -g root $(MDIR)
-	$(INSTALL) -m 755 -o root -g root tun.o $(MDIR)
+	$(INSTALL) -m 644 -o root -g root tun.o $(MDIR)
 	$(DEPMOD) -a 
 
 clean:

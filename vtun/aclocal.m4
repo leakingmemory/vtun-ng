@@ -40,7 +40,7 @@ AC_DEFUN( AC_SEARCH_HEADERS,
 ])
 
 
-dnl Create links to all files($1) in directory($2
+dnl Create links to all files($1) in the directory($2)
 AC_DEFUN( AC_LINK_DIR, 
 [
     for i in $1; do

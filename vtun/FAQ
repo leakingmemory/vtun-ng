@@ -42,14 +42,15 @@ It doesn't support PPTP, L2TP, IPsec.
 VTun was developed on Linux and then ported to several other OS:
    Linux (any glibc based distribution)
    Solaris
-   FreeBSD and other BSD clones.
+   FreeBSD, OpenBSD, NetBSD and other BSD clones.
 
 1.10 Does VTun server support multiple clients ?
-Sure. Number of clients is limited only by the capabilities of your
-machine.
+Sure. Number of the clients is limited only by the capabilities of 
+your machine.
 
 1.11 How many tunnels can VTun handle ?
-VTun doesn't have any limit on number of tunnels.
+Number of the tunnels is limited only by the capabilities of your
+machine.
 
 1.12 What do I need to run VTun ?
 You should install and configure VTun package and read documentation.
@@ -120,14 +121,16 @@ You can send them to /dev/null.
 1.22 Where can I get more information about VTun ?
 VTun package contains: 
    Manual page for vtund.
+   Manual page for configuration file.
    Fully documented config file.
    Several README files.
 
 2. Error Messages
 2.1 Why do I see no vtund log and error messages ?
-On several Unices, FreeBSD for example, syslog doesn't log message with INFO priority, 
-by default. 
-You should add "*.info;" to the line with /var/log/messages in /etc/syslog.conf.
+On several Unices, FreeBSD for example, syslog doesn't log message 
+with INFO priority, by default. 
+You should add "*.info;" to the line with /var/log/messages in 
+/etc/syslog.conf.
 
 2.2 Why do I get "Input/output error" pppd error message ?
 This usually means that vtund on other side has dropped connection,

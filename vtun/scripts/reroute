@@ -1,7 +1,10 @@
 #!/bin/bash
 #
 # Maxim Krasnyansky <max_mk@yahoo.com>
+# $Id$
 #
+IP=/sbin/ip
+
 if [ $# -ne 3 ]; then
    echo "Usage: reroute option Source_IP Destination_IP"
    echo "Options:"
@@ -18,7 +21,7 @@ IP_S=$2
 IP_D=$3
 
 # Get original route
-ROUTE=`ip route get $IP_D from $IP_S | grep dev`
+ROUTE=`$IP route get $IP_D from $IP_S | grep dev`
 
 # Parse route 
 set - $ROUTE
@@ -39,21 +42,21 @@ while [ "$1" != "" ]; do
 done
 
 # Flush all routes, rules and cache for that IP 
-ip route flush $IP_D table all >/dev/null 2>&1
-ip rule del from $IP_S to $IP_D >/dev/null 2>&1
+$IP route flush $IP_D table all >/dev/null 2>&1
+$IP rule del from $IP_S to $IP_D >/dev/null 2>&1
 
 case $MODE in
    -m)
 	# Add route via orig device to table 100
-	ip route add $ROUTE table 100 >/dev/null 2>&1
+	$IP route add $ROUTE table 100 >/dev/null 2>&1
 
 	# Add source based routing 
-	ip rule add from $IP_S to $IP_D table 100 >/dev/null 2>&1
+	$IP rule add from $IP_S to $IP_D table 100 >/dev/null 2>&1
 	;;
 
    -r)
 	# Add route via orig device to defaul table
-	ip route add $ROUTE >/dev/null 2>&1
+	$IP route add $ROUTE >/dev/null 2>&1
 	;;
 esac
 

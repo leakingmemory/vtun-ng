@@ -63,11 +63,13 @@ Anthon Walters <anthon@ws.co.za>
 	Web site mirror. Testing. Initial FAQ.
 
 Ryan Defelice <ryand@mobiletel.com> 
-	OpenBSD package maintainer.
+	OpenBSD package maintainer. Provided OpenBSD server for 
+	development and testing
 
 Alexander Bergolth <leo@strike.wu-wien.ac.at>
 	Initial multiple connection handling and host lock functionalities. 
-	Improvements and fixes of source address option. Ideas. Suggestions.
+	Improvements and fixes of source address option. Incorrect error 
+	handling fix. Ideas. Suggestions.
 
 Hubert Feyrer <feyrer@rfhs8012.fh-regensburg.de>
 	NetBSD package.
@@ -82,10 +84,14 @@ Daniel Podlejski <underley@underley.eu.org>
 	TUN/TAP driver modifications for 2.3.99-pre5 kernel.
 
 Michael Tokarev <mjt@tls.msk.ru>
-	Tons of bug fixes and patches. Ideas.
+	File descriptors and memory leaks fix. 
+	Tons of other bug fixes and patches. Suggestions. Ideas.
 
 Xavier <xavier@bru-noc.net>
 	European web site mirror.
 
 Chris Snell <chris@bikeworld.com>
-	Mailling list archives.
+	Mailing list archives.
+
+Robert Stone <talby@trap.mtview.ca.us>
+	Security enhancements. Suggestions. Ideas.

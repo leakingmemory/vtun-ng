@@ -28,7 +28,7 @@ Supported type of tunnels are: PPP, IP, Ethernet and most of other serial
 protocols and programs.
 
 VTun is easily and highly configurable, it can be used for various network
-task like VPN, Mobil IP, Shaped Internet access, IP address saving, etc.
+tasks like VPN, Mobil IP, Shaped Internet access, IP address saving, etc.
 It is completely user space implementation and does not require modification
 to any kernel parts. 
 

@@ -52,7 +52,8 @@ make CFG_FILE=/etc/vtund.conf PID_FILE=/var/run/vtund.pid  \
 install -d $RPM_BUILD_ROOT%{prefix}/sbin
 install -d $RPM_BUILD_ROOT%{prefix}/man/man8
 install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
-install -d $RPM_BUILD_ROOT/var/log/vtun
+install -d $RPM_BUILD_ROOT/var/log/vtund
+install -d $RPM_BUILD_ROOT/var/lock/vtund
 
 make install
 
@@ -70,6 +71,7 @@ rm -rf ../%{name}-%{version}
 %attr(600,root,root) %config /etc/vtund.conf
 %attr(755,root,root) %{prefix}/sbin/vtund
 %attr(755,root,root) %dir /var/log/vtund
+%attr(755,root,root) %dir /var/lock/vtund
 %{prefix}/man/man8/vtund.8
 %{prefix}/man/man8/vtun.8
 

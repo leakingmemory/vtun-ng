@@ -123,7 +123,7 @@ if test "$LZO" = "yes"; then
    AC_MSG_RESULT()
    AC_CHECKING( for LZO Library and Header files ... )
    AC_SEARCH_HEADERS(lzo1x.h, 
-	$LZO_HDR_DIR /usr/include/lzo /usr/include /usr/local/include,
+	$LZO_HDR_DIR /usr/include/lzo "" /usr/local/include,
         AC_CHECK_LIB(lzo, lzo1x_decompress,
 	    [
 	       LIBS="$LIBS -llzo"
@@ -138,8 +138,8 @@ fi
 if test "$SSL" = "yes"; then
    AC_MSG_RESULT()
    AC_CHECKING( for md5 Library and Header files ... )
-   AC_SEARCH_HEADERS(md5.h,
-	$MD5_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include /usr/include/crypto /usr/include/sys,,
+   AC_SEARCH_HEADERS(openssl/md5.h openssl/blowfish.h,
+	$SSL_HDR_DIR "" /usr/include/ssl /usr/local/include /usr/local/ssl/include,
 	AC_MSG_ERROR( SSL headers not found. )
    )
 fi

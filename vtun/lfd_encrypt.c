@@ -28,15 +28,37 @@
  * several improvements and modifications by me.  
  */
 
+/* 
+ * Robert Stone <talby@trap.mtview.ca.us>
+ * 2000/05/18	* Added cfb64 mode for tcp connections.  This should
+ *		  significantly hinder known plaintext attacks.
+ * 2000/05/24	* UDP algorithm cleanup.
+ * 2000/06/04	* Now uses runtime generated session keys.  This should
+ *		  greatly lessen the value of cyptanalysis on a tunnel.
+ * planned	* Add a key rotation system so that there is a fixed limit
+ *		  on the ammount of data encrypted under one sesion key.
+ *		  (This will require a header on my layer of processing.)
+ *		* Permutate ivec for tcp.  SSH doesn't bother, should we?
+ *		* Add a runtime generated permutation-pad for udp mode
+ *		  encryption to help address known plaintext attacks in ecb
+ *		  mode.  Would this really help?  It does provide 40320
+ *		  permutations on crypted text, but is that computationally
+ *		  hard to unravel?
+ */
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <syslog.h>
 #include <strings.h>
 #include <string.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
+/* OpenSSL includes */
 #include <md5.h>
 #include <blowfish.h>
+#include <rand.h>
 
 #include "vtun.h"
 #include "linkfd.h"
@@ -46,18 +68,123 @@
 #define ENC_KEY_SIZE 16
 
 BF_KEY key;
-char * enc_buf;
+
+char *enc_buf;
+int (*crypt_buf)(int, char *, char *, int) = NULL;
+
+/* encryption could be stronger if the initial ivec was not
+ * a constant, but this is only an issue with the first
+ * packet. (first few packets?) */
+int str_crypt_buf(int len, char *ibuf, char *obuf, int enc)
+{
+  static unsigned char ivec[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  static int           num[2] = {0,0};
+
+  BF_cfb64_encrypt(ibuf, obuf, len, &key, ivec + (enc<<3), num + enc, enc);
+  return(len);
+}
+
+/* UDP packets get a header.  The first byte in the packet is the
+ * length of the header.  The header pads the data out to an 8 byte
+ * boundary */
+int pkt_crypt_buf(int len, char *ibuf, char *obuf, int enc)
+{
+  char *ip = ibuf,
+       *op = obuf;
+  int i = len >> 3;
+  char hdr[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  char hlen;
+
+  if(enc == BF_ENCRYPT) {       /* build header */
+    hlen = 8 - (len & 7);
+    if(hlen == 0) hlen = 8;
+    hdr[0] = hlen;
+    memcpy(hdr + hlen, ip, 8 - hlen);
+    BF_ecb_encrypt(hdr, op, &key, enc);
+    op  += 8;
+    ip  += 8 - hlen;
+    len += hlen;
+  } else {                      /* strip header */
+    BF_ecb_encrypt(ip, hdr, &key, enc);
+    hlen = hdr[0];
+    memcpy(op, hdr + hlen, 8 - hlen);
+    op += 8 - hlen;
+    ip += 8;
+    len -= hlen;
+  }
+  while(i > 0) {
+    BF_ecb_encrypt(ip, op, &key, enc);
+    ip += 8; op += 8; i--;
+  }
+  return(len);
+}
+
+int encrypt_buf(int len, char *in, char **out)
+{
+   *out = enc_buf;
+   return(crypt_buf(len, in, *out, BF_ENCRYPT));
+}
+
+int decrypt_buf(int len, char *in, char **out)
+{
+   *out = enc_buf;
+   return(crypt_buf(len, in, *out, BF_DECRYPT));
+}
+
+unsigned char *session_key(struct vtun_host *host) {
+   static char buf[ENC_KEY_SIZE];
+   BF_KEY initkey;
+   fd_set rfd;
+   struct timeval tv;
+   u_int32_t val;
+   char ivec[] = {0,0,0,0,0,0,0,0};
+   int fun[4];
+   char *mode;
+
+   BF_set_key(&initkey, ENC_KEY_SIZE,
+     MD5(host->passwd, strlen(host->passwd), NULL));
+   tv.tv_sec  = 0; tv.tv_usec = 0; FD_ZERO(&rfd); FD_SET(host->rmt_fd, &rfd);
+   select(host->rmt_fd + 1, &rfd, NULL, NULL, &tv);
+   if(!FD_ISSET(host->rmt_fd, &rfd)) {
+      char cbuf[ENC_KEY_SIZE];
+
+      RAND_seed(host->passwd, strlen(host->passwd));
+      RAND_bytes(buf, ENC_KEY_SIZE);
+      BF_cbc_encrypt(buf, cbuf, ENC_KEY_SIZE, &initkey, ivec, BF_ENCRYPT);
+      write(host->rmt_fd, cbuf, ENC_KEY_SIZE);
+      mode = "send";
+   } else {
+      read(host->rmt_fd, buf, ENC_KEY_SIZE);
+      BF_cbc_encrypt(buf, buf, ENC_KEY_SIZE, &initkey, ivec, BF_DECRYPT);
+      mode = "recv";
+   }
+   /* return(MD5(host->passwd, strlen(host->passwd), NULL)); */
+   memcpy(fun, buf, ENC_KEY_SIZE);
+   syslog(LOG_ERR, "blowfish: %s key %08x %08x %08x %08x", mode,
+     htonl(fun[0]), htonl(fun[1]), htonl(fun[2]), htonl(fun[3]));
+   return(buf);
+}
 
 int alloc_encrypt(struct vtun_host *host)
 {
-   if( !(enc_buf = malloc(ENC_BUF_SIZE)) ){
-      syslog(LOG_ERR,"Can't allocate buffer for encryptor");
+   char *mode;
+
+   if((enc_buf = (char *)malloc(ENC_BUF_SIZE)) == NULL) {
+      syslog(LOG_ERR, "Unable to allocate encryption buffer");
       return -1;
    }
 
-   BF_set_key(&key, ENC_KEY_SIZE, MD5(host->passwd,strlen(host->passwd),NULL));
+   BF_set_key(&key, ENC_KEY_SIZE, session_key(host));
 
-   syslog(LOG_INFO, "BlowFish encryption initialized");
+   if(host->flags & VTUN_TCP) {
+      crypt_buf = str_crypt_buf;
+      mode = "cfb64";
+   } else {
+      crypt_buf = pkt_crypt_buf;
+      mode = "ecb";
+   }
+
+   syslog(LOG_INFO, "blowfish/%s encryption initialized", mode);
    return 0;
 }
 
@@ -66,41 +193,6 @@ int free_encrypt()
    free(enc_buf);
 
    return 0;
-}
-
-int encrypt_buf(int len, char *in, char **out)
-{ 
-   register int pad, p;
-   register char *in_ptr = in, *out_ptr = enc_buf;
-
-   /* 8 - ( len % 8 ) */
-   pad = (~len & 0x07) + 1; p = 8 - pad;
-
-   memset(out_ptr, 0, pad);
-   *out_ptr = (char) pad;
-   memcpy(out_ptr + pad, in_ptr, p);  
-   BF_ecb_encrypt(out_ptr, out_ptr, &key, BF_ENCRYPT);
-   out_ptr += 8; in_ptr += p; 
-   len = len - p;
-
-   for(p=0; p < len; p += 8 )
-      BF_ecb_encrypt(in_ptr + p,  out_ptr + p, &key, BF_ENCRYPT);
-
-   *out = enc_buf;
-   return len + 8;
-}
-
-int decrypt_buf(int len, char *in, char **out)
-{
-   register int p;
-
-   for(p = 0; p < len; p += 8)
-      BF_ecb_encrypt(in + p, in + p, &key, BF_DECRYPT);
-
-   p = *in;
-   *out = in + p;
-
-   return len - p;
 }
 
 /* 

@@ -54,7 +54,7 @@ dev:
 inst: module dev
 	$(INSTALL) -d -m 755 -o root -g root $(MDIR)
 	$(INSTALL) -m 755 -o root -g root tun.o $(MDIR)
-	$(DEPMOD) $(MDIR)/tun.o 
+	$(DEPMOD) -a 
 
 clean:
 	rm -f *.o *~

@@ -34,7 +34,7 @@ BuildRoot: /var/tmp/%{name}-%{version}-buildroot-%(id -u -n)
   writes them to the user space program. 
 
 %prep
-[ `id -u -n` != "root" ] && [ x%isUL = x1 ] && echo "You need to be root on UL to use mknod." && exit 1
+[ `id -u -n` != "root" ] && echo "You need to be root on UL to use mknod." && exit 1
 %setup -n %{name}-%{version}
 ./configure
 

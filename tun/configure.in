@@ -46,7 +46,7 @@ AC_CONFIG_SUBDIRS($OS_DIR)
 
 dnl Build release name
 changequote(<,>)
-REL=`echo 'substr($Name,0)$' | tr -d '$:\- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+REL=`echo 'substr($Name,0)$' | tr -d '$: \-' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
 TUN_VER="$REL `date '+%m/%d/%Y'`"; export TUN_VER
 changequote([,])
 

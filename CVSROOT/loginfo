@@ -24,3 +24,9 @@
 #DEFAULT (echo ""; id; echo %s; date; cat) >> $CVSROOT/CVSROOT/commitlog
 # or
 #DEFAULT (echo ""; id; echo %{sVv}; date; cat) >> $CVSROOT/CVSROOT/commitlog
+#
+^CVSROOT	$CVSROOT/CVSROOT/cvsnotify -u -f %{sVv} -s "[Bluez-Commit] " maxk@users.sourceforge.net 
+#
+DEFAULT		$CVSROOT/CVSROOT/cvsnotify -u -f %{sVv} -s "" vtun-commit@lists.sourceforge.net
+#
+# End of loginfo

@@ -19,12 +19,23 @@
 /*
  * $Id$
  */ 
+#ifndef _VTUN_NETDEV_H
+#define _VTUN_NETDEV_H
 
-#define VTUN_CHAL_SIZE	 16	
+#include "config.h"
+#include <errno.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
-#define ST_INIT  0
-#define ST_HOST  1
-#define ST_CHAL  2
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
 
-struct vtun_host * auth_server(int fd);
-int auth_client(int fd, struct vtun_host *host);
+unsigned long getifaddr(char * ifname);
+int connect_t(int s, struct sockaddr *svr, time_t timeout); 
+int udp_session(struct vtun_host *host, time_t timeout); 
+
+int local_addr(struct sockaddr_in *addr, struct vtun_host *host);
+int server_addr(struct sockaddr_in *addr, struct vtun_host *host);
+
+#endif /* _VTUN_NETDEV_H */

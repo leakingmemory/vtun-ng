@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ * $Id$
  */ 
 
 /*
@@ -55,6 +55,7 @@
 
 #include "vtun.h"
 #include "lib.h"
+#include "lock.h"
 #include "auth.h"
 
 /* 
@@ -237,12 +238,12 @@ int cs2cl(char *str, char *chal)
  * FIXME. Should be rewritten to use better algorithm */
 void gen_chal(char *buf)
 {
-     register int i;
+   register int i;
  
-     srand(time(NULL));
+   srand(time(NULL));
 
-     for(i=0; i<VTUN_CHAL_SIZE; i++)
-	buf[i] = (unsigned int)(255.0 * rand()/RAND_MAX);
+   for(i=0; i<VTUN_CHAL_SIZE; i++)
+      buf[i] = (unsigned int)(255.0 * rand()/RAND_MAX);
 }
 
 /* Encrypt and Decrypt challenge key */
@@ -273,8 +274,8 @@ struct vtun_host * auth_server(int fd)
 {
         char chal_req[VTUN_CHAL_SIZE], chal_res[VTUN_CHAL_SIZE];	
 	char buf[VTUN_MESG_SIZE], *str1, *str2;
-	char host[9];
         struct vtun_host *h = NULL;
+	char *host = NULL;
 	int  stage;
 
         set_title("authentication");
@@ -288,15 +289,14 @@ struct vtun_host * auth_server(int fd)
 	   strtok(buf,"\r\n");
 
 	   if( !(str1=strtok(buf," :")) )
-		break;
+	      break;
 	   if( !(str2=strtok(NULL," :")) )
-		break;
+	      break;
 
-	   switch(stage){
+	   switch( stage ){
 	     case ST_HOST:
 	        if( !strcmp(str1,"HOST") ){
-		   strncpy(host,str2,sizeof(host));
-		   host[sizeof(host)-1]='\0';
+		   host = strdup(str2);
 
 		   gen_chal(chal_req);
 		   print_p(fd,"OK CHAL: %s\n", cl2cs(chal_req));
@@ -315,9 +315,17 @@ struct vtun_host * auth_server(int fd)
 
 		   decrypt_chal(chal_res, h->passwd);   		
 	
-		   if( !memcmp(chal_req, chal_res, VTUN_CHAL_SIZE) )
+		   if( !memcmp(chal_req, chal_res, VTUN_CHAL_SIZE) ){
+		      /* Auth successeful. */
+
+		      /* Lock host */	
+		      if( lock_host(h) < 0 ){
+		         /* Multiple connections are denied */
+		         h = NULL;
+		         break;
+		      }	
 		      print_p(fd,"OK FLAGS: %s\n", bf2cf(h)); 
- 		   else
+ 		   } else
 		      h = NULL;
 	        }
 		break;
@@ -325,7 +333,10 @@ struct vtun_host * auth_server(int fd)
 	   break;
 	}
 
-	if(!h)
+	if( host )
+	   free(host);
+
+	if( !h )
 	   print_p(fd,"ERR\n");	
 
 	return h;
@@ -334,14 +345,14 @@ struct vtun_host * auth_server(int fd)
 /* Authentication (Client side) */
 int auth_client(int fd, struct vtun_host *host)
 {
-	int stage, success=0 ;
 	char buf[VTUN_MESG_SIZE], chal[VTUN_CHAL_SIZE];
+	int stage, success=0 ;
 	
 	stage = ST_INIT;
 
 	while( readn_t(fd, buf, VTUN_MESG_SIZE, VTUN_TIMEOUT) > 0 ){
 	   buf[sizeof(buf)-1]='\0';
-	   switch(stage){
+	   switch( stage ){
 		case ST_INIT:
 	    	   if( !strncmp(buf,"VTUN",4) ){
 		      stage = ST_HOST;

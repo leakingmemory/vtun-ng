@@ -2,7 +2,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@@yahoo.com>
+    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -18,7 +18,7 @@
  */
 
 /*
- * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@@yahoo.com>
+ * $Id$
  */ 
 
 #include "config.h"
@@ -28,7 +28,7 @@
 #include "vtun.h"
 
 #include "cfg_file.tab.h"
-#include "cfg_file.h"
+#include "cfg_kwords.h"
 
 /* static buffer for strings */
 char str_buf[255];
@@ -67,12 +67,10 @@ int yyerror(char *str);
 
 num		[0-9]+
 dnum		{num}:{num}
-word		[A-Za-z0-9\-\_+=\!\$\#\%\&\*\^\@@\\\~]+
+word		[A-Za-z0-9\-\_+=\!\$\#\%\&\*\^\@@\\\~\.]+
 wordnm		{word}:{num}
-kword		[A-Za-z0-9_-]+	
+kword		[A-Za-z0-9\_\-]+	
 comment		\#.*\n
-ipaddr		{num}\.{num}\.{num}\.{num}
-nmaddr		{word}(\.|{word})*
 path		(\/{kword})+
 string		\".*\"
 
@@ -164,16 +162,6 @@ string		\".*\"
 		  yylval.dnum.num1 = find_keyword(cfg_param,yytext);
 		  yylval.dnum.num2 = atoi(++ptr);
 		  return DNUM;
-		}
-
-<PARAM>{ipaddr}	{
-		  yylval.str = yytext;
-		  return IPADDR;
-		}
-
-<PARAM>{nmaddr}	{
-		  yylval.str = yytext;
-		  return NMADDR;
 		}
 
 <PARAM>{path}	{

@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,10 +17,11 @@
  */
 
 /*
- * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ * $Id$
  */ 
 
 #include "config.h"
+#include "vtun_socks.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -34,40 +35,29 @@
 #include <netinet/in.h>
 #endif
 
-#ifdef HAVE_NETINET_TCP_H
-#include <netinet/tcp.h>
-#endif
-
 #ifdef HAVE_ARPA_INET_H
 #include <arpa/inet.h>
 #endif
 
-#ifdef HAVE_RESOLV_H
-#include <resolv.h>
-#endif
-
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-
 #include "vtun.h"
 #include "lib.h"
+#include "llist.h"
 #include "auth.h"
 #include "compat.h"
+#include "netlib.h"
 
 static int client_term;
 static void sig_term(int sig)
 {
-     syslog(LOG_INFO,"Terminated by user");
+     syslog(LOG_INFO,"Terminated");
      client_term = -1;
 }
 
 void client(struct vtun_host *host)
 {
      struct sockaddr_in my_addr,svr_addr;
-     struct hostent *hent;
      struct sigaction sa;
-     int s;	
+     int s,opt;	
 
      syslog(LOG_INFO,"VTun client ver %s started",VER);
 
@@ -83,26 +73,16 @@ void client(struct vtun_host *host)
      sa.sa_handler=sig_term;
      sigaction(SIGTERM,&sa,NULL);
  
-     memset(&my_addr,0,sizeof(my_addr));
-     my_addr.sin_family = AF_INET;
-     my_addr.sin_addr.s_addr = vtun.laddr;
-     my_addr.sin_port = 0;	
-
-     memset(&svr_addr,0,sizeof(my_addr));
-     svr_addr.sin_family = AF_INET;
-     svr_addr.sin_port = htons(vtun.port);	
-
      client_term = 0;
      while( !client_term ){ 
-	/* Lookup server's IP address.
-	 * We do it on every reconnect because server's IP 
-	 * address can be dynamic.
-	 */
-        if( !(hent = gethostbyname(vtun.svr_name)) ){
-           syslog(LOG_ERR, "Can't resolv server address %s",vtun.svr_name);
-           exit(1);
-        }
-        svr_addr.sin_addr.s_addr = *(unsigned long *)hent->h_addr; 
+	set_title("%s init initializing", host->host);
+
+	/* Set server address */
+        if( server_addr(&svr_addr, host) )
+	   break;
+
+	/* Set local address */
+	local_addr(&my_addr, host);
 
 	/* We have to create socket again every time
 	 * we want to connect, since STREAM sockets 
@@ -110,22 +90,26 @@ void client(struct vtun_host *host)
 	 */
         if( (s=socket(AF_INET,SOCK_STREAM,0))==-1 ){
 	   syslog(LOG_ERR,"Can not create socket");
-	   exit(1);
+	   break;
         }
+
+	/* Required when client is forced to bind to specific port */
+        opt=1;
+        setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); 
 
         if( bind(s,(struct sockaddr *)&my_addr,sizeof(my_addr)) ){
 	   syslog(LOG_ERR,"Can not bind to the socket");
-	   exit(1);
+	   break;
         }
-
-        syslog(LOG_INFO,"Connecting to %s", vtun.svr_name);
-	set_title("connecting to %s", vtun.svr_name);
 
         /* 
          * Clear speed and flags which will be supplied by server. 
          */
         host->spd_in = host->spd_out = 0;
         host->flags &= VTUN_CLNT_MASK;
+
+	set_title("connecting to %s", vtun.svr_name);
+        syslog(LOG_INFO,"Connecting to %s", vtun.svr_name);
 
         if( connect_t(s,(struct sockaddr *) &svr_addr, vtun.timeout) ){
 	   syslog(LOG_INFO,"Can't connect to %s",vtun.svr_name);
@@ -142,16 +126,15 @@ void client(struct vtun_host *host)
 	   } else {
 	      syslog(LOG_INFO,"Connection denied by %s",vtun.svr_name);
 	   }
-	   close(s);
 	}
+	close(s);
 	
 	/* If persist option is set, sleep and try to reconnect */
 	if( !client_term && vtun.persist > 0 ) 
-	  sleep(5);
+	   sleep(5);
         else
-	  break;
+	   break;
      }
      syslog(LOG_INFO,"Exit");
      return;
 }
-

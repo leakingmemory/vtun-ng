@@ -2,8 +2,7 @@
 #
 # Script for starting and stoping vtund.
 #
-# Writen by Dag Wieers <dag@life.be>. 
-# Modified to use PID file by Maxim Krasnyansky <max_mk@yahoo.com>  
+# Writen by Dag Wieers <dag@mind.be>. 
 #
 # chkconfig: 345 55 45
 # description: vtund Virtual Tunnel Daemon.
@@ -13,27 +12,24 @@
 # Source function library.
 . /etc/rc.d/init.d/functions
 
-# Read PID file
-PID=`cat /var/run/vtund.pid`
-
 # See how we were called.
 case "$1" in
   start)
         echo -n "Starting vtund: "
-        daemon /usr/sbin/vtund -s
+        daemon vtund -s
         echo
         touch /var/lock/subsys/vtund
         ;;
   stop)
         echo -n "Stopping vtund: "
-        kill $PID
+        killproc vtund
+        echo
         rm -f /var/lock/subsys/vtund
-        echo "vtund"
         ;;
   restart)
         echo -n "Restarting vtund: "
-	kill -HUP $PID
-        echo "vtund"
+	killproc vtund -HUP
+        echo
         ;;
   status)
         status vtund

@@ -20,11 +20,27 @@
  * $Id$
  */ 
 
-#define VTUN_CHAL_SIZE	 16	
+#ifndef _VTUN_SOCKS_H
+#define _VTUN_SOCKS_H
 
-#define ST_INIT  0
-#define ST_HOST  1
-#define ST_CHAL  2
+#if defined(VTUN_SOCKS)
+   /* Syscalls to SOCKS calls */
+   #if VTUN_SOCKS == 1
+      #define connect 		SOCKSconnect
+      #define bind 		SOCKSbind
+      #define select		SOCKSselect
+      #define getsockname 	SOCKSgetsockname
+      #define getpeername 	SOCKSgetpeername
+      #define gethostbyname 	SOCKSgethostbyname
+   #else
+      #define connect 		Rconnect
+      #define bind 		Rbind
+      #define select		Rselect
+      #define getsockname 	Rgetsockname
+      #define getpeername 	Rgetpeername
+      #define gethostbyname 	Rgethostbyname
+   #endif
+#endif
 
-struct vtun_host * auth_server(int fd);
-int auth_client(int fd, struct vtun_host *host);
+
+#endif /* _VTUN_SOCKS_H */

@@ -1,5 +1,37 @@
+ver 2.1b4:
+	 Removed host name size limitation.
+	 Parser and Makefile fixes.
+
+ver 2.1b3:
+	 Locking code rewrite, should fix race conditions. 
+	 Support for inetd and tcp wrapper. Several cleanups.
+	 Updated RPM spec. Initialization fixes.
+
+ver 2.1b2:
+	 Improved parser. New substitutions for command parameters
+	 (%a - local address, %A - remote address,...) allow to handle
+	 dynamic IPs more easily. Correct handling of single quotes and
+	 escaping '\'. Added 'reroute' script for Linux.
+         Configure fixes. Documentation update.
+
+ver 2.1b1:
+	 Correct closing of unsuccessfully connected sockets. UDP session 
+	 initialization fixes.
+	 New option 'multi', allows to gracefully handle multiple connections
+	 with the same host.
+	 New option 'srcaddr', allows to specify source address in form of 
+	 interface, host_name and port.
+	 Unified interface for network device drivers and protocols.
+	 Solaris TUN/TAP driver support. SOCKS support.
+	 Several cleanups and optimizations. Improved Makefile and Configure.
+	 Configure automatically searches for headers and libraries.
+	 Documentation update.
+	 Binary package now linked with latest OpenSSL and LZO libraries.
+	 Updated packages for RedHat, OpenBSD, NetBSD, FreeBSD, Solaris.
+
 ver 2.0: 
-	 Final 2.0 stable version. Small cleanups. Documentation and Web site updates.
+	 Final 2.0 stable version. Small cleanups. Documentation and Web 
+	 site updates.
 
 ver 2.0b8: 
          Config file parser fixes. Improved and simplified connection keep 

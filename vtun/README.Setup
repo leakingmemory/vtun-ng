@@ -11,8 +11,7 @@ VTun Setup recommendations and Config samples.
   This will give you reliable and the fastest possible Point-to-Point
   tunnel.  Use this tunnel type whenever it's possible, especially
   if performance and efficiency is concerned. If you need compression,
-  use LZO or TCP protocol and ZLIB. Currently TUN device is supported 
-  on Linux and FreeBSD, Solaris driver will be available soon.
+  use LZO or TCP protocol and ZLIB. 
 
 1.2 Ethernet tunnel
     type ether;

@@ -19,12 +19,12 @@
 /*
  * $Id$
  */ 
+#ifndef _VTUN_LOCK_H
+#define _VTUN_LOCK_H
 
-#define VTUN_CHAL_SIZE	 16	
+pid_t read_lock(char * host);
+int   create_lock(char * host);
+int   lock_host(struct vtun_host * host);
+void  unlock_host(struct vtun_host * host);
 
-#define ST_INIT  0
-#define ST_HOST  1
-#define ST_CHAL  2
-
-struct vtun_host * auth_server(int fd);
-int auth_client(int fd, struct vtun_host *host);
+#endif /* _VTUN_LOCK_H */

@@ -1,37 +1,40 @@
-1. Compilation and Installation.
-In order to compile VTun yourself you need:
+Compilation and Installation.
+
+In order to compile VTun you need several software packages.
+Required packages: 
   - Good C compiler (gcc, egcs, etc)
   - Lexical Analyzer (flex, lex)
   - YACC (yacc, bison, byacc)
   - Zlib compression library
-  - SSleay encryption library ftp://ftp.pca.dfn.de/pub/tools/net/ssleay
-Optional:
-  - LZO compression library   http://wildsau.idv.uni-linz.ac.at/mfx/lzo.html
+  - OpenSSL encryption library 	http://www.openssl.org 
 
-In order to use Ethernet and TUN(plain IP tunnel) you need:
-  - Universal TUN/TAP driver http://vtun.netpedia.net/tun
+Optional packages:
+  - LZO compression library 	http://wildsau.idv.uni-linz.ac.at/mfx/lzo.html
+  - SOCKS library:
+	 Socks5 by NEC (recommended)	http://www.socks.nec.com 
+	 Dante Socks4/5 	http://www.inet.no/dante 
+  - Universal TUN/TAP driver 	http://vtun.netpedia.net/tun
+    (REQUIRED for Ethernet(TAP) and IP(TUN) tunnels)
 
 To configure VTun run:
   ./configure 
+Optional support:
+  --enable-lzo  	compile with LZO compression support
+  --enable-socks 	compile with SOCKS support
 
-Configure assumes that Crypto library and include files are located in 
-/usr/include and /usr/lib. If you use different locations you have to 
-supply path to those files. 
-For example if libcrypto.a is in /usr/lib/crypto and md5.h and blowfish.h
-are in /usr/include/ssl run:
-  ./configure --with-crypto-lib=/usr/lib/ssl 
-	      --with-crypto-headers=/usr/include/ssl
+Configure automatically searches for all required library and header files. 
+However you might need to specify location of the files that could not be 
+found in default location:
+  SSL(Crypto) library:
+  --with-ssl-lib=/path/to/library (libcrypto.a) 
+  --with-ssl-headers=/path/to/headers (md5.h blowfish.h)
 
-In order to compile LZO compression module you have to specify path to LZO
-header files and library.
-For example if liblzo.a is in /usr/lib/lzo and lzo1x.h is in /usr/include/lzo
-run:
-  ./configure --with-lzo-lib=/usr/lib/lzo 
-	      --with-lzo-headers=/usr/include/lzo
+  LZO library:
+  --with-lzo-lib=/path/to/library (liblzo.a) 
+  --with-lzo-headers=/path/to/headers (lzo1x.h)
 
-By default VTun will be configured to work under /usr/local.
-If you want to install it under usual location run:
-  ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var
+  SOCKS library:
+  --with-socks-lib=/path/to/library (libsocks.a or libsocks5.a) 
 
 To compile and install run:
   make install

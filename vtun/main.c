@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ * $Id$
  */ 
 #include "config.h"
 
@@ -33,21 +33,13 @@
 #include <netinet/in.h>
 #endif
 
-#ifdef HAVE_RESOLV_H
-#include <resolv.h>
-#endif
-
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-
 #include "vtun.h"
 #include "lib.h"
-
 #include "compat.h"
 
 /* Global options for the server and client */
 struct vtun_opts vtun;
+struct vtun_host default_host;
 
 void write_pid(void);
 void reread_config(int sig);
@@ -56,18 +48,19 @@ void usage(void);
 extern int optind,opterr,optopt;
 extern char *optarg;
 
-int main(int argc, char *argv[], char *env[]){
+int main(int argc, char *argv[], char *env[])
+{
+     int svr, daemon, sock, dofork, fd, opt;
      struct vtun_host *host = NULL;
-     int svr = 0, daemon = 1;
-     struct hostent *hent;  
      struct sigaction sa;
      char *hst;
-     int opt;
 
-     /* Configure default options */
+     /* Configure default settings */
+     svr = 0; daemon = 1; sock = 0; dofork = 1;
+
+     vtun.cfg_file = VTUN_CONFIG_FILE;
      vtun.persist = -1;
      vtun.timeout = -1;
-     vtun.cfg_file = VTUN_CONFIG_FILE;
 	
      /* Dup strings because parser will try to free them */	
      vtun.ppp   = strdup("/usr/sbin/pppd");
@@ -75,20 +68,27 @@ int main(int argc, char *argv[], char *env[]){
      vtun.route = strdup("/sbin/route");
      vtun.fwall = strdup("/sbin/ipchains");	
 
-     vtun.laddr = INADDR_ANY;
      vtun.svr_name = NULL;
-     vtun.port  = VTUN_PORT; 
+     vtun.svr_port = -1;
+     vtun.svr_type = -1;
+
+     /* Initialize default host options */
+     memset(&default_host, 0, sizeof(default_host));
+     default_host.flags = VTUN_TTY | VTUN_TCP; 
+     default_host.multi = VTUN_MULTI_ALLOW;
 
      /* Start logging to syslog and stderr */
      openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
 
-     while( (opt=getopt(argc,argv,"sf:P:t:npL:")) != EOF ){
+     while( (opt=getopt(argc,argv,"isf:P:t:np")) != EOF ){
 	switch(opt){
+	    case 'i':
+		vtun.svr_type = VTUN_INETD;
 	    case 's':
 		svr = 1;
 		break;
 	    case 'P':
-		vtun.port = atoi(optarg);
+		vtun.svr_port = atoi(optarg);
 		break;
 	    case 'f':
 		vtun.cfg_file = strdup(optarg);
@@ -101,13 +101,6 @@ int main(int argc, char *argv[], char *env[]){
 		break;
 	    case 't':
 	        vtun.timeout = atoi(optarg);	
-	        break;
-	    case 'L':
-	        if( !(hent = gethostbyname(optarg)) ){
-		   syslog(LOG_ERR, "Can't resolv local address %s",optarg);
-		   exit(1);
-		}
-		vtun.laddr = *(unsigned long *)hent->h_addr;	
 	        break;
 	    default:
 		usage();
@@ -135,23 +128,34 @@ int main(int argc, char *argv[], char *env[]){
       * Now fill uninitialized fields of the options structure
       * with default values. 
       */ 
-
-     if(vtun.port == -1)
-	vtun.port = VTUN_PORT;
+     if(vtun.svr_port == -1)
+	vtun.svr_port = VTUN_PORT;
      if(vtun.persist == -1)
 	vtun.persist = 0;		
      if(vtun.timeout == -1)
 	vtun.timeout = VTUN_CONNECT_TIMEOUT;
 
-     if(daemon){
-        if( fork() )
+     switch( vtun.svr_type ){
+	case -1:
+	   vtun.svr_type = VTUN_STAND_ALONE;
+	   break;
+	case VTUN_INETD:
+	   sock = dup(0);
+	   dofork = 0; 
+	   break;
+     }
+
+     if( daemon ){
+	if( dofork && fork() )
 	   exit(0);
 
-        /* Direct stderr to '/dev/null', otherwise syslog 
-	 * will write to it */
-        close(2); open("/dev/null", O_RDWR);
+        /* Direct stdin,stdout,stderr to '/dev/null' */
+        fd = open("/dev/null", O_RDWR);
+	close(0); dup(fd);
+	close(1); dup(fd);
+        close(2); dup(fd);
+        close(fd);
 
-	close(0);close(1);
 	setsid();
 
 	chdir("/");
@@ -163,10 +167,11 @@ int main(int argc, char *argv[], char *env[]){
         sigaction(SIGHUP,&sa,NULL);
 
         init_title(argc,argv,env,"vtund[s]: ");
+
+	if( vtun.svr_type == VTUN_STAND_ALONE )	
+	   write_pid();
 	
-	write_pid();
-	
-	server();
+	server(sock);
      } else {	
         init_title(argc,argv,env,"vtund[c]: ");
         client(host);
@@ -183,15 +188,15 @@ int main(int argc, char *argv[], char *env[]){
  */
 void write_pid(void)
 {
-	FILE *f;
+     FILE *f;
 
-	if( !(f=fopen(VTUN_PID_FILE,"w")) ){
-	   syslog(LOG_ERR,"Can't write PID file");
-	   return;
-	}
+     if( !(f=fopen(VTUN_PID_FILE,"w")) ){
+        syslog(LOG_ERR,"Can't write PID file");
+        return;
+     }
 
-	fprintf(f,"%d",(int)getpid());
-	fclose(f);
+     fprintf(f,"%d",(int)getpid());
+     fclose(f);
 }
 
 void reread_config(int sig)
@@ -208,7 +213,6 @@ void usage(void)
      printf("  Server:\n");
      printf("\tvtund <-s> [-f file] [-P port]\n");
      printf("  Client:\n");
-     printf("\tvtund [-f file] [-P port] [-L local address] [-p] [-t timeout] <host> <server adress>\n");
+     printf("\tvtund [-f file] [-P port] [-L local address] "
+	    "[-p] [-t timeout] <host> <server adress>\n");
 }
-
-

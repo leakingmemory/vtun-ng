@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,14 +17,14 @@
  */
 
 /*
- * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ * $Id$
  */ 
 #ifndef _VTUN_H
 #define _VTUN_H
 
 #include "llist.h"
 
-#define VER "2.0"
+#define VER "2.1b4 03/21/2000"
 
 /* Default VTUN port */
 #define VTUN_PORT 5000
@@ -43,6 +43,14 @@
  
 /* End of configurable part */
 
+struct vtun_sopt {
+    char *dev;
+    char *laddr;
+    int  lport;
+    char *raddr;
+    int  rport;
+};
+
 struct vtun_stat {
    unsigned long byte_in;
    unsigned long byte_out;
@@ -59,6 +67,17 @@ struct vtun_cmd {
 /* Command flags */
 #define VTUN_CMD_WAIT	0x01 
 #define VTUN_CMD_DELAY  0x02
+#define VTUN_CMD_SHELL  0x04
+
+struct vtun_addr {
+   char *name;
+   char *ip;
+   int port;
+   int type;
+};
+/* Address types */
+#define VTUN_ADDR_IFACE	0x01 
+#define VTUN_ADDR_NAME  0x02
 
 struct vtun_host {
    char *host;
@@ -76,7 +95,15 @@ struct vtun_host {
    int  rmt_fd;
    int  loc_fd;
 
+   /* Multiple connections */
+   int  multi;
+
+   /* Source address */
+   struct vtun_addr src_addr;
+
    struct vtun_stat stat;
+
+   struct vtun_sopt sopt;
 };
 
 extern llist host_list;
@@ -104,17 +131,22 @@ extern llist host_list;
 #define VTUN_STAT	0x1000
 
 /* Constants and flags for VTun protocol */
-#define VTUN_FRAME_SIZE 2048
+#define VTUN_FRAME_SIZE     2048
 #define VTUN_FRAME_OVERHEAD 100
-
 #define VTUN_FSIZE_MASK 0x0fff
+
 #define VTUN_CONN_CLOSE 0x1000
 #define VTUN_ECHO_REQ	0x2000
 #define VTUN_ECHO_REP	0x4000
 #define VTUN_BAD_FRAME  0x8000
 
 /* Authentication message size */
-#define VTUN_MESG_SIZE  50
+#define VTUN_MESG_SIZE	50
+
+/* Support for multiple connections */
+#define VTUN_MULTI_DENY		0  /* no */ 
+#define VTUN_MULTI_ALLOW	1  /* yes */
+#define VTUN_MULTI_KILL		2
 
 /* Global options */
 struct vtun_opts {
@@ -123,23 +155,25 @@ struct vtun_opts {
 
    char *cfg_file;
 
+   char *shell; 	 /* Shell */
    char *ppp;		 /* Command to configure ppp devices */
    char *ifcfg;		 /* Command to configure net devices */
    char *route;		 /* Command to configure routing */
    char *fwall; 	 /* Command to configure FireWall */
 
-   unsigned long laddr;  /* Local IP address */
-   char * svr_name;      /* Server's host name */
-   int port;		 /* Server's port */
+   char *svr_name;       /* Server's host name */
+   int  svr_port;	 /* Server's port */
+   int  svr_type;	 /* Server mode */
 };
+#define VTUN_STAND_ALONE	0 
+#define VTUN_INETD		1	
 
 extern struct vtun_opts vtun;
 
-struct vtun_host * find_host(char *host);
-int read_config(char *file);
-
-int tunnel(struct vtun_host *host);
-
-void server(void);
+void server(int sock);
 void client(struct vtun_host *host);
+int  tunnel(struct vtun_host *host);
+int  read_config(char *file);
+struct vtun_host * find_host(char *host);
+
 #endif

@@ -20,11 +20,35 @@
  * $Id$
  */ 
 
-#define VTUN_CHAL_SIZE	 16	
+#include "config.h"
 
-#define ST_INIT  0
-#define ST_HOST  1
-#define ST_CHAL  2
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <syslog.h>
+#include <sys/socket.h>
 
-struct vtun_host * auth_server(int fd);
-int auth_client(int fd, struct vtun_host *host);
+#include "vtun.h"
+#include "lib.h"
+
+/* 
+ * Create pipe. Return open fd. 
+ */  
+int pipe_alloc(int *fd)
+{
+    return socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
+}
+
+/* Write frames to pipe */
+int pipe_write(int fd, char *buf, int len)
+{
+    return write_n(fd, buf, len);
+}
+
+/* Read frames from pipe */
+int pipe_read(int fd, char *buf, int len)
+{
+    return read(fd, buf, len);
+}

@@ -34,10 +34,21 @@ Summary: Virtual tunnel over TCP/IP networks.
 Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 #Packager: Dag Wieers <dag@mind.be> 
 Packager: Bishop Clark (LC957) <bishop@platypus.bc.ca>
-BuildRoot: /var/tmp/%{name}-%{version}-build
+BuildRoot: %{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 Obsoletes: vppp
 %{!?NO_USE_LZO:Buildrequires: lzo-devel}
-Buildrequires: byacc, flex, openssl-devel, zlib-devel
+%{!?_without_ssl:BuildRequires: openssl-devel }
+BuildRequires: bison
+BuildRequires: flex
+BuildRequires: autoconf
+BuildRequires: automake
+
+# Caldera has funny zlib
+%if %( rpm -q OpenLinux >/dev/null 2>/dev/null && echo 0 || echo 1 )
+BuildRequires: zlib-devel
+%else
+BuildRequires: libz-devel
+%endif
 
 %description
 VTun provides the method for creating Virtual Tunnels over TCP/IP

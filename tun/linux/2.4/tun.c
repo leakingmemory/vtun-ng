@@ -29,7 +29,7 @@
 #include <linux/kernel.h>
 #include <linux/major.h>
 #include <linux/sched.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/poll.h>
 #include <linux/fcntl.h>
 #include <linux/init.h>
@@ -183,7 +183,7 @@ static unsigned int tun_chr_poll(struct file *file, poll_table * wait)
 /* Get packet from user space buffer(already verified) */
 static __inline__ ssize_t tun_get_user(struct tun_struct *tun, const char *buf, size_t count)
 {
-	struct tun_pi pi = { 0, __constant_htons(ETH_P_IP) };
+	struct tun_pi pi;
 	register const char *ptr = buf; 
 	register int len = count;
 	struct sk_buff *skb;
@@ -208,7 +208,12 @@ static __inline__ ssize_t tun_get_user(struct tun_struct *tun, const char *buf, 
 	switch (tun->flags & TUN_TYPE_MASK) {
 	case TUN_TUN_DEV:
 		skb->mac.raw = skb->data;
-		skb->protocol = pi.proto;
+		if (tun->flags & TUN_NO_PI) {
+			skb->protocol = (*(__u8 *)skb->data >> 4 == 6)
+					? __constant_htons(ETH_P_IPV6)
+					: __constant_htons(ETH_P_IP);
+		} else
+			skb->protocol = pi.proto;
 		break;
 	case TUN_TAP_DEV:
 		skb->protocol = eth_type_trans(skb, &tun->dev);
@@ -218,7 +223,7 @@ static __inline__ ssize_t tun_get_user(struct tun_struct *tun, const char *buf, 
 	if (tun->flags & TUN_NOCHECKSUM)
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
  
-	netif_rx(skb);
+	netif_rx_ni(skb);
    
 	tun->stats.rx_packets++;
 	tun->stats.rx_bytes += len;
@@ -325,11 +330,6 @@ static ssize_t tun_chr_read(struct file * file, char * buf,
 	remove_wait_queue(&tun->read_wait, &wait);
 
 	return ret;
-}
-
-static loff_t tun_chr_lseek(struct file * file, loff_t offset, int origin)
-{
-	return -ESPIPE;
 }
 
 static int tun_set_iff(struct file *file, struct ifreq *ifr)
@@ -549,7 +549,7 @@ static int tun_chr_close(struct inode *inode, struct file *file)
 
 static struct file_operations tun_fops = {
 	owner:	THIS_MODULE,	
-	llseek:	tun_chr_lseek,
+	llseek:	no_llseek,
 	read:	tun_chr_read,
 	write:	tun_chr_write,
 	poll:	tun_chr_poll,

@@ -1,0 +1,46 @@
+#
+#  Universal TUN/TAP device driver.
+#  Copyright (C) 1999-2000 Maxim Krasnyansky <max_mk@yahoo.com>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#  GNU General Public License for more details.
+#
+#  $Id$
+#
+CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
+
+INSTALL = @INSTALL@
+
+ARCH = @ARCH@
+KDIR = @KDIR@
+KVER = @KVER@
+
+DESTDIR = /modules
+
+VNODE = @VNODE@
+DEFS = @DEFS@
+CFLAGS+=$(DEFS) $(COPTS) $(CWARNFLAGS) $(DEBUG_FLAGS) -DKLD_MODULE
+CFLAGS+=-nostdinc -I- -I. -I@ -I@/../include -I/usr/include
+
+KMOD = if_tap
+
+SRCS = if_tap.c if_tap.h vnode_if.h
+OBJS = ${SRCS:N*.h:R:S/$/.o/g}
+
+
+vnode_if.h:
+	$(VNODE)
+
+clean:
+	rm -f $(SRCS) *.o
+
+distclean: clean
+	rm -f if_tap.h if_tap.c @ machine
+	rm -f $(CONFIGURE_FILES)

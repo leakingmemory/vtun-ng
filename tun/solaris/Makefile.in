@@ -17,6 +17,8 @@
 #
 #  $Id$
 #
+CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
+
 CC = gcc
 LD = ld
 
@@ -44,6 +46,7 @@ inst: module
 	$(INSTALL) -m 644 -o root -g root if_tun.h /usr/include/net 
 
 clean:
-	rm -f tun br *.o
+	rm -f tun *.o *~
 
 distclean: clean
+	rm -f $(CONFIGURE_FILES)

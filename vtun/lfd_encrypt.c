@@ -169,7 +169,7 @@ int alloc_encrypt(struct vtun_host *host)
 {
    char *mode;
 
-   if((enc_buf = (char *)malloc(ENC_BUF_SIZE)) == NULL) {
+   if((enc_buf = (char *)lfd_alloc(ENC_BUF_SIZE)) == NULL) {
       syslog(LOG_ERR, "Unable to allocate encryption buffer");
       return -1;
    }
@@ -190,7 +190,7 @@ int alloc_encrypt(struct vtun_host *host)
 
 int free_encrypt()
 {
-   free(enc_buf);
+   lfd_free(enc_buf);
 
    return 0;
 }

@@ -2226,8 +2226,10 @@ esac
 
 echo "$ac_t""" 1>&6
 
-TAG='$Name$'
-REL=`echo $TAG | sed 's/\_/\./' | tr -d 'A-Za-z$\-\: '`
+
+REL=`echo '$Name$' | tr -d '$:- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+
+
 cat >> confdefs.h <<EOF
 #define VTUN_VER "$REL `date '+%m/%d/%Y'`"
 EOF

@@ -155,8 +155,10 @@ AC_LINK_DRV(`cat vtun.drivers`, $OS_DIR)
 AC_MSG_RESULT()
 
 dnl Build release name
-TAG='substr($Name,0)$'
-REL=`echo $TAG | sed 's/\_/\./' | tr -d '[A-Za-z$\-\: ]'`
+changequote(<,>)
+REL=`echo 'substr($Name,0)$' | tr -d '$:- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+changequote([,])
+
 AC_DEFINE_UNQUOTED(VTUN_VER, "$REL `date '+%m/%d/%Y'`")
 
 AC_OUTPUT(Makefile)

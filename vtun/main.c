@@ -87,7 +87,7 @@ int main(int argc, char *argv[], char *env[])
 	default_host.loc_fd = default_host.rmt_fd = -1;
 
 	/* Start logging to syslog and stderr */
-	vtun_openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
+	openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
 
 	while ((opt = getopt(argc, argv, "isf:P:t:nph")) != EOF) {
 		switch (opt) {
@@ -122,8 +122,8 @@ int main(int argc, char *argv[], char *env[])
 	if (vtun.syslog != LOG_DAEMON) {
 		/* Restart logging to syslog using specified facility  */
 		closelog();
-		vtun_openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR,
-			     vtun.syslog);
+		openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR,
+			vtun.syslog);
 	}
 
 	if (!svr) {

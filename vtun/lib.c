@@ -40,7 +40,6 @@
 #include "lib.h"
 
 volatile sig_atomic_t __io_canceled = 0;
-volatile sig_atomic_t __in_syslog = 0;
 
 #ifndef HAVE_SETPROC_TITLE
 /* Functions to manipulate with program title */
@@ -351,25 +350,20 @@ void free_sopt(struct vtun_sopt *opt)
 	}
 }
 
-void vtun_openlog (char *ident, int option, int facility)
-{
-   openlog(ident, option, facility);
-   __in_syslog = 0;
-}
-
 void vtun_syslog (int priority, char *format, ...)
 {
+   static volatile sig_atomic_t in_syslog= 0;
    char buf[255];
    va_list ap;
 
-   if(! __in_syslog) {
-      __in_syslog = 1;
+   if(! in_syslog) {
+      in_syslog = 1;
     
       va_start(ap, format);
       vsnprintf(buf, sizeof(buf)-1, format, ap);
       syslog(priority, "%s", buf);
       va_end(ap);
 
-      __in_syslog = 0;
+      in_syslog = 0;
    }
 }

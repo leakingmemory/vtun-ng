@@ -54,7 +54,7 @@ OBJS = main.o cfg_file.tab.o cfg_file.lex.o server.o client.o lib.o \
 
 CONFIGURE_FILES = Makefile config.status config.cache config.h config.log 
 
-.c.o: vtun.h
+%.o: %.c vtun.h lib.h
 	$(CC) $(CFLAGS) $(DEFS) -c $<
 
 vtund: $(OBJS)

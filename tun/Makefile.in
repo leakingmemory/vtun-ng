@@ -27,10 +27,13 @@ module:
 install: module
 	cd $(OS_DIR); make inst
 
+kernel:
+	cd $(OS_DIR); make kernel
+
 clean:
 	cd $(OS_DIR); make clean
 	rm -f core *~
-      
+     
 distclean: clean
 	cd $(OS_DIR); make distclean
 	rm -f $(CONFIGURE_FILES)

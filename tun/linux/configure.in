@@ -20,6 +20,7 @@ AC_INIT()
 AC_SUBST(KDIR)
 AC_SUBST(KVER)
 AC_SUBST(ARCH)
+AC_SUBST(UPGRADE)
 
 AC_PROG_CC
 AC_PROG_AWK
@@ -58,8 +59,6 @@ AC_TEST_FILES(tun.c if_tun.h, $TDIR, ,
    AC_MSG_ERROR( Unsupported kernel version. )
 )
 
-AC_LINK_FILES($TDIR/tun.c $TDIR/if_tun.h, tun.c if_tun.h)
-
 AC_DEFINE_UNQUOTED(TUN_VER, "$TUN_VER")
 
 case $TDIR in
@@ -76,22 +75,33 @@ case $TDIR in
         ;;
 
      2.4)
- 	AC_MSG_CHECKING( for kernel driver )
+ 	AC_MSG_CHECKING( for kernel driver version )
 
  	# Check driver files 
 	AC_TEST_FILES(drivers/net/tun.c include/linux/if_tun.h, $KDIR,  ,
-	   AC_MSG_ERROR( Universal TUN/TAP driver was no found in $KDIR )
+	   AC_MSG_ERROR( Universal TUN/TAP driver was not found in $KDIR )
 	)
 
         O_VER=`grep '#.*TUN_VER' $KDIR/drivers/net/tun.c | tr -d '\000-\057A-z'`
         N_VER=`grep '#.*TUN_VER' $TDIR/tun.c | tr -d '\000-\057A-z'`
 
-        if test $N_VER -le $O_VER; then
-	   AC_MSG_RESULT("up to date")
+	UPGRADE=0
+        if test $N_VER -lt $O_VER; then
+	   AC_MSG_RESULT("newer")
+        elif test $N_VER -eq $O_VER; then
+	   AC_MSG_RESULT("same")
         else  
-           AC_MSG_RESULT("upgrade") 
+           AC_MSG_RESULT("older")
+	   UPGRADE=1
         fi
         ;;
 esac
 
+AC_LINK_FILES($TDIR/tun.c $TDIR/if_tun.h, tun.c if_tun.h)
+
 AC_OUTPUT(Makefile)
+
+if test $UPGRADE -eq 1; then
+   AC_MSG_RESULT()
+   AC_MSG_RESULT("Run 'make kernel' to upgrade kernel driver")
+fi

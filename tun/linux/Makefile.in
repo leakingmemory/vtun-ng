@@ -23,8 +23,7 @@ DEFS = @DEFS@
 KDIR = @KDIR@
 KVER = @KVER@
 ARCH = @ARCH@
-
-EXTERNAL_DRIVER = @EXTRN@
+UPGRADE = @UPGRADE@
 
 DEPMOD  = /sbin/depmod
 MDIR = /lib/modules/$(KVER)/net
@@ -59,6 +58,14 @@ inst: module dev
 	$(INSTALL) -d -m 755 -o root -g root $(MDIR)
 	$(INSTALL) -m 644 -o root -g root tun.o $(MDIR)
 	$(DEPMOD) -a 
+
+kernel:
+	@if test $(UPGRADE) -eq 1; then \
+	   $(INSTALL) -v -m 644 -o root -g root tun.c $(KDIR)/drivers/net;     \
+	   $(INSTALL) -v -m 644 -o root -g root if_tun.h $(KDIR)/include/linux;\
+	else \
+	   echo "Kernel driver upgrade is not required"; \
+	fi
 
 clean:
 	rm -f *.o *~

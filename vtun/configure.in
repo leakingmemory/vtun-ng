@@ -2,7 +2,7 @@ dnl
 dnl VTun - Virtual Tunnel over TCP/IP network.
 dnl Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 dnl
-dnl $Id$
+dnl configure.in,v 1.10.2.3 2000/12/28 05:35:10 maxk Exp
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -43,7 +43,12 @@ AC_ARG_ENABLE(socks,
 
 AC_ARG_WITH(ssl-headers,
    --with-ssl-headers=DIR  Crypto Include files location,
-   SSL_HDR_DIR="$withval"
+   MD5_HDR_DIR="$withval"
+   CPPFLAGS="$CPPFLAGS -I$withval" 
+)
+AC_ARG_WITH(ssl-headers,
+   --with-ssl-headers=DIR  Crypto Include files location,
+   BLOWFISH_HDR_DIR="$withval"
    CPPFLAGS="$CPPFLAGS -I$withval" 
 )
 AC_ARG_WITH(ssl-lib,
@@ -132,9 +137,18 @@ fi
 
 if test "$SSL" = "yes"; then
    AC_MSG_RESULT()
-   AC_CHECKING( for SSL Library and Header files ... )
-   AC_SEARCH_HEADERS(md5.h blowfish.h,
-	$SSL_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include,
+   AC_CHECKING( for md5 Library and Header files ... )
+   AC_SEARCH_HEADERS(md5.h,
+	$MD5_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include /usr/include/crypto /usr/include/sys,,
+	AC_MSG_ERROR( SSL headers not found. )
+   )
+fi
+
+if test "$SSL" = "yes"; then
+   AC_MSG_RESULT()
+   AC_CHECKING( for blowfish Library and Header files ... )
+   AC_SEARCH_HEADERS(blowfish.h,
+	$BLOWFISH_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include  /usr/include/crypto,
 	AC_CHECK_LIB(crypto, BF_set_key,
 	    [
 	       LIBS="$LIBS -lcrypto"

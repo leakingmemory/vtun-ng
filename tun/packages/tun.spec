@@ -1,12 +1,16 @@
 %define name	tun
 %define version	1.1
-%define release	6
+%define release	7
 %define kernel  %(uname -r)
 %define devstyl	%(uname -r| awk -F. '{print $1"."$2;}')
 #catch that cool kung fu.
 
 #for OpenLinux crunchy goodness
 %define	_buildshell	%([ -x /bin/bash2 ] && echo /bin/bash2 || echo /bin/bash )
+
+# for UnitedLinux badness
+%define isUL %(rpm -q unitedlinux-release > /dev/null 2>/dev/null && echo 1 || \
+echo 0)
 
 Name: %{name}
 Version: %{version}
@@ -18,7 +22,7 @@ Source: http://vtun.sourceforge.net/tun/%{name}-%{version}.tar.gz
 Summary: Universal TUN/TAP device driver.
 Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: Bishop Clark (LC957) <bishop@platypus.bc.ca>
-BuildRoot: /var/tmp/%{name}-%{version}-build
+BuildRoot: /var/tmp/%{name}-%{version}-buildroot-%(id -u -n)
 
 #doesn't work
 #Requires:	kernel=%(uname -r)
@@ -31,6 +35,7 @@ BuildRoot: /var/tmp/%{name}-%{version}-build
   writes them to the user space program. 
 
 %prep
+[ `id -u -n` != "root" ] && [ x%isUL = x1 ] && echo "You need to be root on UL to use mknod." && exit 1
 %setup -n %{name}-%{version}
 ./configure
 
@@ -43,10 +48,9 @@ make
 # %files -f is required.
 
 %install
-#okay, you NEED this, Max.  It is for repeat builds.  Stop deleting it.
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
 
-install -m 755 -o root -g root -d $RPM_BUILD_ROOT/lib/modules/%{kernel}/net
+install -m 755 -d $RPM_BUILD_ROOT/lib/modules/%{kernel}/net
 
 #schroedinger's tun.o
 cat <<EOF > listA
@@ -54,11 +58,11 @@ cat <<EOF > listA
 %doc FAQ README
 EOF
 if [ -f linux/tun.o ]; then
-install -m 644 -o root -g root linux/tun.o $RPM_BUILD_ROOT/lib/modules/%{kernel}/net
+install -m 644 linux/tun.o $RPM_BUILD_ROOT/lib/modules/%{kernel}/net
  echo "%attr(600,root,root) /lib/modules/"%{kernel}"/net/tun.o" >> listA
 fi
-install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev
-install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev/net
+install -m 755 -d $RPM_BUILD_ROOT/dev
+install -m 755 -d $RPM_BUILD_ROOT/dev/net
 if [ %devstyl = 2.4 ]; then 
  mknod $RPM_BUILD_ROOT/dev/net/tun c 10 200
  echo "%attr(600,root,root) /dev/net/tun" >> listA

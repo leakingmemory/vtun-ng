@@ -112,7 +112,8 @@ void client(struct vtun_host *host)
         syslog(LOG_INFO,"Connecting to %s", vtun.svr_name);
 
         if( connect_t(s,(struct sockaddr *) &svr_addr, vtun.timeout) ){
-	   syslog(LOG_INFO,"Can't connect to %s",vtun.svr_name);
+	   syslog(LOG_INFO,"Connect to %s failed. %s(%d)", vtun.svr_name,  
+					strerror(errno), errno);
         } else {
 	   if( auth_client(s, host) ){   
 	      syslog(LOG_INFO,"Session %s[%s] opened",host->host,vtun.svr_name);

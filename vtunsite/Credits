@@ -3,7 +3,7 @@ Author of this package is Maxim Krasnyansky <max_mk@yahoo.com>.
 A lot of thanks to the following people for their suggestions and 
 contributions:
 
-Gayaneh Krasnyanskaya(my wife:))) <gayaneh@yahoo.com> 
+Gayaneh Krasnyanskaya(Max's Wife) <gayaneh@yahoo.com> 
 	Initial Web site creation. And a lot of other help :)))  
 
 Alex Korenkov <alex@uznet.net> 
@@ -13,8 +13,10 @@ Shukhrat Zakhidov <shukhrat@ishonch.uz>
 	Testing, bug reports, suggestions.
 
 Dag Wieers <dag@mind.be>
-	RPM packager specification file. RedHat startup script. 
-	Several bug reports. SOCKS support suggestions.
+	Initial RPM packager specification file. 
+	RedHat startup script. 
+	Several bug reports. 
+	SOCKS support suggestions.
 
 Ted Rolle <ted@acacia.datacomm.com> 
 	Spelling fixes.
@@ -47,7 +49,9 @@ Vadim Zaliva <lord@crocodile.org>
 	Solaris patches.  Suggestions.
 
 Hurricane Floyd <floyd@hurricanes.org> 
-	I had several vacations.
+	Max had several vacations.
+	Bishop had no power or water, and was able
+	   to experience the Third World.
 	:)))))))))))))))))))
 
 James B. MacLean <macleajb@Trademart-1.EDnet.NS.CA> 
@@ -77,7 +81,7 @@ Hubert Feyrer <feyrer@rfhs8012.fh-regensburg.de>
 Hiroharu Tamaru <tamaru@ap.t.u-tokyo.ac.jp>
 	Updated FreeBSD 4.0 TUN driver support. 
 
-Terry Donaldson <tsd@speedway.net>
+Terry Donaldson <tsd@geo-mis.com>
 	Provided Solaris 8.0 server for development and testing.
 
 Daniel Podlejski <underley@underley.eu.org>
@@ -113,3 +117,18 @@ Greg Olszewski <noop@nwonknu.org>
 Kevin P. Fleming <kevin@labsysgrp.com>
 	Makefile and config parser enhancement.
 	Other minor fixes and suggestions.
+
+Robert R. Wal <rrw@hell.pl>
+	Added support for iproute command.
+
+Willems Luc <willems.luc@pandora.be>
+	Initial SuSE packaging.  Testing.
+
+Dale Fountain <dpf-vtun@fountainbay.com>
+	Added multiple cipher support.
+	Added multiple cipher modes support.
+	Added support for different sized keys.
+	Re-sync ciphers when using non-ECB modes over a UDP connection.
+	Fixed Bug#908824 (persist=keep not re-applying routes)
+
+

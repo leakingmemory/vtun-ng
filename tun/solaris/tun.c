@@ -50,16 +50,17 @@ static	int  tunwput(queue_t *wq, mblk_t *mb);
 static	int  tunwsrv(queue_t *wq);
 static  void tunioctl(queue_t *wq, mblk_t *mb);
 static  void tunproto(queue_t *wq, mblk_t *mp);
-
 static  void tun_frame(queue_t *wq, mblk_t *mp);
 
+#define TUN_VER "0.5"
+
 static struct module_info tunminfo = {
-  TUNIDNUM,	/* mi_idnum */
-  TUNNAME,	/* mi_idname */
-  TUNMINPSZ,	/* mi_minpsz */
-  TUNMAXPSZ,	/* mi_maxpsz */
-  TUNHIWAT,	/* mi_hiwat */
-  TUNLOWAT	/* mi_lowat */
+  125,		/* mi_idnum  - Module ID number	*/
+  "tun",	/* mi_idname - Module name 	*/
+  21,		/* mi_minpsz - Min packet size 	*/
+  2048,		/* mi_maxpsz - Max packet size 	*/
+  (32 * 1024),	/* mi_hiwat  - Hi-water mark 	*/
+  1		/* mi_lowat  _ Lo-water mark 	*/
 };
 
 static struct qinit tunrinit = {
@@ -89,7 +90,7 @@ static struct streamtab	tun_info = {
   NULL			/* st_muxwrinit */
 };
 
-static	struct cb_ops tun_cb_ops = {
+static struct cb_ops tun_cb_ops = {
   nulldev,		/* cb_open */
   nulldev,		/* cb_close */
   nodev,		/* cb_strategy */
@@ -104,7 +105,7 @@ static	struct cb_ops tun_cb_ops = {
   nochpoll,		/* cb_chpoll */
   ddi_prop_op,		/* cb_prop_op */
   &tun_info,		/* cb_stream */
-  (D_MP | D_MT_QPAIR | D_MTOUTPERIM | D_MTOCEXCL)	/* cb_flag */
+  (D_MP | D_MTQPAIR | D_MTOUTPERIM | D_MTOCEXCL)	/* cb_flag */
 };
 
 static	struct dev_ops tun_ops = {
@@ -142,7 +143,7 @@ static struct tunstr *tun_str;
 
 int _init(void)
 {
-  cmn_err(CE_CONT, "Universal TUN/TAP device driver ver %s"
+  cmn_err(CE_CONT, "Universal TUN/TAP device driver ver %s "
 		   "(C) 1999-2000 Maxim Krasnyansky\n", TUN_VER);
 
   DBG(CE_CONT,"tun: _init\n");
@@ -171,7 +172,7 @@ static int tunattach(dev_info_t *dev, ddi_attach_cmd_t cmd)
 {
   DBG(CE_CONT,"tun: tunattach\n");
 
-  if(cmd == DDI_ATTACH) {
+  if( cmd == DDI_ATTACH ){
      /* Create the filesystem device node */
      if(ddi_create_minor_node(dev,"tun", S_IFCHR, ddi_get_instance(dev), 
 			      DDI_PSEUDO, CLONE_DEV) == DDI_FAILURE) {
@@ -182,7 +183,7 @@ static int tunattach(dev_info_t *dev, ddi_attach_cmd_t cmd)
 
      ddi_report_dev(dev);
      return (DDI_SUCCESS);
-  } else if (cmd == DDI_RESUME) {
+  } else if( cmd == DDI_RESUME ){
      return DDI_SUCCESS;
   } else
      return DDI_FAILURE;
@@ -192,11 +193,11 @@ static int tundetach(dev_info_t *dev, ddi_detach_cmd_t cmd)
 {
   DBG(CE_CONT,"tun: tundetach\n");
 
-  if(cmd == DDI_DETACH) {
+  if( cmd == DDI_DETACH ){
      ddi_prop_remove_all(dev);
      ddi_remove_minor_node(dev, NULL);
      return (DDI_SUCCESS);
-  } else if ((cmd == DDI_SUSPEND) || (cmd == DDI_PM_SUSPEND)) {
+  } else if( (cmd == DDI_SUSPEND) || (cmd == DDI_PM_SUSPEND) ){
      return (DDI_SUCCESS);
   } else
      return (DDI_FAILURE);
@@ -211,7 +212,7 @@ static int tuninfo(dev_info_t *devi, ddi_info_cmd_t infocmd, void *arg, void **r
 
   DBG(CE_CONT,"tun: tuninfo\n");
 
-  switch (infocmd) {
+  switch( infocmd ){
      case DDI_INFO_DEVT2DEVINFO:
 	*result = tun_dev;
 	return DDI_SUCCESS;
@@ -230,7 +231,7 @@ static int tunopen(queue_t *rq, dev_t *dev, int flag, int sflag, cred_t *credp)
 
   /* Determine minor device number */
   prev = &tun_str;
-  if(sflag == CLONEOPEN){
+  if( sflag == CLONEOPEN ){
      minordev = 0;
      for(; (str = *prev); prev = &str->s_next){
         if(minordev < str->minor)
@@ -241,7 +242,7 @@ static int tunopen(queue_t *rq, dev_t *dev, int flag, int sflag, cred_t *credp)
   } else
      minordev = getminor(*dev);
 
-  if(!rq->q_ptr){
+  if( !rq->q_ptr ){
      str = (struct tunstr *)kmem_zalloc(sizeof(struct tunstr), KM_SLEEP);
      str->rq = rq;
      str->minor = minordev;
@@ -272,7 +273,7 @@ static int tunclose(queue_t *rq)
      if( str->flags & TUN_CONTROL ){
   	DBG(CE_CONT,"tun: closing control stream %p\n", str);
 	
-	/* Unlink PPA from all protocol Streams */
+	/* Unlink all protocol Streams from the PPA */
 	for(tmp = ppa->p_str; tmp; tmp = tmp->p_next){
 	   flushq(WR(tmp->rq), FLUSHDATA);
 	   tmp->ppa = NULL;
@@ -282,7 +283,7 @@ static int tunclose(queue_t *rq)
 	tun_ppa[ppa->id] = NULL;
 	kmem_free((char *)ppa, sizeof(struct tunppa));
      } else {
-	/* Unlink Stream from PPA list */
+	/* Unlink Stream from the PPA list */
 	for(prev = &ppa->p_str; (tmp = *prev); prev = &tmp->p_next)
      	   if( tmp==str ) break;
         *prev = tmp->p_next;
@@ -291,7 +292,7 @@ static int tunclose(queue_t *rq)
 
   /* Unlink Stream from streams list and free it */
   for(prev = &tun_str; (tmp = *prev); prev = &tmp->s_next)
-     if( tmp==str) break;
+     if( tmp==str ) break;
   *prev = tmp->s_next;
   kmem_free((char *)str, sizeof(struct tunstr));
   rq->q_ptr = WR(rq)->q_ptr = NULL;
@@ -307,14 +308,13 @@ static int tunwput(queue_t *wq, mblk_t *mp)
   DBG(CE_CONT, "tun: tunwput str %p\n", str);
 #endif
 
-  switch(DB_TYPE(mp)) {
+  switch( DB_TYPE(mp) ){
      case M_DATA:
 	tun_frame(wq, mp);
 	break;
 
      case M_PROTO:
      case M_PCPROTO:
-	/* Queue all M_PROTO messages for service proc */
 	putq(wq, mp);
 	break;
 
@@ -324,7 +324,6 @@ static int tunwput(queue_t *wq, mblk_t *mp)
 
      case M_FLUSH:
 	/* Flush queues */
-	/* FIXME: In case of control Stream flush all proto streams ??? */
         if(*mp->b_rptr & FLUSHW) {
            flushq(wq, FLUSHALL);
            *mp->b_rptr &= ~FLUSHW;
@@ -353,7 +352,7 @@ static int tunwsrv(queue_t *wq)
 #endif
 
   while( (mp = getq(wq)) )
-     switch (DB_TYPE(mp)) {
+     switch( DB_TYPE(mp) ){
  	 case M_DATA:
 	    tun_frame(wq, mp);
 	    break;
@@ -413,7 +412,7 @@ static void tunioctl(queue_t *wq, mblk_t *mp)
   int p;
 
   DBG(CE_CONT,"tun: tunioctl 0x%x\n", ioc->ioc_cmd);
-  switch(ioc->ioc_cmd){
+  switch( ioc->ioc_cmd ){
      case TUNNEWPPA:
 	/* Allocate new PPA and assign control stream */
 
@@ -848,7 +847,7 @@ static void tun_promiscoff_req(queue_t *wq, mblk_t *mp)
      return;
   }
 
-  switch( ((dl_promiscoff_req_t *)mp->b_rptr)->dl_level){
+  switch( ((dl_promiscoff_req_t *)mp->b_rptr)->dl_level ){
      case DL_PROMISC_PHYS:
         str->flags &= ~TUN_ALL_PHY;
         break;
@@ -871,10 +870,9 @@ static void tun_promiscoff_req(queue_t *wq, mblk_t *mp)
 static void tunproto(queue_t *wq, mblk_t *mp)
 {
   union DL_primitives *dlp = (union DL_primitives *)mp->b_rptr;
-  struct tunstr *str = (struct tunstr *)wq->q_ptr;
   uint32_t prim = dlp->dl_primitive;
 
-  switch(prim) {
+  switch( prim ){
      case DL_INFO_REQ:
         tun_info_req(wq, mp);
         break;

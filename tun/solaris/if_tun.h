@@ -21,10 +21,9 @@
 #ifndef	_SYS_IF_TUN_H
 #define	_SYS_IF_TUN_H
 
-#define TUN_VER "0.5"
-
+#ifdef _KERNEL
 /* Uncomment to enable debuging */
-//#define TUN_DEBUG 1
+/* #define TUN_DEBUG 1 */
 
 #ifdef TUN_DEBUG
 #define DBG	 cmn_err
@@ -32,31 +31,15 @@
 #define DBG( a... )
 #endif
 
-#ifdef _KERNEL
-/*
- * Definitions for module_info.
- */
-#define	TUNIDNUM	(125)		/* module ID number */
-#define	TUNNAME		"tun"		/* module name */
-#define	TUNMINPSZ	(21)		/* min packet size */
-#define	TUNMAXPSZ	2048		/* max packet size */
-#define	TUNHIWAT	(32 * 1024)	/* hi-water mark */
-#define	TUNLOWAT	(1)		/* lo-water mark */
-
-#define TUNMAXPPA	20
-
-/* 
- * PPA structure, one per TUN iface
- */ 
+/* PPA structure, one per TUN iface */ 
 struct tunppa {
   unsigned int id;    		/* Iface number		*/
   queue_t *rq;			/* Control Stream RQ    */
   struct tunstr * p_str; 	/* Protocol Streams 	*/
 }; 
+#define TUNMAXPPA	20
 
-/*
- * Stream structure, one per Stream
- */
+/* Stream structure, one per Stream */
 struct tunstr {
   struct tunstr	*s_next;	/* next in streams list */
   struct tunstr	*p_next;	/* next in ppa list */
@@ -86,9 +69,7 @@ struct tundladdr {
 
 #endif /* _KERNEL */
 
-/*
- * IOCTL defines
- */
+/* IOCTL defines */
 #define TUNNEWPPA	(('T'<<16) | 0x0001)
 #define TUNSETPPA	(('T'<<16) | 0x0002)
 

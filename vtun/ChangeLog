@@ -1,3 +1,8 @@
+ver 2.5:
+	 New config option to keep tun device always open
+	 iproute support
+	 Fixes to support both Linux TUN/TAP drivers.
+
 ver 2.5b1:
 	 Encryption fixes: improved challenge generation, padding check.
 	 Config parser fixes. Don't allow empty passwords.

@@ -18,7 +18,6 @@ Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: Dag Wieers <dag@mind.be>
 BuildRoot: /var/tmp/%{name}-%{version}-build
 Obsoletes: vppp
-Buildrequires: lzo-devel
 
 %description
 VTun provides the method for creating Virtual Tunnels over TCP/IP networks
@@ -35,7 +34,7 @@ This package is build with%{!?USE_SOCKS:out} SOCKS-support.
 
 %prep
 
-%setup -n %{name}-%{version}
+%setup -n %{name}
 %configure			   \
             --prefix=/usr 	   \
 	    --sysconfdir=/etc 	   \
@@ -69,7 +68,7 @@ make install SBIN_DIR=$RPM_BUILD_ROOT/usr/sbin \
 %doc ChangeLog Credits FAQ README README.Setup README.Shaper TODO
 %doc TODO vtund.conf 
 %attr(755,root,root) %config /etc/rc.d/init.d/vtund
-%attr(600,root,root) %config(noreplace) /etc/vtund.conf
+%attr(600,root,root) %config /etc/vtund.conf
 %attr(755,root,root) /usr/sbin/vtund
 %attr(755,root,root) %dir /var/log/vtund
 %attr(755,root,root) %dir /var/lock/vtund
@@ -78,10 +77,6 @@ make install SBIN_DIR=$RPM_BUILD_ROOT/usr/sbin \
 /usr/man/man5/vtund.conf.5*
 
 %changelog
-* Mon Jan 14 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-2
-- noreplace to vtund.conf to prevent Freshen from clobbering config.
-- added buildrequires to prevent failed builds.
-
 * Mon May 29 2000 Michael Tokarev <mjt@tls.msk.ru>
 - Allow to build as non-root (using new INSTALL_OWNER option)
 - Added vtund.conf.5 manpage

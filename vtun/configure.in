@@ -156,7 +156,7 @@ AC_MSG_RESULT()
 
 dnl Build release name
 changequote(<,>)
-REL=`echo 'substr($Name,0)$' | tr -d '$:- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+REL=`echo 'substr($Name,0)$' | tr -d '$:\- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
 changequote([,])
 
 AC_DEFINE_UNQUOTED(VTUN_VER, "$REL `date '+%m/%d/%Y'`")

@@ -60,12 +60,12 @@ void connection(int sock)
 
 	opt = sizeof(struct sockaddr_in);
 	if (getpeername(sock, (struct sockaddr *) &cl_addr, &opt)) {
-		syslog(LOG_ERR, "Can't get peer name");
+		vtun_syslog(LOG_ERR, "Can't get peer name");
 		exit(1);
 	}
 	opt = sizeof(struct sockaddr_in);
 	if (getsockname(sock, (struct sockaddr *) &my_addr, &opt) < 0) {
-		syslog(LOG_ERR, "Can't get local socket address");
+		vtun_syslog(LOG_ERR, "Can't get local socket address");
 		exit(1);
 	}
 
@@ -78,8 +78,8 @@ void connection(int sock)
 		sa.sa_flags = SA_NOCLDWAIT;;
 		sigaction(SIGHUP, &sa, NULL);
 
-		syslog(LOG_INFO, "Session %s[%s:%d] opened", host->host,
-		       ip, ntohs(cl_addr.sin_port));
+		vtun_syslog(LOG_INFO, "Session %s[%s:%d] opened", host->host,
+			    ip, ntohs(cl_addr.sin_port));
 		host->rmt_fd = sock;
 
 		host->sopt.laddr = strdup(inet_ntoa(my_addr.sin_addr));
@@ -90,13 +90,13 @@ void connection(int sock)
 		/* Start tunnel */
 		tunnel(host);
 
-		syslog(LOG_INFO, "Session %s closed", host->host);
+		vtun_syslog(LOG_INFO, "Session %s closed", host->host);
 
 		/* Unlock host. (locked in auth_server) */
 		unlock_host(host);
 	} else {
-		syslog(LOG_INFO, "Denied connection from %s:%d", ip,
-		       ntohs(cl_addr.sin_port));
+		vtun_syslog(LOG_INFO, "Denied connection from %s:%d", ip,
+			    ntohs(cl_addr.sin_port));
 	}
 	close(sock);
 
@@ -114,7 +114,7 @@ void listener(void)
 	my_addr.sin_port = htons(vtun.svr_port);
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-		syslog(LOG_ERR, "Can't create socket");
+		vtun_syslog(LOG_ERR, "Can't create socket");
 		exit(1);
 	}
 
@@ -122,12 +122,12 @@ void listener(void)
 	setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
 	if (bind(s, (struct sockaddr *) &my_addr, sizeof(my_addr))) {
-		syslog(LOG_ERR, "Can't bind to the socket");
+		vtun_syslog(LOG_ERR, "Can't bind to the socket");
 		exit(1);
 	}
 
 	if (listen(s, 10)) {
-		syslog(LOG_ERR, "Can't listen on the socket");
+		vtun_syslog(LOG_ERR, "Can't listen on the socket");
 		exit(1);
 	}
 
@@ -145,7 +145,7 @@ void listener(void)
 			connection(s1);
 			break;
 		case -1:
-			syslog(LOG_ERR, "Couldn't fork()");
+	      vtun_syslog(LOG_ERR, "Couldn't fork()");
 		default:
 			close(s1);
 			break;
@@ -165,8 +165,8 @@ void server(int sock)
 	sigaction(SIGPIPE, &sa, NULL);
 	sigaction(SIGUSR1, &sa, NULL);
 
-	syslog(LOG_INFO, "VTUN server ver %s (%s)", VTUN_VER,
-	       vtun.svr_type == VTUN_INETD ? "inetd" : "stand");
+	vtun_syslog(LOG_INFO, "VTUN server ver %s (%s)", VTUN_VER,
+		    vtun.svr_type == VTUN_INETD ? "inetd" : "stand");
 
 	switch (vtun.svr_type) {
 	case VTUN_STAND_ALONE:

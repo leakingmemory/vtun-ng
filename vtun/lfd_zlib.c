@@ -57,20 +57,20 @@ int zlib_alloc(struct vtun_host *host)
 	zi.opaque = (voidpf) 0;
 
 	if (deflateInit(&zd, zlevel) != Z_OK) {
-		syslog(LOG_ERR, "Can't initialize compressor");
+		vtun_syslog(LOG_ERR, "Can't initialize compressor");
 		return 1;
 	}
 	if (inflateInit(&zi) != Z_OK) {
-		syslog(LOG_ERR, "Can't initialize decompressor");
+		vtun_syslog(LOG_ERR, "Can't initialize decompressor");
 		return 1;
 	}
 	if (!(zbuf = (void *) lfd_alloc(zbuf_size))) {
-		syslog(LOG_ERR,
+		vtun_syslog(LOG_ERR,
 		       "Can't allocate buffer for the compressor");
 		return 1;
 	}
 
-	syslog(LOG_INFO, "ZLIB compression[level %d] initialized.",
+	vtun_syslog(LOG_INFO, "ZLIB compression[level %d] initialized.",
 	       zlevel);
 	return 0;
 }
@@ -120,7 +120,7 @@ int zlib_comp(int len, char *in, char **out)
 	while (1) {
 		oavail = zd.avail_out;
 		if ((err = deflate(&zd, Z_SYNC_FLUSH)) != Z_OK) {
-			syslog(LOG_ERR, "Deflate error %d", err);
+			vtun_syslog(LOG_ERR, "Deflate error %d", err);
 			return -1;
 		}
 		olen += oavail - zd.avail_out;
@@ -128,7 +128,7 @@ int zlib_comp(int len, char *in, char **out)
 			break;
 
 		if (expand_zbuf(&zd, 100)) {
-			syslog(LOG_ERR, "Can't expand compression buffer");
+			vtun_syslog(LOG_ERR, "Can't expand compression buffer");
 			return -1;
 		}
 	}
@@ -149,15 +149,15 @@ int zlib_decomp(int len, char *in, char **out)
 	while (1) {
 		oavail = zi.avail_out;
 		if ((err = inflate(&zi, Z_SYNC_FLUSH)) != Z_OK) {
-			syslog(LOG_ERR, "Inflate error %d len %d", err,
-			       len);
+			vtun_syslog(LOG_ERR, "Inflate error %d len %d", err,
+				    len);
 			return -1;
 		}
 		olen += oavail - zi.avail_out;
 		if (!zi.avail_in)
 			break;
 		if (expand_zbuf(&zi, 100)) {
-			syslog(LOG_ERR, "Can't expand compression buffer");
+			vtun_syslog(LOG_ERR, "Can't expand compression buffer");
 			return -1;
 		}
 	}
@@ -181,7 +181,7 @@ struct lfd_mod lfd_zlib = {
 
 int no_zlib(struct vtun_host *host)
 {
-	syslog(LOG_INFO, "ZLIB compression is not supported");
+     vtun_syslog(LOG_INFO, "ZLIB compression is not supported");
 	return -1;
 }
 

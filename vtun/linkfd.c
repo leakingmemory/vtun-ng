@@ -160,14 +160,14 @@ static volatile sig_atomic_t linker_term;
 
 static void sig_term(int sig)
 {
-	syslog(LOG_INFO, "Closing connection");
+     vtun_syslog(LOG_INFO, "Closing connection");
 	io_cancel();
 	linker_term = VTUN_SIG_TERM;
 }
 
 static void sig_hup(int sig)
 {
-	syslog(LOG_INFO, "Reestablishing connection");
+     vtun_syslog(LOG_INFO, "Reestablishing connection");
 	io_cancel();
 	linker_term = VTUN_SIG_HUP;
 }
@@ -205,7 +205,7 @@ int lfd_linker(void)
 	int maxfd, idle = 0;
 
 	if (!(buf = lfd_alloc(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD))) {
-		syslog(LOG_ERR, "Can't allocate buffer for the linker");
+		vtun_syslog(LOG_ERR, "Can't allocate buffer for the linker");
 		return 0;
 	}
 
@@ -236,9 +236,9 @@ int lfd_linker(void)
 			/* We are idle, lets check connection */
 			if (lfd_host->flags & VTUN_KEEP_ALIVE) {
 				if (++idle > lfd_host->ka_failure) {
-					syslog(LOG_INFO,
-					       "Session %s network timeout",
-					       lfd_host->host);
+					vtun_syslog(LOG_INFO,
+						    "Session %s network timeout",
+						    lfd_host->host);
 					break;
 				}
 				/* Send ECHO request */
@@ -261,7 +261,7 @@ int lfd_linker(void)
 			len = len & VTUN_FSIZE_MASK;
 			if (fl) {
 				if (fl == VTUN_BAD_FRAME) {
-					syslog(LOG_ERR,
+					vtun_syslog(LOG_ERR,
 					       "Received bad frame");
 					continue;
 				}
@@ -277,7 +277,7 @@ int lfd_linker(void)
 					continue;
 				}
 				if (fl == VTUN_CONN_CLOSE) {
-					syslog(LOG_INFO,
+					vtun_syslog(LOG_INFO,
 					       "Connection closed by other side");
 					break;
 				}
@@ -317,7 +317,7 @@ int lfd_linker(void)
 		}
 	}
 	if (!linker_term && errno)
-		syslog(LOG_INFO, "%s (%d)", strerror(errno), errno);
+		vtun_syslog(LOG_INFO, "%s (%d)", strerror(errno), errno);
 
 	if (linker_term == VTUN_SIG_TERM) {
 		lfd_host->persist = 0;
@@ -377,7 +377,7 @@ int linkfd(struct vtun_host *host)
 			setvbuf(host->stat.file, NULL, _IOLBF, 0);
 			alarm(VTUN_STAT_IVAL);
 		} else
-			syslog(LOG_ERR, "Can't open stats file %s", file);
+	   vtun_syslog(LOG_ERR, "Can't open stats file %s", file);
 	}
 
 	io_init();

@@ -84,36 +84,36 @@ int tunnel(struct vtun_host *host)
 		switch (host->flags & VTUN_TYPE_MASK) {
 		case VTUN_TTY:
 			if ((fd[0] = pty_open(dev)) < 0) {
-				syslog(LOG_ERR,
-				       "Can't allocate pseudo tty. %s(%d)",
-				       strerror(errno), errno);
+				vtun_syslog(LOG_ERR,
+					    "Can't allocate pseudo tty. %s(%d)",
+					    strerror(errno), errno);
 				return -1;
 			}
 			break;
 
 		case VTUN_PIPE:
 			if (pipe_open(fd) < 0) {
-				syslog(LOG_ERR,
-				       "Can't create pipe. %s(%d)",
-				       strerror(errno), errno);
+				vtun_syslog(LOG_ERR,
+					    "Can't create pipe. %s(%d)",
+					    strerror(errno), errno);
 				return -1;
 			}
 			break;
 
 		case VTUN_ETHER:
 			if ((fd[0] = tap_open(dev)) < 0) {
-				syslog(LOG_ERR,
-				       "Can't allocate tap device %s. %s(%d)",
-				       dev, strerror(errno), errno);
+				vtun_syslog(LOG_ERR,
+					    "Can't allocate tap device %s. %s(%d)",
+					    dev, strerror(errno), errno);
 				return -1;
 			}
 			break;
 
 		case VTUN_TUN:
 			if ((fd[0] = tun_open(dev)) < 0) {
-				syslog(LOG_ERR,
-				       "Can't allocate tun device %s. %s(%d)",
-				       dev, strerror(errno), errno);
+				vtun_syslog(LOG_ERR,
+					    "Can't allocate tun device %s. %s(%d)",
+					    dev, strerror(errno), errno);
 				return -1;
 			}
 			break;
@@ -139,7 +139,7 @@ int tunnel(struct vtun_host *host)
 
 	case VTUN_UDP:
 		if ((opt = udp_session(host)) == -1) {
-			syslog(LOG_ERR, "Can't establish UDP session");
+			vtun_syslog(LOG_ERR, "Can't establish UDP session");
 			close(fd[1]);
 			if (!(host->persist == VTUN_PERSIST_KEEPIF))
 				close(fd[0]);
@@ -157,7 +157,7 @@ int tunnel(struct vtun_host *host)
 		/* do this only the first time when in persist = keep_if mode */
 		switch ((pid = fork())) {
 		case -1:
-			syslog(LOG_ERR, "Couldn't fork()");
+			vtun_syslog(LOG_ERR, "Couldn't fork()");
 			if (!(host->persist == VTUN_PERSIST_KEEPIF))
 				close(fd[0]);
 			close(fd[1]);
@@ -167,8 +167,8 @@ int tunnel(struct vtun_host *host)
 			case VTUN_TTY:
 				/* Open pty slave (becomes controlling terminal) */
 				if ((fd[1] = open(dev, O_RDWR)) < 0) {
-					syslog(LOG_ERR,
-					       "Couldn't open slave pty");
+					vtun_syslog(LOG_ERR,
+						    "Couldn't open slave pty");
 					exit(0);
 				}
 				/* Fall through */

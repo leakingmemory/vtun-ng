@@ -62,6 +62,11 @@ static inline void io_cancel(void)
 	__io_canceled = 1;
 }
 
+/* signal safe syslog function */
+extern volatile sig_atomic_t __in_syslog;
+void vtun_openlog (char *ident, int option, int facility);
+void vtun_syslog (int priority, char *format, ...);
+
 /* Read exactly len bytes (Signal safe)*/
 static inline int read_n(int fd, char *buf, int len)
 {

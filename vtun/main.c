@@ -87,7 +87,7 @@ int main(int argc, char *argv[], char *env[])
 	default_host.loc_fd = default_host.rmt_fd = -1;
 
 	/* Start logging to syslog and stderr */
-	openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
+	vtun_openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
 
 	while ((opt = getopt(argc, argv, "isf:P:t:nph")) != EOF) {
 		switch (opt) {
@@ -122,8 +122,8 @@ int main(int argc, char *argv[], char *env[])
 	if (vtun.syslog != LOG_DAEMON) {
 		/* Restart logging to syslog using specified facility  */
 		closelog();
-		openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR,
-			vtun.syslog);
+		vtun_openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR,
+			     vtun.syslog);
 	}
 
 	if (!svr) {
@@ -134,8 +134,8 @@ int main(int argc, char *argv[], char *env[])
 		hst = argv[optind++];
 
 		if (!(host = find_host(hst))) {
-			syslog(LOG_ERR, "Host %s not found in %s", hst,
-			       vtun.cfg_file);
+			vtun_syslog(LOG_ERR, "Host %s not found in %s", hst,
+				    vtun.cfg_file);
 			exit(1);
 		}
 
@@ -212,7 +212,7 @@ void write_pid(void)
 	FILE *f;
 
 	if (!(f = fopen(VTUN_PID_FILE, "w"))) {
-		syslog(LOG_ERR, "Can't write PID file %s", VTUN_PID_FILE);
+		vtun_syslog(LOG_ERR, "Can't write PID file %s", VTUN_PID_FILE);
 		return;
 	}
 
@@ -223,7 +223,7 @@ void write_pid(void)
 void reread_config(int sig)
 {
 	if (!read_config(vtun.cfg_file)) {
-		syslog(LOG_ERR, "No hosts defined");
+		vtun_syslog(LOG_ERR, "No hosts defined");
 		exit(1);
 	}
 }

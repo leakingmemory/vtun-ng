@@ -61,7 +61,7 @@
 
 #ifndef __APPLE_CC__
 #include <rand.h>
-#endif  __APPLE_CC__
+#endif  /* __APPLE_CC__ */
 
 #include "vtun.h"
 #include "linkfd.h"
@@ -173,8 +173,8 @@ unsigned char *session_key(struct vtun_host *host)
 	}
 	/* return(MD5(host->passwd, strlen(host->passwd), NULL)); */
 	memcpy(fun, buf, ENC_KEY_SIZE);
-	syslog(LOG_ERR, "blowfish: %s key %08x %08x %08x %08x", mode,
-	       htonl(fun[0]), htonl(fun[1]), htonl(fun[2]), htonl(fun[3]));
+	vtun_syslog(LOG_ERR, "blowfish: %s key %08x %08x %08x %08x", mode,
+		    htonl(fun[0]), htonl(fun[1]), htonl(fun[2]), htonl(fun[3]));
 	return (buf);
 }
 
@@ -183,7 +183,7 @@ int alloc_encrypt(struct vtun_host *host)
 	char *mode;
 
 	if ((enc_buf = (char *) lfd_alloc(ENC_BUF_SIZE)) == NULL) {
-		syslog(LOG_ERR, "Unable to allocate encryption buffer");
+		vtun_syslog(LOG_ERR, "Unable to allocate encryption buffer");
 		return -1;
 	}
 
@@ -197,7 +197,7 @@ int alloc_encrypt(struct vtun_host *host)
 		mode = "ecb";
 	}
 
-	syslog(LOG_INFO, "blowfish/%s encryption initialized", mode);
+	vtun_syslog(LOG_INFO, "blowfish/%s encryption initialized", mode);
 	return 0;
 }
 

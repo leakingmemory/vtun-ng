@@ -67,21 +67,21 @@ int alloc_lzo(struct vtun_host *host)
 	}
 
 	if (lzo_init() != LZO_E_OK) {
-		syslog(LOG_ERR, "Can't initialize compressor");
+		vtun_syslog(LOG_ERR, "Can't initialize compressor");
 		return 1;
 	}
 	if (!(zbuf = lfd_alloc(zbuf_size))) {
-		syslog(LOG_ERR,
-		       "Can't allocate buffer for the compressor");
+		vtun_syslog(LOG_ERR,
+			    "Can't allocate buffer for the compressor");
 		return 1;
 	}
 	if (!(wmem = lzo_malloc(mem))) {
-		syslog(LOG_ERR,
-		       "Can't allocate buffer for the compressor");
+		vtun_syslog(LOG_ERR,
+			    "Can't allocate buffer for the compressor");
 		return 1;
 	}
 
-	syslog(LOG_INFO, "LZO compression[level %d] initialized", zlevel);
+	vtun_syslog(LOG_INFO, "LZO compression[level %d] initialized", zlevel);
 
 	return 0;
 }
@@ -112,7 +112,7 @@ int comp_lzo(int len, char *in, char **out)
 	if ((err =
 	     lzo1x_compress((void *) in, len, zbuf, &zlen,
 			    wmem)) != LZO_E_OK) {
-		syslog(LOG_ERR, "Compress error %d", err);
+		vtun_syslog(LOG_ERR, "Compress error %d", err);
 		return -1;
 	}
 
@@ -128,7 +128,7 @@ int decomp_lzo(int len, char *in, char **out)
 	if ((err =
 	     lzo1x_decompress((void *) in, len, zbuf, &zlen,
 			      wmem)) != LZO_E_OK) {
-		syslog(LOG_ERR, "Decompress error %d", err);
+		vtun_syslog(LOG_ERR, "Decompress error %d", err);
 		return -1;
 	}
 
@@ -152,7 +152,7 @@ struct lfd_mod lfd_lzo = {
 
 int no_lzo(struct vtun_host *host)
 {
-	syslog(LOG_INFO, "LZO compression is not supported");
+     vtun_syslog(LOG_INFO, "LZO compression is not supported");
 	return -1;
 }
 

@@ -101,10 +101,10 @@ if [ x%{IsSuSE} = x1 ]; then
 #rc config
 echo "Updating etc/rc.config..."
 if [ -x bin/fillup ] ; then
-  bin/fillup -q -d = etc/rc.config var/adm/fillup-templates/rc.config.cpxml
+  bin/fillup -q -d = etc/rc.config var/adm/fillup-templates/rc.config.vtund
 else
   echo "ERROR: fillup not found. This should not happen. Please compare"
-  echo "etc/rc.config and var/adm/fillup-templates/rc.config.cpxml and"
+  echo "etc/rc.config and var/adm/fillup-templates/rc.config.vtund and"
   echo "update by hand."
 fi
 sbin/insserv etc/init.d/vtund

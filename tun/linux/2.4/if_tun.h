@@ -21,10 +21,6 @@
 /* Uncomment to enable debugging */
 /* #define TUN_DEBUG 1 */
 
-#ifndef TUN_MAJOR
-#define TUN_MAJOR 195
-#endif
-
 #ifdef __KERNEL__
 
 #ifdef TUN_DEBUG

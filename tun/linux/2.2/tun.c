@@ -85,8 +85,6 @@ static int tun_net_xmit(struct sk_buff *skb, struct device *dev)
    if( dev->tbusy )
       return 1;
 
-   tun->stats.tx_packets++;
-
    /* Queue frame */ 
    skb_queue_tail(&tun->txq, skb);
    if( skb_queue_len(&tun->txq) >= TUN_TXQ_SIZE )
@@ -229,6 +227,7 @@ static ssize_t tun_chr_write(struct file * file, const char * buf,
    netif_rx(skb);
    
    tun->stats.rx_packets++;
+   tun->stats.rx_bytes += count;
 
    return count;
 }
@@ -278,6 +277,9 @@ static ssize_t tun_chr_read(struct file * file, char * buf,
 	 ret = len;
 
       dev_kfree_skb(skb);
+
+      tun->stats.tx_packets++;
+      tun->stats.tx_bytes += len;
 
       break; 
    }

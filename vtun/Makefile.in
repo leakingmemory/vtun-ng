@@ -80,6 +80,7 @@ distclean: clean
 install_man: 
 	$(INSTALL) -d -m 755 -o root -g 0 $(MAN_DIR)/man8
 	$(INSTALL) -m 644 -o root -g 0 vtund.8 $(MAN_DIR)/man8
+	$(INSTALL) -m 644 -o root -g 0 vtund.conf.5 $(MAN_DIR)/man5
 	rm -f $(MAN_DIR)/man8/vtun.8 
 	ln -s vtund.8 $(MAN_DIR)/man8/vtun.8 
 

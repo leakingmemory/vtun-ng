@@ -21,10 +21,6 @@
 /* Uncomment to enable debugging */
 /* #define TUN_DEBUG 1 */
 
-#ifndef TUN_MAJOR
-#define TUN_MAJOR 90
-#endif
-
 #ifdef __KERNEL__
 
 #ifdef TUN_DEBUG
@@ -39,12 +35,12 @@ struct tun_struct {
 	char 			name[8];
 	unsigned long 		flags;
 
-	struct fasync_struct    fasync;
+	struct fasync_struct    *fasync;
 	wait_queue_head_t	read_wait;
 
 	struct net_device	dev;
 	struct sk_buff_head	txq;
-        struct enet_statistics 	stats;
+        struct net_device_stats	stats;
 
 #ifdef TUN_DEBUG	
 	int debug;

@@ -38,11 +38,11 @@
 #include <linux/if.h>
 #include <linux/if_arp.h>
 #include <linux/if_ether.h>
+#include <linux/if_tun.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
-#include "if_tun.h"
 
 #ifdef TUN_DEBUG
 static int debug=0;
@@ -122,7 +122,7 @@ static void tun_net_mclist(struct net_device *dev)
    return;
 }
 
-static struct enet_statistics *tun_net_stats(struct net_device *dev)
+static struct net_device_stats *tun_net_stats(struct net_device *dev)
 {
    struct tun_struct *tun = (struct tun_struct *)dev->priv;
    return &tun->stats;
@@ -321,29 +321,17 @@ static int tun_chr_ioctl(struct inode *inode, struct file *file,
 static int tun_chr_fasync(int fd, struct file *file, int on)
 {
    struct tun_struct *tun = (struct tun_struct *)file->private_data;
- 
+   register int ret;
+
    DBG(KERN_INFO "%s: tun_chr_fasync %d\n", tun->name, on);
 
-   if( on ) {
-      /* Enable FASYNC mode 
-       * We don't need any fasync queue since only one process 
-       * is allowed to open TUN device 
-       */
-      if( !file->f_owner.pid ) {
-         file->f_owner.pid  = current->pid;
-         file->f_owner.uid  = current->uid; 
-         file->f_owner.euid = current->euid;
-      }
-      tun->fasync.magic   = FASYNC_MAGIC;
-      tun->fasync.fa_file = file;
-      tun->fasync.fa_fd   = fd;
-      tun->fasync.fa_next = NULL;
-
-      tun->flags |= TUN_FASYNC;
-   } else {
-      /* Disable FASYNC mode */
-      tun->flags &= ~TUN_FASYNC;
-   }	
+   if( (ret = fasync_helper(fd, file, on, &tun->fasync)) < 0 )
+      return ret; 
+ 
+   if( on )
+     tun->flags |= TUN_FASYNC;
+   else 
+     tun->flags &= ~TUN_FASYNC;
 
    return 0;
 }
@@ -438,24 +426,21 @@ static int tun_chr_close(struct inode *inode, struct file *file)
 }
 
 static struct file_operations tun_fops = {
-   tun_chr_lseek,
-   tun_chr_read,
-   tun_chr_write,
-   NULL,		/* readdir */
-   tun_chr_poll,
-   tun_chr_ioctl,
-   NULL,		/* mmap */
-   tun_chr_open,
-   NULL,		/* flush */
-   tun_chr_close,
-   NULL,		/* fsync */
-   tun_chr_fasync		
+   owner:	THIS_MODULE,	
+   llseek:	tun_chr_lseek,
+   read:	tun_chr_read,
+   write:	tun_chr_write,
+   poll:	tun_chr_poll,
+   ioctl:	tun_chr_ioctl,
+   open:	tun_chr_open,
+   release:	tun_chr_close,
+   fasync:	tun_chr_fasync		
 };
 
 int tun_init(void)
 {
    printk(KERN_INFO "Universal TUN/TAP device driver %s " 
-		    "(c) Maxim Krasnyansky\n", TUN_VER);
+		    "(C)1999-2000 Maxim Krasnyansky\n", TUN_VER);
 
    if( register_chrdev(TUN_MAJOR,"tun", &tun_fops) ){
       printk(KERN_ERR "tun: Can't register char device %d\n", TUN_MAJOR);
@@ -466,7 +451,7 @@ int tun_init(void)
    return 0;
 #else
    /* If driver is not module, tun_init will be called from Space.c.
-    * Return non-zero to not register fake device. */	
+    * Return non-zero not to register fake device. */	
    return 1;
 #endif
 }

@@ -22,6 +22,7 @@
 
 #define TUN_VER "1.4"
 
+#include <linux/config.h>
 #include <linux/module.h>
 
 #include <linux/errno.h>
@@ -48,7 +49,7 @@
 #include <asm/uaccess.h>
 
 #ifdef TUN_DEBUG
-static int debug=0;
+static int debug;
 #endif
 
 /* Network device part of the driver */
@@ -141,8 +142,6 @@ int tun_net_init(struct net_device *dev)
 		dev->type = ARPHRD_PPP; 
 		dev->flags = IFF_POINTOPOINT | IFF_NOARP | IFF_MULTICAST;
 		dev->tx_queue_len = 10;
-
-		dev_init_buffers(dev);
 		break;
 
 	case TUN_TAP_DEV:
@@ -188,9 +187,6 @@ static __inline__ ssize_t tun_get_user(struct tun_struct *tun, const char *buf, 
 	register const char *ptr = buf; 
 	register int len = count;
 	struct sk_buff *skb;
-
-	if (len > TUN_MAX_FRAME)
-		return -EINVAL;
 
 	if (!(tun->flags & TUN_NO_PI)) {
 		if ((len -= sizeof(pi)) < 0)
@@ -290,7 +286,7 @@ static ssize_t tun_chr_read(struct file * file, char * buf,
 	struct sk_buff *skb;
 	ssize_t ret = 0;
 
-	if( !tun )
+	if (!tun)
 		return -EBADFD;
 
 	DBG(KERN_INFO "%s: tun_chr_read\n", tun->name);
@@ -432,7 +428,7 @@ static int tun_chr_ioctl(struct inode *inode, struct file *file,
 		err = tun_set_iff(file, &ifr);
 		rtnl_unlock();
 
-		if( err )
+		if (err)
 			return err;
 
 		copy_to_user((void *)arg, &ifr, sizeof(ifr));
@@ -492,7 +488,7 @@ static int tun_chr_fasync(int fd, struct file *file, int on)
 	struct tun_struct *tun = (struct tun_struct *)file->private_data;
 	int ret;
 
-	if( !tun )
+	if (!tun)
 		return -EBADFD;
 
 	DBG(KERN_INFO "%s: tun_chr_fasync %d\n", tun->name, on);
@@ -516,6 +512,7 @@ static int tun_chr_fasync(int fd, struct file *file, int on)
 static int tun_chr_open(struct inode *inode, struct file * file)
 {
 	DBG1(KERN_INFO "tunX: tun_chr_open\n");
+	file->private_data = NULL;
 	return 0;
 }
 
@@ -523,12 +520,12 @@ static int tun_chr_close(struct inode *inode, struct file *file)
 {
 	struct tun_struct *tun = (struct tun_struct *)file->private_data;
 
-	if( !tun )
+	if (!tun)
 		return 0;
 
 	DBG(KERN_INFO "%s: tun_chr_close\n", tun->name);
 
-    tun_chr_fasync(-1, file, 0);
+	tun_chr_fasync(-1, file, 0);
 
 	rtnl_lock();
 

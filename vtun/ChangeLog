@@ -1,3 +1,7 @@
+ver 2.2:
+	 Added support for new OpenBSD tun driver. Fixes for generic tun driver support.
+         Configure fixes. Small cleanups.
+
 ver 2.1:
 	 Final stable 2.1 release.
          Small cleanups.

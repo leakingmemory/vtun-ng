@@ -2227,7 +2227,7 @@ esac
 echo "$ac_t""" 1>&6
 
 
-REL=`echo '$Name$' | tr -d '$:- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+REL=`echo '$Name$' | tr -d '$:\- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
 
 
 cat >> confdefs.h <<EOF

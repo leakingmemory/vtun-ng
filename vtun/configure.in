@@ -91,7 +91,7 @@ AC_CHECK_LIB(z, deflate,
 AC_MSG_RESULT()
 AC_CHECKING( for SSL Library and Header files ... )
 AC_SEARCH_HEADERS(md5.h blowfish.h,
-   $SSL_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include,
+   $SSL_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include,
    AC_CHECK_LIB(crypto, BF_set_key,,
 	AC_MSG_ERROR(SSL library not found.)
    ),
@@ -102,7 +102,7 @@ if test "$LZO" = "yes"; then
    AC_MSG_RESULT()
    AC_CHECKING( for LZO Library and Header files ... )
    AC_SEARCH_HEADERS(lzo1x.h, 
-	$LZO_HDR_DIR /usr/include/lzo /usr/include,
+	$LZO_HDR_DIR /usr/include/lzo /usr/include /usr/local/include,
         AC_CHECK_LIB(lzo, lzo1x_decompress,
 	    [
 	       LIBS="$LIBS -llzo"
@@ -156,7 +156,7 @@ AC_MSG_RESULT()
 
 dnl Build release name
 changequote(<,>)
-REL=`echo 'substr($Name,0)$' | tr -d '$:\- ' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+REL=`echo 'substr($Name,0)$' | tr -d '$: \-' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
 changequote([,])
 
 AC_DEFINE_UNQUOTED(VTUN_VER, "$REL `date '+%m/%d/%Y'`")

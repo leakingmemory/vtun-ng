@@ -1,0 +1,28 @@
+Universal TUN/TAP device driver Frequently Asked Question.
+   
+1. What is the TUN ?
+The TUN is Virtual Point-to-Point network device.
+
+2. What is the TAP ?
+The TAP is a Virtual Ethernet network device.
+
+3. What platforms are supported by TUN/TAP driver ?
+Currently driver has been written for 3 Unices:
+   Linux kernels 2.2.x, 2.4.x 
+   FreeBSD 3.x, 4.x
+   Solaris 7.0, 8.0 (beta stage)
+
+4. How does Virtual network device actually work ? 
+Virtual network device can be viewed as a simple Point-to-Point or
+Ethernet device, which instead of receiving packets from a physical 
+media, receives them from user space program and instead of sending 
+packets via physical media writes them to the user space program. 
+
+Let's say that you configured IPX on the tap0, then whenever 
+kernel sends any IPX packet to tap0, it is passed to the application
+(VTun for example). Application encrypts, compresses and sends it to 
+the other side over TCP or UDP. Application on other side decompress 
+and decrypts them and write packet to the TAP device, kernel handles 
+the packet like it came from real physical device.
+
+

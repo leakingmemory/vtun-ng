@@ -1,0 +1,29 @@
+Universal TUN/TAP device driver.
+Copyright (C) 1999-2000 Maxim Krasnyansky <max_mk@yahoo.com>
+
+1. Description
+  TUN provides packet reception and transmission for user space programs. 
+  It can be viewed as a simple Point-to-Point or Ethernet device, which 
+  instead of receiving packets from a physical media, receives them from 
+  user space program and instead of sending packets via physical media 
+  writes them to the user space program. 
+
+  When a program opens /dev/tunX or /dev/tapX, driver creates and 
+  registers corresponding net device tunX or tapX. After a program closed 
+  above devices, driver will automatically delete tunXX or tapXX device 
+  and all routes corresponding to it.
+
+  This package(http://vtun.sourceforge.net/tun) contains two simple example 
+  programs how to use tun and tap devices. Both programs works like 
+  bridge between two network interfaces.
+  br_select.c - bridge based on select system call.
+  br_sigio.c  - bridge based on async io and SIGIO signal.
+  However the best example is VTun http://vtun.sourceforge.net :))  
+
+2. Installation
+  Run './configure' to configure the driver.
+
+  Run 'make install' to compile and install driver module and to create 
+  /dev/tunXX and /dev/tapXX device nodes.
+
+  Add 'insmod tun' to one of the startup rc files.

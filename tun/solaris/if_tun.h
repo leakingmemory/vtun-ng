@@ -1,0 +1,96 @@
+/*
+ *  Universal TUN/TAP device driver.
+ *
+ *  Multithreaded STREAMS tun pseudo device driver.
+ *
+ *  Copyright (C) 1999-2000 Maxim Krasnyansky <max_mk@yahoo.com>
+ *  
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *  
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ *  GNU General Public License for more details.
+ *
+ *  $Id$
+ */
+
+#ifndef	_SYS_IF_TUN_H
+#define	_SYS_IF_TUN_H
+
+#define TUN_VER "0.5"
+
+/* Uncomment to enable debuging */
+//#define TUN_DEBUG 1
+
+#ifdef TUN_DEBUG
+#define DBG	 cmn_err
+#else
+#define DBG( a... )
+#endif
+
+#ifdef _KERNEL
+/*
+ * Definitions for module_info.
+ */
+#define	TUNIDNUM	(125)		/* module ID number */
+#define	TUNNAME		"tun"		/* module name */
+#define	TUNMINPSZ	(21)		/* min packet size */
+#define	TUNMAXPSZ	2048		/* max packet size */
+#define	TUNHIWAT	(32 * 1024)	/* hi-water mark */
+#define	TUNLOWAT	(1)		/* lo-water mark */
+
+#define TUNMAXPPA	20
+
+/* 
+ * PPA structure, one per TUN iface
+ */ 
+struct tunppa {
+  unsigned int id;    		/* Iface number		*/
+  queue_t *rq;			/* Control Stream RQ    */
+  struct tunstr * p_str; 	/* Protocol Streams 	*/
+}; 
+
+/*
+ * Stream structure, one per Stream
+ */
+struct tunstr {
+  struct tunstr	*s_next;	/* next in streams list */
+  struct tunstr	*p_next;	/* next in ppa list */
+  kmutex_t lock;		/* protect this structure */
+  queue_t *rq;			/* pointer to rq */
+
+  struct tunppa *ppa;		/* assigned PPA */
+  u_long flags;			/* flags */
+  u_long state;			/* DL state */
+  u_long sap;			/* bound sap */
+  u_long minor;			/* minor device number */
+};
+
+/* Flags */
+#define TUN_CONTROL	0x0001
+
+#define TUN_RAW		0x0100
+#define TUN_FAST	0x0200
+
+#define TUN_ALL_PHY	0x0010
+#define TUN_ALL_SAP	0x0020
+#define TUN_ALL_MUL	0x0040
+
+struct tundladdr {
+  u_short sap;
+};
+#define TUN_ADDR_LEN  (sizeof(struct tundladdr))
+
+#endif /* _KERNEL */
+
+/*
+ * IOCTL defines
+ */
+#define TUNNEWPPA	(('T'<<16) | 0x0001)
+#define TUNSETPPA	(('T'<<16) | 0x0002)
+
+#endif	/* _SYS_IF_TUN_H */

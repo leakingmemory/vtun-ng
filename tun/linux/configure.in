@@ -1,0 +1,58 @@
+dnl
+dnl  TUN - Universal TUN/TAP device driver.
+dnl  Copyright (C) 1999-2000 Maxim Krasnyansky <max_mk@yahoo.com>
+dnl
+dnl  This program is free software; you can redistribute it and/or modify
+dnl  it under the terms of the GNU General Public License as published by
+dnl  the Free Software Foundation; either version 2 of the License, or
+dnl  (at your option) any later version.
+dnl
+dnl  This program is distributed in the hope that it will be useful,
+dnl  but WITHOUT ANY WARRANTY; without even the implied warranty of
+dnl  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+dnl  GNU General Public License for more details.
+dnl
+dnl  $Id$
+dnl
+dnl Process this file with autoconf to produce a configure script.
+dnl
+AC_INIT()
+AC_SUBST(KDIR)
+AC_SUBST(KVER)
+AC_SUBST(ARCH)
+
+AC_PROG_AWK
+AC_PROG_INSTALL
+
+AC_ARG_WITH(kernel,
+   --with-kernel=DIR     Kernel source location,
+   KDIR="$withval",
+   KDIR=/usr/src/linux
+)      
+
+# Check kernel sources
+AC_TEST_FILES(Makefile include/linux/if.h, $KDIR,  ,
+   AC_MSG_ERROR( Linux kernel source not found in $KERNEL )
+)       
+AC_TEST_FILES(.config include/linux/version.h, $KDIR,  ,
+   AC_MSG_ERROR( Linux kernel $KERNEL is not configured )
+) 
+      
+ARCH=`uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
+      -e s/arm.*/arm/ -e s/sa110/arm/`
+
+KVER=`cat $KDIR/Makefile | $AWK '			\
+	/^VERSION.*=/    { ver=$3   }			\
+        /^PATCHLEVEL.*=/ { patch=$3 }			\
+        /^SUBLEVEL.*=/   { slev=$3  }			\
+        /^EXTRAVER.*=/   { print ver "." patch "." slev $3 }' ` 
+
+TDIR=`echo $KVER | cut -d '.' -f 1,2`
+
+AC_TEST_FILES(tun.c if_tun.h, $TDIR, ,
+   AC_MSG_ERROR( Unsupported kernel version. )
+)
+
+AC_LINK_FILES($TDIR/tun.c $TDIR/if_tun.h, tun.c if_tun.h)
+
+AC_OUTPUT(Makefile)

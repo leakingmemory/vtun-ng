@@ -1,15 +1,14 @@
 Universal TUN/TAP device driver ChangeLog.
 
 ver 1.0:
-	Final stable 1.0 release. CVS source tree access.
+	Final stable 1.0 release. CVS source tree access. Packages.
 	Solaris, Linux and FreeBSD drivers merged into one package.
 	Easy compilation and installation without patching a kernel.	
 	Smart configure script, autodetection of OS and kernel versions. 
 	Stable Solaris driver. Locking code rewrite, a lot of major fixes 
-	and optimizations.
-	Linux driver support for latest 2.2.X and 2.3.X kernels
+	and optimizations. Support for Solaris 2.6, 7.0, 8.0. 
+	Linux driver support for latest 2.2.X and 2.3.X kernels.
 	FreeBSD driver support for 3.X, 4.X and 5.X FreeBSD releases.
-
 
 FreeBSD TAP driver ChangeLog.
 Maksim Yevmenkin <m_evmenkin@yahoo.com>

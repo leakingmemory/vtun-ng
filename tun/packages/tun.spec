@@ -8,9 +8,9 @@ Version: %{version}
 Release: %{release}
 Copyright: GPL
 Group: System/Drivers
-Url: http://vtun.sourceforge.net/
-Source: http://vtun.sourceforge.net/%{name}-%{version}.tar.gz
-Summary: Virtual tunnel over TCP/IP networks.
+Url: http://vtun.sourceforge.net/tun/
+Source: http://vtun.sourceforge.net/tun/%{name}-%{version}.tar.gz
+Summary: Universal TUN/TAP device driver.
 Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: Maxim Krasnyansky <max_mk@yahoo.com>
 BuildRoot: /var/tmp/%{name}-%{version}-build
@@ -33,13 +33,19 @@ make
 %install
 make
 install -d $RPM_BUILD_ROOT/lib/modules/net
-install -m 644 -o root -g root tun.o $RPM_BUILD_ROOT/lib/modules/net
+install -m 644 -o root -g root linux/tun.o $RPM_BUILD_ROOT/lib/modules/net
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 rm -rf ../%{name}-%{version}
 
+%post
+depmod -a
+
+%postun
+depmod -a
+
 %files
 %defattr(644,root,root)
 %doc FAQ README
-%attr(755,root,root) %{prefix}/lib/modules/net/tun.o
+%attr(644,root,root) %{prefix}/lib/modules/net/tun.o

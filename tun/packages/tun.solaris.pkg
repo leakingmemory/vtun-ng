@@ -2,7 +2,7 @@
 !BASEDIR=/usr
 #
 i pkginfo=tun.solaris.info
-i version=tun.desc
+#i version=tun.desc
 #
 !search $BASEDIR
 !default 755 root root

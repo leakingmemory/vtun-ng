@@ -1,8 +1,10 @@
 ver 2.1b4:
+         Bind UDP socket to the same address:port used for TCP connection. 
+         Fixed NOBUFS error handling for UDP sockets.
+	 Updated FreeBSD tun device support. 
 	 Removed host name size limitation.
 	 Parser and Makefile fixes.
 	 CVS source tree access.
-	 Updated FreeBSD tun device support. 
 
 ver 2.1b3:
 	 Locking code rewrite, should fix race conditions. 

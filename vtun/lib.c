@@ -367,7 +367,7 @@ void vtun_syslog (int priority, char *format, ...)
     
       va_start(ap, format);
       vsnprintf(buf, sizeof(buf)-1, format, ap);
-      vtun_syslog(priority, "%s", buf);
+      syslog(priority, "%s", buf);
       va_end(ap);
 
       __in_syslog = 0;

@@ -190,15 +190,14 @@ int tunnel(struct vtun_host *host)
 			case VTUN_TUN:
 				break;
 			}
-
-			/* Run list of up commands */
-			set_title("%s running up commands", host->host);
-			llist_trav(&host->up, run_cmd, &host->sopt);
-
 			exit(0);
 		}
 		host->loc_fd = fd[0];
 	}
+
+	/* Run list of up commands */
+	set_title("%s running up commands", host->host);
+	llist_trav(&host->up, run_cmd, &host->sopt);
 
 	switch (host->flags & VTUN_TYPE_MASK) {
 	case VTUN_TTY:

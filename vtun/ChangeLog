@@ -1,8 +1,10 @@
 ver 2.3:
-	 Fixed incorrect error handling in UDP and TCP drivers. Makefile improvements.
-	 RPM package fixes. Persist mode fixes. Fixed a couple of memmory and file descriptor
-	 leaks. Added man page for configuration file and other documentation update.
- 	 Team members list update. 
+	 Fixed incorrect error handling in UDP and TCP drivers. Makefile 
+	 improvements. RPM package fixes. Persist mode fixes. Fixed a 
+	 couple of memory and file descriptor leaks. Correct closing of 
+	 Solaris TUN device.
+	 Added man page for configuration file and other documentation 
+	 update. Team members list update. 
 
 ver 2.2:
 	 Added support for new OpenBSD tun driver. Fixes for generic tun 

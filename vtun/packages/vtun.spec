@@ -1,18 +1,25 @@
-%define name vtun
-%define version 2.0
-%define release 1
+%define name	vtun
+%define version	2.1b3
+%define release	1
+%define prefix	/usr
+
+# By default, builds without socks-support.
+# To build with socks-support, issue:
+#   rpm --define "USE_SOCKS yes" ...
+
 Name: %{name}
 Version: %{version}
 Release: %{release}
 Copyright: GPL
 Group: Networking/Tunnels
-Url: http://vtun.netpedia.net
+Url: http://vtun.netpedia.net/
 Source: http://vtun.netpedia.net/%{name}-%{version}.tar.gz
 Summary: Virtual tunnel over TCP/IP networks.
 Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
-Packager: Maxim Krasnyansky <max_mk@yahoo.com>
+Packager: Dag Wieers <dag@mind.be>
 BuildRoot: /var/tmp/%{name}-%{version}-build
 Obsoletes: vppp
+Prefix: %{prefix}
 
 %description
 VTun provides the method for creating Virtual Tunnels over TCP/IP networks
@@ -25,24 +32,25 @@ task like VPN, Mobil IP, Shaped Internet access, IP address saving, etc.
 It is completely user space implementation and does not require modification
 to any kernel parts. 
 
-You need SSLeay-devel and lzo-devel to build it.
+This package is build with%{!?USE_SOCKS:out} SOCKS-support.
 
 %prep
-%setup
+%setup -n %{name}-%{version}
 
 %build
 CFLAGS="$RPM_OPT_FLAGS"; ./configure 		   \
-            --prefix=$RPM_BUILD_ROOT/usr 	   \
+            --prefix=$RPM_BUILD_ROOT%{prefix} 	   \
 	    --sysconfdir=$RPM_BUILD_ROOT/etc 	   \
 	    --localstatedir=$RPM_BUILD_ROOT/var	   \
-            --with-crypto-headers=/usr/include/ssl \
-            --with-lzo-headers=/usr/include/lzo
+            --enable-lzo                           \
+%{?USE_SOCKS: --enable-socks}
 
-make CFG_FILE=/etc/vtund.conf PID_FILE=/var/run/vtund.pid STAT_DIR=/var/log/vtun
+make CFG_FILE=/etc/vtund.conf PID_FILE=/var/run/vtund.pid  \
+     STAT_DIR=/var/log/vtund LOCK_DIR=/var/lock/vtund
 
 %install
-install -d $RPM_BUILD_ROOT/usr/sbin
-install -d $RPM_BUILD_ROOT/usr/man/man8
+install -d $RPM_BUILD_ROOT%{prefix}/sbin
+install -d $RPM_BUILD_ROOT%{prefix}/man/man8
 install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
 install -d $RPM_BUILD_ROOT/var/log/vtun
 
@@ -56,17 +64,26 @@ rm -rf ../%{name}-%{version}
 
 %files
 %defattr(644,root,root)
-%doc ChangeLog Credits README README.Config README.Shaper FAQ
+%doc ChangeLog Credits FAQ README README.Setup README.Shaper TODO
 %doc TODO vtund.conf 
 %attr(755,root,root) %config /etc/rc.d/init.d/vtund
 %attr(600,root,root) %config /etc/vtund.conf
-%attr(755,root,root) /usr/sbin/vtund
+%attr(755,root,root) %{prefix}/sbin/vtund
 %attr(755,root,root) %dir /var/log/vtund
-/usr/man/man8/vtund.8
-/usr/man/man8/vtun.8
+%{prefix}/man/man8/vtund.8
+%{prefix}/man/man8/vtun.8
 
 %changelog
+* Sat Mar 04 2000 Dag Wieers <dag@mind.be> 
+- Added USE_SOCKS compile option.
+- Added Prefix-header
+
+* Sat Jan 29 2000 Dag Wieers <dag@mind.be> 
+- Replaced SSLeay-dependency by openssl-dependency
+- Replaced README.Config by README.Setup
+- Added TODO
+
 * Tue Nov 23 1999 Dag Wieers <dag@mind.be> 
 - Added Url and Obsoletes-headers
-- Added changelog ;)
+- Added ChangeLog ;)
 - Changed summary

@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,14 +17,14 @@
  */
 
 /*
- * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ * $Id$
  */ 
 #ifndef _VTUN_LIB_H
 #define _VTUN_LIB_H
 
 #include "config.h"
+#include <sys/types.h>
 #include <errno.h>
-#include <sys/socket.h>
 
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
@@ -42,14 +42,11 @@
   #define min(a,b)    ( (a)<(b) ? (a):(b) )
 #endif
 
-int getpty(char *pty);
-int gettap(char *dev);
-int gettun(char *dev);
-
-int connect_t(int s, struct sockaddr *svr, time_t timeout);
 int readn_t(int fd, void *buf, size_t count, time_t timeout);
-
 int print_p(int f, const char *ftm, ...);
+
+int  run_cmd(void *d, void *opt);
+void free_sopt(struct vtun_sopt *opt);
 
 /* Read exactly len bytes (Signal safe)*/
 extern inline int read_n(int fd, void *buf, int len)

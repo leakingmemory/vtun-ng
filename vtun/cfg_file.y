@@ -2,7 +2,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -18,7 +18,7 @@
  */
 
 /*
- * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ * $Id$
  */ 
 
 #include "config.h"
@@ -33,8 +33,8 @@
 
 int lineno = 1;
 
-struct vtun_host default_host;
 struct vtun_host *parse_host;
+extern struct vtun_host default_host;
 
 llist  *parse_cmds;
 struct vtun_cmd parse_cmd;
@@ -45,6 +45,9 @@ int cfg_error(const char *fmt, ...);
 int add_cmd(llist *cmds, char *prog, char *args, int flags);
 void *cp_cmd(void *d, void *u);
 int free_cmd(void *d, void *u);
+
+void copy_addr(struct vtun_host *to, struct vtun_host *from);
+void free_addr(struct vtun_host *h);
 
 void free_host_list(void);
 
@@ -61,15 +64,16 @@ int yyerror(char *s);
    int  num;
    struct { int num1; int num2; } dnum;
 }
-%expect 14
+%expect 18
 
-%token K_OPTIONS K_DEFAULT K_PORT K_PERSIST K_TIMEOUT K_PASSWD 
-%token K_PROG K_PPP K_SPEED K_IFCFG K_FWALL K_ROUTE K_DEVICE
+%token K_OPTIONS K_DEFAULT K_PORT K_PERSIST K_TIMEOUT
+%token K_PASSWD K_PROG K_PPP K_SPEED K_IFCFG K_FWALL K_ROUTE K_DEVICE 
+%token K_MULTI K_SRCADDR K_IFACE K_ADDR
 %token K_TYPE K_PROT K_COMPRESS K_ENCRYPT K_KALIVE K_STAT
-%token K_UP K_DOWN 
+%token K_UP K_DOWN
 
 %token <str> K_HOST K_ERROR
-%token <str> WORD IPADDR NMADDR PATH STRING
+%token <str> WORD PATH STRING
 %token <num> NUM 
 %token <dnum> DNUM
 
@@ -98,6 +102,9 @@ statement: '\n'
 		  parse_host->host = strdup($1);
 		  parse_host->passwd = NULL;
 
+		  /* Copy local address */
+		  copy_addr(parse_host, &default_host);
+
 		  llist_copy(&default_host.up,&parse_host->up,cp_cmd,NULL);
 		  llist_copy(&default_host.down,&parse_host->down,cp_cmd,NULL);
 
@@ -119,8 +126,12 @@ options:
 /* Don't override command line options */
 option:  '\n'
   | K_PORT NUM 		{ 
-			  if(vtun.port == -1)
-			     vtun.port = $2;
+			  if(vtun.svr_port == -1)
+			     vtun.svr_port = $2;
+			} 
+  | K_TYPE NUM 		{ 
+			  if(vtun.svr_type == -1)
+			     vtun.svr_type = $2;
 			} 
   | K_PERSIST NUM 	{ 
 			  if(vtun.persist == -1) 
@@ -168,13 +179,15 @@ host_option: '\n'
 			  free(parse_host->dev);  
 			  parse_host->dev = strdup($2); 
 			}	
+  | K_MULTI NUM		{ 
+			  parse_host->multi = $2; 	
+			}
   | K_SPEED NUM 	{ 
 			  if( $2 ){ 
 			     parse_host->spd_in = parse_host->spd_out = $2;
 			     parse_host->flags |= VTUN_SHAPE;
 			  } else 
 			     parse_host->flags &= ~VTUN_SHAPE;
-				
 			}
   | K_SPEED DNUM 	{ 
 			  if( yylval.dnum.num1 || yylval.dnum.num2 ){ 
@@ -212,6 +225,8 @@ host_option: '\n'
 			  parse_host->flags &= ~VTUN_PROT_MASK;
 			  parse_host->flags |= $2;
 			}
+  | K_SRCADDR 		'{' srcaddr_options '}'
+
   | K_UP 	        { 
 			  parse_cmds = &parse_host->up; 
    			  llist_free(parse_cmds, free_cmd, NULL);   
@@ -240,6 +255,36 @@ compress:
   			}
   | K_ERROR		{
 			  cfg_error("Unknown compression '%s'",$1);
+			  YYABORT;
+			} 
+  ;
+
+srcaddr_options: /* empty */
+  | srcaddr_option
+  | srcaddr_options srcaddr_option
+  ;
+
+srcaddr_option:  
+  K_ADDR WORD		{
+			  free_addr(parse_host);
+			  parse_host->src_addr.name = strdup($2);
+			  parse_host->src_addr.type = VTUN_ADDR_NAME;
+			}
+  | K_IFACE WORD	{
+			  free_addr(parse_host);
+			  parse_host->src_addr.name = strdup($2);
+			  parse_host->src_addr.type = VTUN_ADDR_IFACE;
+			}
+  | K_IFACE STRING	{
+			  free_addr(parse_host);
+			  parse_host->src_addr.name = strdup($2);
+			  parse_host->src_addr.type = VTUN_ADDR_IFACE;
+			}
+  | K_PORT NUM 		{
+			  parse_host->src_addr.port = $2;
+			}
+  | K_ERROR		{
+			  cfg_error("Unknown option '%s'",$1);
 			  YYABORT;
 			} 
   ;
@@ -358,6 +403,23 @@ int free_cmd(void *d, void *u)
    return 0;
 }
 
+void copy_addr(struct vtun_host *to, struct vtun_host *from)
+{  
+   if( from->src_addr.type ){
+      to->src_addr.type = from->src_addr.type;
+      to->src_addr.name = strdup(from->src_addr.name);
+   }
+   to->src_addr.port = from->src_addr.port;
+}
+
+void free_addr(struct vtun_host *h)
+{  
+   if( h->src_addr.type ){
+      h->src_addr.type = 0;
+      free(h->src_addr.name);
+   }
+}
+
 int free_host(void *d, void *u)
 {
    struct vtun_host *h = d;
@@ -371,6 +433,8 @@ int free_host(void *d, void *u)
    llist_free(&h->up, free_cmd, NULL);   
    llist_free(&h->down, free_cmd, NULL);
 
+   free_addr(h);
+ 
    return 0;   
 }
 
@@ -402,10 +466,6 @@ int read_config(char *file)
    cfg_loaded = 1;
 
    llist_init(&host_list);
-
-   /* Initialize default options */
-   memset(&default_host, 0, sizeof(default_host));
-   default_host.flags = VTUN_TTY | VTUN_TCP; 
 
    if( !(yyin = fopen(file,"r")) ){
       syslog(LOG_ERR,"Can not open %s", file);

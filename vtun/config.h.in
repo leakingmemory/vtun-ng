@@ -52,4 +52,3 @@
 
 /*Define if you have LZO */
 #undef HAVE_LZO
-

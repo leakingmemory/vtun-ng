@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+ * $Id$
  */
 
 #include "config.h"
@@ -30,7 +30,6 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
-#include <sys/uio.h>
 #include <syslog.h>
 #include <time.h>
 
@@ -49,13 +48,12 @@
 #include "vtun.h"
 #include "linkfd.h"
 #include "lib.h"
+#include "driver.h"
 
 /* Host we are working with. 
  * Used by signal handlers that's why it is global. 
  */
 struct vtun_host *lfd_host;
-
-extern int errno;
 
 struct lfd_mod *lfd_mod_head = NULL, *lfd_mod_tail = NULL;
 
@@ -164,159 +162,8 @@ inline int lfd_check_up(void)
 
      return err;
 }
-/* Functions to read/write frames. */
-
-int write_frame_udp(int fd, char *buf, int len)
-{
-     unsigned short nlen, cnt; 
-     struct iovec iv[2];
-
-     nlen = htons(len); 
-     len  = len & VTUN_FSIZE_MASK;
-
-     iv[0].iov_len  = sizeof(short); 
-     iv[0].iov_base = (char *) &nlen; 
-     if( buf ) {
-        iv[1].iov_len  = len; 
-        iv[1].iov_base = buf;
-	cnt = 2;
-     } else {
-        /* Write flags only */
-	cnt = 1;
-     }
-
-     while(1) {
-        register int err;
-	err = writev(fd, iv, cnt); 
-	if( err < 0 && ( errno == EAGAIN || errno == EINTR ) )
-	   continue;
-	/* Even if we wrote only part of the frame
-         * we can't use second write since it will produce 
-         * another UDP frame */  
-        return err;
-     }
-}
-
-int read_frame_udp(int fd, char *buf)
-{
-     unsigned short len, flen, cnt;
-     struct iovec iv[2];
-
-     /* Get frame size */
-     while(1) {
-	register int err;     
-        if( (err = recv(fd, &len, sizeof(short), MSG_PEEK)) > 0)
-	   break;
-	if( err < 0 && ( errno == EAGAIN || errno == EINTR ) )
-	   continue;
-	return err;
-     }
-
-     len = ntohs(len);
-     flen = len & VTUN_FSIZE_MASK;
-
-     if( flen > VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD ) {
-     	/* Oversized frame, drop it.  
-	 * On UDP socket read will drop remaining part of the frame */
-        read(fd, buf, VTUN_FRAME_SIZE);
-	return VTUN_BAD_FRAME;
-     }	
-
-     /* Read frame */
-     iv[0].iov_len  = sizeof(short);
-     iv[0].iov_base = (char *) &flen;
-     if( len & ~VTUN_FSIZE_MASK ) {
-	/* Read flags only */
-	cnt = 1;
-     } else {	
-        iv[1].iov_len  = flen;
-        iv[1].iov_base = buf;
-	cnt = 2;
-     }
-
-     while(1) {
-	register int err;     
-	errno = 0;
-        if( (err = readv(fd, iv, cnt)) > 0) 
-	   return len;
-	if( err < 0 && ( errno == EAGAIN || errno == EINTR ) )
-	   continue;
-	return err;
-     }
-}		
-
-int write_frame_tcp(int fd, char *buf, int len)
-{
-     unsigned short nlen, cnt; 
-     struct iovec iv[2];
-
-     nlen = htons(len); 
-     len  = len & VTUN_FSIZE_MASK;
-
-     iv[0].iov_len  = sizeof(short); 
-     iv[0].iov_base = (char *) &nlen; 
-     if( buf ) {
-        iv[1].iov_len  = len; 
-        iv[1].iov_base = buf;
-	cnt = 2;
-     } else {
-        /* Write flags only */
-	cnt = 1;
-     }
-
-     while(1) {
-        register int err;
-	err = writev(fd, iv, cnt); 
-	if( err < 0 && ( errno == EAGAIN || errno == EINTR ) )
-	   continue;
-	if( err > 0 && err < (len + sizeof(short)) ) {
-	   /* We wrote only part of the frame, lets write the rest
-	    * FIXME should check if wrote less than sizeof(short) */
-	   err -= sizeof(short);
-	   return write_n(fd, buf + err, len - err);
-	}
-
-	return err;
-     }
-}
-
-int read_frame_tcp(int fd, char *buf)
-{
-     unsigned short len, flen;
-     register int err;     
-
-     /* Read frame size */
-     if( (err = read_n(fd, &len, sizeof(short)) ) < 0)
-	return err;
-
-     len = ntohs(len);
-     flen = len & VTUN_FSIZE_MASK;
-
-     if( flen > VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD ) {
-     	/* Oversized frame, drop it. */ 
-        while(flen) {
-	   len = min(flen, VTUN_FRAME_SIZE);
-           if( (len = read_n(fd, buf, len)) <= 0 )
-	      return VTUN_BAD_FRAME;
-           flen -= len;
-        }                                                               
-	return VTUN_BAD_FRAME;
-     }	
-
-     if( len & ~VTUN_FSIZE_MASK ) {
-	/* Return flags */
-	return len;
-     }
-
-     /* Read frame */
-     return read_n(fd, buf, flen);
-}		
-
-int (*write_frame)(int fd, char *buf, int len);
-int (*read_frame)(int fd, char *buf);
-
+		
 /********** Linker *************/
-
 /* Termination flag */
 static int linker_term;
 
@@ -385,7 +232,7 @@ int lfd_linker(void)
 	if( !len ){
 	   /* We are idle, lets check connection */
 	   if( lfd_host->flags & VTUN_KEEP_ALIVE ){
-	      write_frame(fd1, NULL, VTUN_ECHO_REQ);
+	      proto_write(fd1, NULL, VTUN_ECHO_REQ);
 	      if( ++idle > 3 ){
 	         syslog(LOG_INFO,"Session %s network timeout", lfd_host->host);
 		 break;	
@@ -395,10 +242,10 @@ int lfd_linker(void)
 	}	   
 
 	/* Read frames from network(fd1), decode and pass them to 
-         * the local program (fd2) */
+         * the local device (fd2) */
 	if( FD_ISSET(fd1, &fdset) && lfd_check_up() ){
 	   idle = 0; 
-	   if( (len=read_frame(fd1,buf)) <= 0 )
+	   if( (len=proto_read(fd1,buf)) <= 0 )
 	      break;
 
 	   /* Handle frame flags */
@@ -411,7 +258,7 @@ int lfd_linker(void)
 	      }
 	      if( fl==VTUN_ECHO_REQ ){
 		 /* Reply on echo request */
-	 	 write_frame(fd1, NULL, VTUN_ECHO_REP);
+	 	 proto_write(fd1, NULL, VTUN_ECHO_REP);
 		 continue;
 	      }
    	      if( fl==VTUN_ECHO_REP ){
@@ -427,15 +274,15 @@ int lfd_linker(void)
 	   lfd_host->stat.comp_in += len; 
 	   if( (len=lfd_run_up(len,buf,&out)) == -1 )
 	      break;	
-	   if( len && write_n(fd2,out,len) < 0 )
+	   if( len && dev_write(fd2,out,len) < 0 )
 	      break; 
 	   lfd_host->stat.byte_in += len; 
 	}
 
-	/* Read data from the local program(fd2), encode and pass it to 
+	/* Read data from the local device(fd2), encode and pass it to 
          * the network (fd1) */
 	if( FD_ISSET(fd2, &fdset) && lfd_check_down() ){
-	   if( (len=read(fd2, buf, VTUN_FRAME_SIZE)) < 0 ){
+	   if( (len = dev_read(fd2, buf, VTUN_FRAME_SIZE)) < 0 ){
 	      if( errno != EAGAIN && errno != EINTR )
 	         break;
 	      else
@@ -446,7 +293,7 @@ int lfd_linker(void)
 	   lfd_host->stat.byte_out += len; 
 	   if( (len=lfd_run_down(len,buf,&out)) == -1 )
 	      break;
-	   if( len && write_frame(fd1, out, len) < 0 )
+	   if( len && proto_write(fd1, out, len) < 0 )
 	      break;
 	   lfd_host->stat.comp_out += len; 
 	}
@@ -455,7 +302,7 @@ int lfd_linker(void)
 	syslog(LOG_INFO,"%s (%d)", strerror(errno), errno);
 	
      /* Notify other end about our close */
-     write_frame(fd1, NULL, VTUN_CONN_CLOSE);
+     proto_write(fd1, NULL, VTUN_CONN_CLOSE);
      free(buf);
 
      return 0;
@@ -487,15 +334,6 @@ int linkfd(struct vtun_host *host)
 
      if(lfd_alloc_mod(host))
 	return -1;
-
-     /* Initialize read/write frame functions */
-     if( host->flags & VTUN_TCP ) {
-	write_frame = write_frame_tcp;
-	read_frame = read_frame_tcp;
-     } else {	
- 	write_frame = write_frame_udp;
-	read_frame = read_frame_udp;
-     }
 
      memset(&sa, 0, sizeof(sa));
      sa.sa_handler=sig_term;

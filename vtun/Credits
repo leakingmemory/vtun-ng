@@ -11,7 +11,7 @@ Alex Korenkov <alex@uznet.net> - Testing, bug reports.
 Shukhrat Zakhidov <shukhrat@ishonch.uz> - Testing, bug reports, suggestions.
 
 Dag Wieers <dag@mind.be> - RPM packager specification file. RedHat startup 
-	script. Several bug reports. 
+	script. Several bug reports. SOCKS support suggestions.
 
 Ted Rolle <ted@acacia.datacomm.com>  - Spelling fixes.
 
@@ -44,3 +44,11 @@ Paul <xerox@httpd.net> - Stress tests, bug reports, suggestions.
 Maksim Yevenkin <m_evmenkin@yahoo.com> - TAP driver for FreeBSD.
 
 Anthon Walters <anthon@ws.co.za> - Web site mirror. Testing. Initial FAQ.
+
+Ryan Defelice <ryand@mobiletel.com> - OpenBSD package maintainer.
+
+Alexander Bergolth <leo@strike.wu-wien.ac.at> - Initial multiple connection
+	handling and host lock functionalities. Improvements and fixes of 
+	source address option. Ideas. Suggestions.
+
+Hubert Feyrer <feyrer@rfhs8012.fh-regensburg.de> - NetBSD package.

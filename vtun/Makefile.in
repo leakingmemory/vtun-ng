@@ -1,7 +1,7 @@
 #
 #   VTun - Virtual Tunnel over TCP/IP network. 
 #
-#   Copyright (C) 1998,1999  Maxim Krasnyansky <max_mk@yahoo.com>
+#   Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
 #
 #   VTun has been derived from VPPP package by Maxim Krasnyansky. 
 #
@@ -15,8 +15,19 @@
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU General Public License for more details.
 #
-#   Version: 2.0 12/30/1999 Maxim Krasnyansky <max_mk@yahoo.com>
+#   $Id$
 #  
+CC = @CC@
+CFLAGS = @CFLAGS@ @CPPFLAGS@
+LDFLAGS = @LIBS@
+
+YACC = @YACC@
+YACCFLAGS = -d
+
+LEX = @LEX@
+LEXFLAGS = 
+
+INSTALL = @INSTALL@
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -29,78 +40,42 @@ VAR_DIR  = @localstatedir@
 PID_FILE = ${VAR_DIR}/run/vtund.pid
 CFG_FILE = ${ETC_DIR}/vtund.conf
 STAT_DIR = ${VAR_DIR}/log/vtund
+LOCK_DIR = ${VAR_DIR}/lock/vtund
 
-DEFS = -DVTUN_CONFIG_FILE=\"$(CFG_FILE)\" -DVTUN_PID_FILE=\"$(PID_FILE)\" -DVTUN_STAT_DIR=\"$(STAT_DIR)\"
+DEFS = -DVTUN_CONFIG_FILE=\"$(CFG_FILE)\" -DVTUN_PID_FILE=\"$(PID_FILE)\" \
+       -DVTUN_STAT_DIR=\"$(STAT_DIR)\" -DVTUN_LOCK_DIR=\"$(LOCK_DIR)\"
 
-CC = @CC@
-CFLAGS = @CFLAGS@
-LDFLAGS = @LIBS@
-
-YACC = @YACC@
-YACCFLAGS = -d
-
-LEX = @LEX@
-LEXFLAGS = 
-
-INSTALL = @INSTALL@
-
-OBJS = main.o cfg_file.tab.o cfg_file.lex.o server.o client.o lib.o llist.o auth.o tunnel.o 
-LFD_OBJS = linkfd.o lfd_shaper.o lfd_zlib.o lfd_lzo.o lfd_encrypt.o
+OBJS = main.o cfg_file.tab.o cfg_file.lex.o server.o client.o lib.o \
+       llist.o auth.o tunnel.o lock.o netlib.o  \
+       tun_dev.o tap_dev.o pty_dev.o pipe_dev.o \
+       tcp_proto.o udp_proto.o \
+       linkfd.o lfd_shaper.o lfd_zlib.o lfd_lzo.o lfd_encrypt.o 
 
 CONFIGURE_FILES = Makefile config.status config.cache config.h config.log 
 
-vtund: $(OBJS) $(LFD_OBJS)
+.c.o:
+	$(CC) $(CFLAGS) $(DEFS) -c $<
+
+vtund: $(OBJS)
 	$(CC) $(CFLAGS) -o vtund $(OBJS) $(LFD_OBJS) $(LDFLAGS)
 
-main.o: main.c vtun.h config.h compat.h
-	$(CC) $(CFLAGS) $(DEFS) -c main.c
-
-lib.o: lib.c lib.h vtun.h config.h
-	$(CC) $(CFLAGS) -c lib.c
-
-llist.o: llist.c llist.h
-	$(CC) $(CFLAGS) -c llist.c
-
-auth.o: auth.c auth.h vtun.h config.h lib.h
-	$(CC) $(CFLAGS) -c auth.c
-
-tunnel.o: tunnel.c vtun.h config.h lib.h
-	$(CC) $(CFLAGS) -c tunnel.c
-
-server.o: server.c vtun.h config.h
-	$(CC) $(CFLAGS) -c server.c
-
-client.o: client.c vtun.h config.h
-	$(CC) $(CFLAGS) -c client.c
-
-cfg_file.tab.o: cfg_file.y cfg_file.h config.h
+cfg_file.tab.o: cfg_file.y cfg_kwords.h config.h
 	$(YACC) $(YACCFLAGS) -b cfg_file cfg_file.y
-	$(CC) $(CFLAGS) -c cfg_file.tab.c
+	$(CC) $(CFLAGS) $(DEFS) -c cfg_file.tab.c
 
-cfg_file.lex.o: cfg_file.l cfg_file.h config.h
+cfg_file.lex.o: cfg_file.l cfg_kwords.h config.h
 	$(LEX) $(LEXFLAGS) -ocfg_file.lex.c cfg_file.l
-	$(CC) $(CFLAGS) -c cfg_file.lex.c
+	$(CC) $(CFLAGS) $(DEFS) -c cfg_file.lex.c
 
-linkfd.o: linkfd.c linkfd.h vtun.h lib.h config.h
-	$(CC) $(CFLAGS) $(DEFS) -c linkfd.c
-
-lfd_shaper.o: lfd_shaper.c linkfd.h config.h
-	$(CC) $(CFLAGS) -c lfd_shaper.c
-
-lfd_zlib.o: lfd_zlib.c linkfd.h lib.h config.h
-	$(CC) $(CFLAGS) -c lfd_zlib.c
-
-lfd_lzo.o: lfd_lzo.c linkfd.h lib.h config.h
-	$(CC) $(CFLAGS) -c lfd_lzo.c
-
-lfd_encrypt.o: lfd_encrypt.c linkfd.h lib.h config.h
-	$(CC) $(CFLAGS) -c lfd_encrypt.c
+depend:
+	makedepend -- $(CFLAGS) -- *.c
 
 clean:
-	rm -f core cfg_file.tab.* cfg_file.lex.* *.o *~ vtund
+	rm -f core cfg_file.tab.* cfg_file.lex.* *.o *~ *.bak vtund
 
 distclean: clean
 	rm -f $(CONFIGURE_FILES)
+	./config.drivers unlink
 
 install_man: 
 	$(INSTALL) -d -m 644 -o root -g 0 $(MAN_DIR)/man8
@@ -116,6 +91,9 @@ install_config:
 
 install: vtund install_config install_man
 	$(INSTALL) -d -m 755 -o root -g 0 $(VAR_DIR)/run
-	$(INSTALL) -d -m 755 -o root -g 0 $(VAR_DIR)/log/vtund
+	$(INSTALL) -d -m 755 -o root -g 0 $(STAT_DIR)
+	$(INSTALL) -d -m 755 -o root -g 0 $(LOCK_DIR)
 	$(INSTALL) -d -m 755 -o root -g 0 $(SBIN_DIR)
 	$(INSTALL) -m 755 -o root -g 0 vtund $(SBIN_DIR)
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.

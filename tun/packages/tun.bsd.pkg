@@ -9,3 +9,8 @@
 
 @mode 555
 modules/if_tap.ko
+
+@mode 600
+dev/tap0
+dev/tap1
+dev/tap2

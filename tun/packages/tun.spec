@@ -32,8 +32,16 @@ make
 
 %install
 make
-install -d $RPM_BUILD_ROOT/lib/modules/net
+install -m 755 -o root -g root -d $RPM_BUILD_ROOT/lib/modules/net
 install -m 644 -o root -g root linux/tun.o $RPM_BUILD_ROOT/lib/modules/net
+
+install -m 755 -o root -g root -d $RPM_BUILD_ROOT/dev
+mknod $RPM_BUILD_ROOT/dev/tun0 c 90 0
+mknod $RPM_BUILD_ROOT/dev/tun1 c 90 1
+mknod $RPM_BUILD_ROOT/dev/tun2 c 90 2
+mknod $RPM_BUILD_ROOT/dev/tap0 c 90 128
+mknod $RPM_BUILD_ROOT/dev/tap1 c 90 129
+mknod $RPM_BUILD_ROOT/dev/tap2 c 90 130
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -49,3 +57,9 @@ depmod -a
 %defattr(644,root,root)
 %doc FAQ README
 %attr(644,root,root) %{prefix}/lib/modules/net/tun.o
+%attr(600,root,root) %{prefix}/dev/tun0
+%attr(600,root,root) %{prefix}/dev/tun1
+%attr(600,root,root) %{prefix}/dev/tun2
+%attr(600,root,root) %{prefix}/dev/tap0
+%attr(600,root,root) %{prefix}/dev/tap1
+%attr(600,root,root) %{prefix}/dev/tap2

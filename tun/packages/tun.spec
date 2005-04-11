@@ -1,6 +1,6 @@
 %define name	tun
 %define version	1.1
-%define release	7.1
+%define release	7.2
 
 # get the distro mark (eg rh70)
 %define	_dis	%(case `rpm -qf /etc/issue 2>/dev/null` in (fedora-*) echo fc ;; (mandrake-*) echo mdk ;; (openlinux-*) echo ol ;; (redhat-*) echo rh;; (tao-*) echo tao ;; (whitebox-*) echo wb ;; (xos-*) echo xos ;; esac)
@@ -13,7 +13,7 @@
 %define	modchr	%(case "%{devstyl}" in (2.2) echo 'char-major-90' ;; (2.4) echo 'char-major-10-200' ;; esac)
 
 # start delineating which distros need nodes built.
-%define	donode	%(case "%{_dis}%{_tro}" in (rhel?|fc?|tao*|xos*) echo '0' ;; (*) echo '1' ;; esac)
+%define	donode	%(case "%{_dis}%{_tro}" in (rhel4|fc?|tao*|xos*|wb*) echo '0' ;; (*) echo '1' ;; esac)
 %define	doconf	%(case "%{_dis}%{_tro}" in (rhel4*|fc?) echo '0' ;; (*) echo '1' ;; esac)
 
 #for OpenLinux crunchy goodness

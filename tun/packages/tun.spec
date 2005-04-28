@@ -30,6 +30,7 @@ Summary: 	Universal TUN/TAP device driver.
 Vendor: 	Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: 	Bishop Clark (LC957) <bishop@platypus.bc.ca>
 BuildRoot: 	/var/tmp/%{name}-%{version}-buildroot-%(id -u -n)
+Requires:	%{_bindir}/diff %{_bindir}/patch /bin/grep
 
 #doesn't work
 %if "%{devstyl}" == "2.2"
@@ -96,9 +97,6 @@ elif [ %devstyl = 2.2 ]; then
  done
 fi
 %endif
-
-#/usr/bin/find $RPM_BUILD_ROOT -type f -print > listA
-#| sed 's?/var/tmp/tun-1.1-build?%attr(600,root,root) ?' 
 
 %clean
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT

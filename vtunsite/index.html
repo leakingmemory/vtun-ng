@@ -1,182 +1,198 @@
 <html>
 
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
-<meta name="Author" content="Maxim Krasnyansky">
-<meta name="Keywords" content="vpn, ip, ppp, slip, ethernet, virtual, tunnel, vtun, vtund, network, Maxim, Krasnyansky, Maksim, Krasnyanskiy">
-<meta name="Description" content="The easiest way to create Virtual Tunnels over TCP/IP network">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"/>
+    <meta name="Author" content="Maxim Krasnyansky"/>
+    <meta name="Keywords" content="vpn, ip, ppp, slip, ethernet, virtual, tunnel, vtun, vtund, network, Maxim, Krasnyansky, Maksim, Krasnyanskiy"/>
+    <meta name="Description" content="The easiest way to create Virtual Tunnels over IP networks"/>
 
-<title>
-   VTun - Virtual Tunnels over TCP/IP networks 
-</title>
-</head>
+    <title>
+      VTun - Virtual Tunnels over TCP/IP networks 
+    </title>
+  </head>
 
-<body bgcolor="#FFFFFF" vlink="#446DC4" link="#000000" text="#446DC4">
+  <body bgcolor="#FFFFFF" vlink="#446DC4" link="#000000" text="#446DC4">
 
-<center>
-   <br>
-   <img src="vtun.gif" width="492" height="112" alt="* VTun *">
-   <br>
-   <font face="Verdana"><b>
-   The easiest way to create Virtual Tunnels over TCP/IP networks<br>
-   with traffic shaping, compression and encryption.<br>  
-   </b></font>
-   <p>
-   <table border="0" cellpadding="0" cellspacing="0" width="95%">
-       <tr>
-       <td align="center" valign="top" width="50%">
-	   <table border="1" cellpadding="0" cellspacing="0" width="98%">
-              <tr>
-                 <td align="center" valign="top" bgcolor="#446DC4">
-		    <font color="#FFFFFF" face="Verdana">
+    <center>
+      <br/>
+      <img src="vtun.gif" width="492" height="112" alt="* VTun *"/>
+      <br/>
+      <font face="Verdana"><b>
+	The easiest way to create Virtual Tunnels over TCP/IP networks<br/>
+	with traffic shaping, compression and encryption.<br/>  
+      </b></font>
+      <br/>
+
+      <table border="0" cellpadding="0" cellspacing="0" width="95%">
+	<tr>
+	  <td align="center" valign="top" width="50%">
+
+	    <table border="1" cellpadding="0" cellspacing="0" width="98%">
+	      <tr>
+		<td align="center" valign="top" bgcolor="#446DC4">
+		  <font color="#FFFFFF" face="Verdana">
 		    <b>News</b>
-		    </font>
-	 	 </td>
-              </tr>
-              <tr>
-                 <td bgcolor="#E7E7E7">
-		    <font face="Verdana" color="#000000">
-                    <center>
-                    <table border=0 cellspacing=0 cellpadding=0 width="95%"><tr><td>
-                    <font face="Verdana" color="#000000">
-		        04.06.2003 Released VTun 2.6<br>
-			01.14.2002 Released VTun 2.5<br>
-			08.24.2001 Mailing list moved to SourceForge.Net<br>
-			08.06.2001 Released VTun 2.5b1<br>
-			02.03.2001 Universal TUN/TAP driver 1.1 released<br>
-			01.23.2001 Released VTun 2.4<br>
-			12.27.2000 Released VTun 2.4b2<br>
-		    </font>
-                    </td></tr></table>
-                    </center>
-		    <br> 
-                 </td>
-              </tr>
-           </table>
-	   <br>
-	   <table border="1" cellpadding="0" cellspacing="0" width="98%">
-              <tr>
-                 <td align="center" valign="top" bgcolor="#446DC4">
+		  </font>
+		</td>
+	      </tr>
+	      <tr>
+		<td bgcolor="#E7E7E7">
+		  <font face="Verdana" color="#000000">
+		    <center>
+
+		      <table border=0 cellspacing=0 cellpadding=0 width="95%">
+			<tr>
+			  <td>
+			    <font face="Verdana" color="#000000">
+			      04.06.2003 Released VTun 2.6<br/>
+			      01.14.2002 Released VTun 2.5<br/>
+			      08.24.2001 Mailing list moved to SourceForge.Net<br/>
+			      08.06.2001 Released VTun 2.5b1<br/>
+			      02.03.2001 Universal TUN/TAP driver 1.1 released<br/>
+			      01.23.2001 Released VTun 2.4<br/>
+			      12.27.2000 Released VTun 2.4b2<br/>
+			    </font>
+			  </td>
+			</tr>
+		      </table>
+
+		    </center>
+		    <br/> 
+		  </td>
+		</tr>
+	      </table>
+
+	      <br/>
+
+	      <table border="1" cellpadding="0" cellspacing="0" width="98%">
+		<tr>
+		  <td align="center" valign="top" bgcolor="#446DC4">
 		    <font color="#FFFFFF" face="Verdana">
-		    <b>Documentation</b>
+		      <b>Documentation</b>
 		    </font>
-	 	 </td>
-              </tr>
-              <tr>
-                 <td bgcolor="#E7E7E7">
+		  </td>
+		</tr>
+		<tr>
+		  <td bgcolor="#E7E7E7">
 		    <font face="Verdana">
- 		    <ul>
-                      <li>
-			<a href="faq.html">Frequently Asked Questions(FAQ)</a>
-   		      </li>
-                      <li>
-			<a href="setup.html">Setup recommendations and Config examples</a>
-   		      </li>
-                      <li>
-			<a href="vtund.conf">Configuration file</a>
-   		      </li>
-                      <li>
-			<a href="ChangeLog">Change Log</a>
-   		      </li>
-                      <li>
-			Man pages
-			<dl><a href="vtund.man.html">Daemon</a></dl>
-			<dl><a href="conf.man.html">Config file</a></dl>
-   		      </li>
-                    </ul>
+		      <ul>
+			<li>
+			  <a href="faq.html">Frequently Asked Questions(FAQ)</a>
+			</li>
+			<li>
+			  <a href="setup.html">Setup recommendations and Config examples</a>
+			</li>
+			<li>
+			  <a href="vtund.conf">Configuration file</a>
+			</li>
+			<li>
+			  <a href="ChangeLog">Change Log</a>
+			</li>
+			<li>
+			  Man pages
+			  <dl><a href="vtund.man.html">Daemon</a></dl>
+			  <dl><a href="conf.man.html">Config file</a></dl>
+			</li>
+		      </ul>
 		    </font>
- 		    <br>
-                 </td>
-              </tr>
-           </table>
-        </td>
-        <td align="center" valign="top" width="50%">
-	   <table border="1" cellpadding="0" cellspacing="0" width="98%">
-              <tr>
-                 <td align="center" valign="top" bgcolor="#446DC4">
+		    <br/>
+		  </td>
+		</tr>
+	      </table>
+
+	    </td>
+	    <td align="center" valign="top" width="50%">
+
+	      <table border="1" cellpadding="0" cellspacing="0" width="98%">
+		<tr>
+		  <td align="center" valign="top" bgcolor="#446DC4">
 		    <font color="#FFFFFF" face="Verdana">
-		    <b>VTun</b>
+		      <b>VTun</b>
 		    </font>
-	 	 </td>
-              </tr>
-              <tr>
-                 <td bgcolor="#E7E7E7">
+		  </td>
+		</tr>
+		<tr>
+		  <td bgcolor="#E7E7E7">
 		    <font face="Verdana">
- 		    <ul>
-                      <li>
-			<a href="features.html">Features</a>
-   		      </li>
-                      <li>
-			<a href="download.html">Download</a>
-   		      </li>
-                      <li>
-			<a href="http://cvs.sourceforge.net/cgi-bin/viewcvs.cgi/vtun/">CVS tree</a>
-   		      </li>
-                      <li>
-			<a href="team.html">Team</a>
-   		      </li>
-                      <li>
-			<a href="mlist.html">Mailing lists</a>
-   		      </li>
-                    </ul>
+		      <ul>
+			<li>
+			  <a href="features.html">Features</a>
+			</li>
+			<li>
+			  <a href="download.html">Download</a>
+			</li>
+			<li>
+			  <a href="http://cvs.sourceforge.net/cgi-bin/viewcvs.cgi/vtun/">CVS tree</a>
+			</li>
+			<li>
+			  <a href="team.html">Team</a>
+			</li>
+			<li>
+			  <a href="mlist.html">Mailing lists</a>
+			</li>
+		      </ul>
 		    </font>
- 		    <br>
-                 </td>
-              </tr>
-           </table>
-	   <br>
-	   <table border="1" cellpadding="0" cellspacing="0" width="98%">
-              <tr>
-                 <td align="center" valign="top" bgcolor="#446DC4">
+		    <br/>
+		  </td>
+		</tr>
+	      </table>
+
+	      <br/>
+
+	      <table border="1" cellpadding="0" cellspacing="0" width="98%">
+		<tr>
+		  <td align="center" valign="top" bgcolor="#446DC4">
 		    <font color="#FFFFFF" face="Verdana">
-		    <b>Links</b>
+		      <b>Links</b>
 		    </font>
-	 	 </td>
-              </tr>
-              <tr>
-                 <td bgcolor="#E7E7E7">
+		  </td>
+		</tr>
+		<tr>
+		  <td bgcolor="#E7E7E7">
 		    <font face="Verdana">
- 		    <ul>
-                      <li>
-			<a href="tun/index.html">Universal TUN/TAP driver</a>
-   		      </li>
-                      <li>
-			<a href="http://sourceforge.net/project/?group_id=2947">VTun on SourceForge.net</a>
-   		      </li>
-                      <li>
-		        <font face="Verdana" color="#000000">Web site mirrors</font>
-			<dl>
-			   <a href="http://vtun.saol.com">Saol.com (South Africa)</a>
-			</dl>
-			<dl>
-			   <a href="http://vtun.geo-mis.com">Geo-Mis.com (USA)</a>
-			</dl>
-			<dl>
-			   <a href="http://mirror.blackroute.net/vtun">Blackroute.net (USA)</a>
-			</dl>
-			<dl>
-			   <a href="http://vtun.info">Vtun.Info (Canada)</a>
-			</dl>
-   		      </li>
-                    </ul>
+		      <ul>
+			<li>
+			  <a href="tun/index.html">Universal TUN/TAP driver</a>
+			</li>
+			<li>
+			  <a href="http://sourceforge.net/project/?group_id=2947">VTun on SourceForge.net</a>
+			</li>
+			<li>
+			  <font face="Verdana" color="#000000">Web site mirrors</font>
+			  <dl>
+			    <a href="http://vtun.saol.com">Saol.com (South Africa)</a>
+			  </dl>
+			  <dl>
+			    <a href="http://vtun.geo-mis.com">Geo-Mis.com (USA)</a>
+			  </dl>
+			  <dl>
+			    <a href="http://mirror.blackroute.net/vtun">Blackroute.net (USA)</a>
+			  </dl>
+			  <dl>
+			    <a href="http://vtun.info">Vtun.Info (Canada)</a>
+			  </dl>
+			</li>
+		      </ul>
 		    </font>
-		    <br>
-                 </td>
-              </tr>
-           </table>
-       </td>
-       </tr>
-   </table>
-   <br><br>
-   <img SRC="/cgi-bin/count.cgi?df=vtun_main&ft=1&dd=C&srgb=0;0;0&prgb=0;115;198" alt=""> 
-   <br><br>
-   <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=978&type=1" BORDER=0
-   height=31 width=88></a>
-   <br><br> 
-   <font face="Verdana"> 
-      Copyright (C) 1999-2003 Maxim Krasnyansky<br>
-   </font>
-   <font size=-3><a href="http://sourceforge.net/sendmessage.php?touser=10830">corrections?</a></font>   
-</center>
-</body>
-</html>
+		    <br/>
+		  </td>
+		</tr>
+	      </table>
+
+	    </td>
+	  </tr>
+	</table>
+
+	<br/><br/>
+	<img SRC="/cgi-bin/count.cgi?df=vtun_main&ft=1&dd=C&srgb=0;0;0&prgb=0;115;198" alt="counter" /> 
+	<br/><br/>
+	<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=978&type=1" BORDER="0"
+	height="31" width="88" /></a>
+	<br/><br/> 
+	<font face="Verdana"> 
+	  Copyright (C) 1999-2005 Maxim Krasnyansky<br/>
+	</font>
+	<font size=-3><a href="http://sourceforge.net/sendmessage.php?touser=10830">corrections?</a></font>   
+      </center>
+    </body>
+  </html>

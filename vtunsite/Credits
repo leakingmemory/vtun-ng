@@ -124,11 +124,12 @@ Robert R. Wal <rrw@hell.pl>
 Willems Luc <willems.luc@pandora.be>
 	Initial SuSE packaging.  Testing.
 
+Nickolai Zeldovich <nickolai@cs.stanford.edu>
+	mlockall() support to prevent VM collapse.
+
 Dale Fountain <dpf-vtun@fountainbay.com>
 	Added multiple cipher support.
 	Added multiple cipher modes support.
 	Added support for different sized keys.
 	Re-sync ciphers when using non-ECB modes over a UDP connection.
 	Fixed Bug#908824 (persist=keep not re-applying routes)
-
-

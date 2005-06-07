@@ -1,11 +1,13 @@
 
 3.0.0-pre2:
 	obsoleted linux/tap_dev (mjt)
-	fixed bug sf1062819 - multi killold parsing bug (dpf)	
+	fixed Bug#1062819 - multi killold parsing bug (dpf)	
 	changed rpm macros to support '--with socks' syntax (bc)
 	changed rpm macros to support '--without lzo' syntax (bc)
 	reworked rpm macro matrix for various distros (bc)
 	started on UNSUPPORTED rpmbuild option (bc)
+	Fixed Bug#1176343 SIGINT kills foreground server process (bc)
+	Added RFE#936523 Bind VTun Server to Specific Interface (bc)
 	
 3.0.0-pre1:
 	Implementation of Nickolai 'kolya' Zeldovich's mlockall() patch	(bc)

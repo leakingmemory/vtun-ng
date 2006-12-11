@@ -17,8 +17,8 @@
  */
 
 /*
- * tun_dev.c,v 1.4 2001/09/20 06:26:41 talby Exp
- */
+ * tun_dev.c,v 1.3.2.1.2.1 2006/11/16 04:04:52 mtbishop Exp
+ */ 
 
 #include "config.h"
 
@@ -41,60 +41,60 @@
 /* 
  * Allocate TUN device, returns opened fd. 
  * Stores dev name in the first arg(must be large enough).
- */
+ */  
 int tun_open(char *dev)
 {
-	char tunname[14];
-	int i, fd = -1;
+    char tunname[14];
+    int i, fd = -1;
 
-	if (*dev) {
-		sprintf(tunname, "/dev/%s", dev);
-		fd = open(tunname, O_RDWR);
-	} else {
-		for (i = 0; i < 255; i++) {
-			sprintf(tunname, "/dev/tun%d", i);
-			/* Open device */
-			if ((fd = open(tunname, O_RDWR)) > 0) {
-				sprintf(dev, "tun%d", i);
-				break;
-			}
-		}
-	}
-	return fd;
+    if( *dev ){
+       sprintf(tunname, "/dev/%s", dev);
+       fd = open(tunname, O_RDWR);
+    } else {
+       for(i=0; i < 255; i++){
+          sprintf(tunname, "/dev/tun%d", i);
+          /* Open device */
+          if( (fd=open(tunname, O_RDWR)) > 0 ){
+             sprintf(dev, "tun%d", i);
+             break;
+          }
+       }
+    }
+    return fd;
 }
 
 int tun_close(int fd, char *dev)
 {
-	return close(fd);
+    return close(fd);
 }
 
 /* Read/write frames from TUN device */
 int tun_write(int fd, char *buf, int len)
 {
-	u_int32_t type = htonl(AF_INET);
-	struct iovec iv[2];
+    u_int32_t type = htonl(AF_INET);
+    struct iovec iv[2];
+    
+    iv[0].iov_base = &type;
+    iv[0].iov_len = sizeof(type);
+    iv[1].iov_base = buf;
+    iv[1].iov_len = len;
 
-	iv[0].iov_base = &type;
-	iv[0].iov_len = sizeof(type);
-	iv[1].iov_base = buf;
-	iv[1].iov_len = len;
-
-	return writev(fd, iv, 2);
+    return writev(fd, iv, 2);
 }
 
 int tun_read(int fd, char *buf, int len)
 {
-	struct iovec iv[2];
-	u_int32_t type;
-	register int rlen;
+    struct iovec iv[2];
+    u_int32_t type;
+    register int rlen;
 
-	iv[0].iov_base = &type;
-	iv[0].iov_len = sizeof(type);
-	iv[1].iov_base = buf;
-	iv[1].iov_len = len;
+    iv[0].iov_base = &type;
+    iv[0].iov_len = sizeof(type);
+    iv[1].iov_base = buf;
+    iv[1].iov_len = len;
 
-	if ((rlen = readv(fd, iv, 2)) > 0)
-		return rlen - sizeof(type);
-	else
-		return rlen;
+    if( (rlen = readv(fd, iv, 2)) > 0 )
+       return rlen - sizeof(type);
+    else
+       return rlen;
 }

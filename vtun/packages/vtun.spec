@@ -1,94 +1,132 @@
-%define name	vtun
-# temporary version for timestamped releases
-%define version	3.0.0
-%define release	0
-
-#this part NEEDS to be expanded
-%define IsSuSE	%( [ -f /etc/SuSE-release ] && echo 1 || echo 0 )
-%if %{IsSuSE}
- %define rc_dir   /etc/init.d
- %define lock_dir /var/lock/subsys/vtunnel
- %define log_dir  /var/log/vtunnel
-%else
- %define rc_dir /etc/rc.d/init.d
- %define lock_dir /var/lock/vtund
- %define log_dir  /var/log/vtund
-%endif
+# vtun.spec,v 1.7.2.33.2.22 2006/11/16 04:04:55 mtbishop Exp
 
 # By default, builds without socks-support.
 # To build with socks-support, issue:
-#   rpm --define "USE_SOCKS yes" ...
+#   rpm --define "_with_socks yes" ...
 
 # By default, builds with LZO support (available for any RPM system)
 # To disable LZO, issue:
-#   rpm --define "NO_USE_LZO yes" ...
+#   rpm --define "_without_lzo yes" ...
 
-Name: %{name}
-Version: %{version}
-Release: %{release}
-Copyright: GPL
-Group: System Environment/Daemons
-Url: http://vtun.sourceforge.net/
-Source: http://vtun.sourceforge.net/%{name}-%{version}.tar.gz
-Summary: Virtual tunnel over TCP/IP networks.
-Vendor: Maxim Krasnyansky <max_mk@yahoo.com>
-#Packager: Dag Wieers <dag@mind.be> 
-Packager: Bishop Clark (LC957) <bishop@platypus.bc.ca>
-BuildRoot: %{?_tmppath:%{_tmppath}}%{!?_tmppath:%{tmpdir}}/%{name}-%{version}-root-%(id -u -n)
-Obsoletes: vppp
-%{!?NO_USE_LZO:Buildrequires: lzo-devel}
-%{!?_without_ssl:BuildRequires: openssl-devel }
-BuildRequires: bison
-BuildRequires: flex
-BuildRequires: autoconf
-BuildRequires: automake
+# define variables here for older RPM versions.
+%define name	vtun
+%define version	2.9.91
+%define release	4
+
+# expansion of the previous part.
+# get the distro mark (eg rh70)
+%define	_dis	%(case `rpm -qf /etc/issue 2>/dev/null` in (redhat-*) echo rh;; (mandrake-*) echo mdk ;; (fedora-*) echo fc ;; (openlinux-*) echo ol ;; (whitebox-*) echo wb ;; (xos-*) echo xos ;;(SuSE-*) echo suse ;; esac)
+%define _tro	%(rpm -qf --qf "%%{version}" /etc/issue | sed 's/\\.//g' )
+
+%define	rc_dir_suse	/etc/init.d
+%define	lock_dir_suse	/var/lock/subsys/vtunnel
+%define	log_dir_suse	/var/log/vtunnel
+
+# now apply the components
+# If anyone can find system that strangers understand, that still
+# enables one SRPM to build for 17 distros, I'm open to suggestions.
+%define	_requires	%{expand:%%{?_requires_%{_dis}%{_tro}:%%_requires_%{_dis}%{_tro}}%%{!?_requires_%{_dis}%{_tro}:%%{?_requires_%{_dis}:%%_requires_%{_dis}}%%{!?_requires_%{_dis}:%{_requires_}}}}
+%define	_buildreq	%{expand:%%{?_buildreq_%{_dis}%{_tro}:%%_buildreq_%{_dis}%{_tro}}%%{!?_buildreq_%{_dis}%{_tro}:%%{?_buildreq_%{_dis}:%%_buildreq_%{_dis}}%%{!?_buildreq_%{_dis}:%{_buildreq_}}}}
+%define	rc_dir	%{expand:%%{?rc_dir_%{_dis}%{_tro}:%%rc_dir_%{_dis}%{_tro}}%%{!?rc_dir_%{_dis}%{_tro}:%%{?rc_dir_%{_dis}:%%rc_dir_%{_dis}}%%{!?rc_dir_%{_dis}:/etc/rc.d/init.d}}}
+%define	lock_dir	%{expand:%%{?lock_dir_%{_dis}%{_tro}:%%lock_dir_%{_dis}%{_tro}}%%{!?lock_dir_%{_dis}%{_tro}:%%{?lock_dir_%{_dis}:%%lock_dir_%{_dis}}%%{!?lock_dir_%{_dis}:/var/lock/vtund}}}
+%define	log_dir	%{expand:%%{?log_dir_%{_dis}%{_tro}:%%log_dir_%{_dis}%{_tro}}%%{!?log_dir_%{_dis}%{_tro}:%%{?log_dir_%{_dis}:%%log_dir_%{_dis}}%%{!?log_dir_%{_dis}:/var/log/vtund}}}
+
+Name: 		%{name}
+Version: 	%{version}
+Release: 	%{release}
+Copyright: 	GPL
+Group: 		System Environment/Daemons
+Url: 		http://vtun.sourceforge.net/
+Source: 	http://vtun.sourceforge.net/%{name}-%{version}.tar.gz
+Summary: 	Virtual tunnel over TCP/IP networks.
+Summary(pl):	Wirtualne tunele poprzez sieci TCP/IP
+Vendor: 	Maxim Krasnyansky <max_mk@yahoo.com>
+Packager: 	Bishop Clark (LC957) <bishop@platypus.bc.ca>
+BuildRoot: 	%{?_tmppath:%{_tmppath}}%{!?_tmppath:%{tmpdir}}/%{name}-%{version}-root-%(id -u -n)
+Obsoletes: 	vppp
+BuildRequires:  autoconf
+BuildRequires: 	bison
+BuildRequires: 	flex
+BuildRequires: 	autoconf
+BuildRequires: 	automake
+
+# must specify like so to get the right package for gcc (eg ecgs)
+BuildRequires:  %{_bindir}/gcc
+
+# please check the FAQ for this question, and mail Bishop if there is
+# no FAQ entry.
+%define	_buildreq_	zlib-devel %{!?_without_ssl:openssl-devel >= 0.9.7} %{!?_without_lzo: lzo-devel}
+%define	_requires_	tun
 
 # Caldera has funny zlib
-%if %( rpm -q OpenLinux >/dev/null 2>/dev/null && echo 0 || echo 1 )
-BuildRequires: zlib-devel
-%else
-BuildRequires: libz-devel
-%endif
+%define	_buildreq_ol	libz-devel %{!?_without_ssl:openssl-devel >= 0.9.7} %{!?_without_lzo:lzo-devel}
+# Mandrake has unpredictable devel package names
+%define	_buildreq_mdk	zlib1-devel %{!?_without_ssl:libopenssl0-devel >= 0.9.7} %{!?_without_lzo: liblzo1-devel}
+
+# normally, NOT depending on the tun package encourages other apps to
+# clobber the modules.conf file. In this case, the reverse is true,
+# since FCx actually includes all the necessary entries.  So no tun.
+# We avoid a %null value by stating one redundantly.
+%define	_requires_fc	zlib
+%define	_buildreq_fc	zlib-devel %{!?_without_ssl:openssl-devel} %{!?_without_lzo: lzo-devel}
+%define	_requires_rhel4	%_requires_fc
+%define	_buildreq_rhel4	%_buildreq_fc
+
+Requires:	%{_requires}
+BuildRequires:	%{_buildreq}
 
 %description
-VTun provides the method for creating Virtual Tunnels over TCP/IP
-networks and allows to shape, compress, encrypt traffic in that
-tunnels.  Supported type of tunnels are: PPP, IP, Ethernet and most of
+VTun provides a method for creating Virtual Tunnels over TCP/IP
+networks and allows one to shape, compress, encrypt traffic in those
+tunnels.  Supported types of tunnels are: PPP, IP, Ethernet and most
 other serial protocols and programs.
 
 VTun is easily and highly configurable: it can be used for various
-network tasks like VPN, Mobil IP, Shaped Internet access, IP address
+network tasks like VPN, Mobile IP, Shaped Internet access, IP address
 saving, etc.  It is completely a user space implementation and does
 not require modification to any kernel parts.
 
-This package is built with%{!?USE_SOCKS:out} SOCKS-support.
-%{?NO_USE_LZO:This package is built without LZO support.}
+This package is built with%{!?_with_socks:out} SOCKS-support.
+%{?_without_lzo:This package is built without LZO support.}
+%{?_without_ssl:This package is built without OpenSSL support.  The VTun}
+%{?_without_ssl:Development Team does not support a no-SSL configuration.}
+
+%description -l pl
+VTun umo¿liwia tworzenie Wirtualnych Tunelu poprzez sieci TCP/IP wraz
+z przydzielaniem pasma, kompresj±, szyfrowaniem danych w tunelach.
+Wspierane typy tuneli to: PPP, IP, Ethernet i wiêkszo¶æ pozosta³ych
+protoko³ów szeregowych.
+
 
 %prep
-
-%setup -n %{name}
-%configure			   \
+%setup -n %{name}-%{version}
+%{__aclocal}
+%{__autoconf}
+%configure				   \
             --prefix=%{_exec_prefix} 	   \
-	    --sysconfdir=/etc 	   \
-	    --localstatedir=%{_var}   \
-%{?NO_USE_LZO: --disable-lzo} \
-%{?USE_SOCKS: --enable-socks}
+	    --sysconfdir=/etc 		   \
+	    --localstatedir=%{_var}	   \
+%{?_without_ssl: --disable-ssl} \
+%{?_without_lzo: --disable-lzo} \
+%{?_with_socks: --enable-socks}
 
 %build
-%if %{IsSuSE}
-make LOCK_DIR=%{lock_dir} STAT_DIR=/var/log/vtunnel
+%if "%_dis" == "suse"
+%{__make} LOCK_DIR=%{lock_dir} STAT_DIR=/var/log/vtunnel
 %else
-make
+%{__make}
 %endif
 
 %install
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT%{rc_dir}
- if [ x%{IsSuSE} = x1 ]; then
+%__install -d $RPM_BUILD_ROOT%{rc_dir}
+
+%if "%_dis" == "suse"
 install scripts/vtund.rc.suse $RPM_BUILD_ROOT%{rc_dir}/vtund
- else 
+%else 
 install scripts/vtund.rc.red_hat $RPM_BUILD_ROOT%{rc_dir}/vtund
- fi
+%endif
+
 make install SBIN_DIR=$RPM_BUILD_ROOT%{_sbindir} \
         MAN_DIR=$RPM_BUILD_ROOT%{_mandir} \
         ETC_DIR=$RPM_BUILD_ROOT/etc \
@@ -96,7 +134,11 @@ make install SBIN_DIR=$RPM_BUILD_ROOT%{_sbindir} \
         LOCK_DIR=$RPM_BUILD_ROOT%{lock_dir} \
 	INSTALL_OWNER=
 
-if [ x%{IsSuSE} = x1 ]; then
+%__install -d $RPM_BUILD_ROOT/etc/xinetd.d
+%__sed 's:/usr/local:%{_prefix}:' scripts/vtund.xinetd \
+	> $RPM_BUILD_ROOT/etc/xinetd.d/vtun
+
+%if "%_dis" == "suse"
 # SuSE RC.CONFIG templates
 install -d $RPM_BUILD_ROOT/var/adm/fillup-templates
 install -m 644 scripts/vtund.rc.suse.config $RPM_BUILD_ROOT/var/adm/fillup-templates/rc.config.vtund
@@ -104,10 +146,10 @@ install -m 644 scripts/vtund.rc.suse.config $RPM_BUILD_ROOT/var/adm/fillup-templ
 # rcvtund
 ln -sf ../..%{rc_dir}/vtund $RPM_BUILD_ROOT/usr/sbin/rcvtund
 
-fi
+%endif
 
 %post
-if [ x%{IsSuSE} = x1 ]; then
+%if "%_dis" == "suse"
 #rc config
 echo "Updating etc/rc.config..."
 if [ -x bin/fillup ] ; then
@@ -118,7 +160,7 @@ else
   echo "update by hand."
 fi
 sbin/insserv etc/init.d/vtund
-fi
+%endif
 
 %clean
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
@@ -135,16 +177,50 @@ fi
 %{_mandir}/man8/vtund.8*
 #%{_mandir}/man8/vtun.8*
 %{_mandir}/man5/vtund.conf.5*
-%if %{IsSuSE}
+/etc/xinetd.d/vtun
+%if "%_dis" == "suse"
 %attr(755,root,root) %{_sbindir}/rcvtund
 /var/adm/fillup-templates/rc.config.vtund
 %endif
 
+#date +"%a %b %d %Y"
 %changelog
+* Wed Feb 23 2005 Bishop Clark (LC957) <bishop@platypus.bc.ca>	2.9.91-4
+- added XOS macros.
+- s/rhas4/rhel4/ in hopes, although Ihaven't seen it yet.
+
+* Thu Oct 07 2004 Bishop Clark (LC957) <bishop@platypus.bc.ca>	2.9.91-3
+- macros support --with/out conditional command line
+- premliminary support for RHAS4 (FC2)
+- AES requires Openssl 097 or higher.
+
+* Wed Sep 14 2004 Bishop Clark (LC957) <bishop@platypus.bc.ca>	2.9.91-2
+- no change from 1.0.2, just bumping the package number to force a
+  rebuild.
+
+* Fri Aug 27 2004 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.9.91-1
+- xinetd prototype file
+- Nickolai 'kolya' Zeldovich's mlockall() patch
+- Added upper time bound to packet-based resync to reduce resync delay
+
+* Tue Aug  3 2004 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.9.90-2
+- incorporation of some of PLD fixes
+- move to more macros and less if/thens
+- one ugly SPEC for 18 happy distros.
+
+* Sun Mar 14 2004 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.9.90-1
+- new 3.0.0 pre-release.  
+- better ciphers and a persist-keep bugfix.
+* Sun Mar 23 2003 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.6-1.1
+- alter packaging to accomodate MDKs non-standard devel pkg names
+
+* Tue Mar 18 2003 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.6-1
+- new release
+
 * Sat Aug 17 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-5
 - fix GROUP for amanda's genhdlist and Michael Van Donselaar
 
-* Tue Feb 12 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-4
+* Tue Jun 5 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-4
 - Deprecated redundant directory creation in install
 - More undisputed patches by Willems Luc for SuSE support
 - Update of one SuSE config file, addition of another as per 
@@ -153,19 +229,20 @@ fi
 * Mon Jan 21 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-3
 - Macros updating as per 2.5 for better cross-distro build
 - Added NO_USE_LZO compile option as per Willems Luc
-- Very initial SuSE 7.3 support as per Willems Luc
-- Removed packaging of vtun->vtund symlink in man8 as per build
+- very initial SuSE 7.3 support as per Willems Luc
+- removed packaging of vtun->vtund symlink in man8 as per build
   behaviour
+- re-edited as per Jan 14 2002 edits
 
 * Mon Jan 14 2002 Bishop Clark (LC957) <bishop@platypus.bc.ca> 2.5-2
-- Noreplace to vtund.conf to prevent Freshen from clobbering config.
-- Added buildrequires to prevent failed builds.
+- noreplace to vtund.conf to prevent Freshen from clobbering config.
+- added buildrequires to prevent failed builds.
 
 * Mon May 29 2000 Michael Tokarev <mjt@tls.msk.ru>
 - Allow to build as non-root (using new INSTALL_OWNER option)
 - Added vtund.conf.5 manpage
 - Allow compressed manpages
-- Added cleanup of old $RPM_BUILD_ROOT at beginning of %install stage
+- Added cleanup of old $RPM_BUILD_ROOT at beginning of %%install stage
 
 * Sat Mar 04 2000 Dag Wieers <dag@mind.be> 
 - Added USE_SOCKS compile option.

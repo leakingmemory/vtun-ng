@@ -17,8 +17,8 @@
  */
 
 /*
- * lfd_lzo.c,v 1.2 2001/09/20 06:26:41 talby Exp
- */
+ * lfd_lzo.c,v 1.1.1.2.2.7.2.1 2006/11/16 04:03:00 mtbishop Exp
+ */ 
 
 /* LZO compression module */
 
@@ -42,123 +42,117 @@ static lzo_voidp wmem;
 static int zbuf_size = VTUN_FRAME_SIZE * VTUN_FRAME_SIZE / 64 + 16 + 3;
 
 /* Pointer to compress function */
-int (*lzo1x_compress) (const lzo_byte * src, lzo_uint src_len,
-		       lzo_byte * dst, lzo_uint * dst_len,
-		       lzo_voidp wrkmem);
+int (*lzo1x_compress)(const lzo_byte *src, lzo_uint  src_len,
+		   	    lzo_byte *dst, lzo_uint *dst_len,
+		   	    lzo_voidp wrkmem);
 /* 
  * Initialize compressor/decompressor.
  * Allocate the buffers.
- */
+ */  
 
 int alloc_lzo(struct vtun_host *host)
 {
-	int zlevel = host->zlevel ? host->zlevel : 1;
-	int mem;
+     int zlevel = host->zlevel ? host->zlevel : 1;
+     int mem;
 
-	switch (zlevel) {
+     switch( zlevel ){
 	case 9:
-		lzo1x_compress = lzo1x_999_compress;
-		mem = LZO1X_999_MEM_COMPRESS;
-		break;
-	default:
-		lzo1x_compress = lzo1x_1_15_compress;
-		mem = LZO1X_1_15_MEM_COMPRESS;
-		break;
-	}
+	   lzo1x_compress = lzo1x_999_compress;
+           mem = LZO1X_999_MEM_COMPRESS;
+           break;
+	default: 	   
+ 	   lzo1x_compress = lzo1x_1_15_compress;
+           mem = LZO1X_1_15_MEM_COMPRESS;
+           break;
+     }
 
-	if (lzo_init() != LZO_E_OK) {
-		vtun_syslog(LOG_ERR, "Can't initialize compressor");
-		return 1;
-	}
-	if (!(zbuf = lfd_alloc(zbuf_size))) {
-		vtun_syslog(LOG_ERR,
-			    "Can't allocate buffer for the compressor");
-		return 1;
-	}
-	if (!(wmem = lzo_malloc(mem))) {
-		vtun_syslog(LOG_ERR,
-			    "Can't allocate buffer for the compressor");
-		return 1;
-	}
+     if( lzo_init() != LZO_E_OK ){
+	vtun_syslog(LOG_ERR,"Can't initialize compressor");
+	return 1;
+     }	
+     if( !(zbuf = lfd_alloc(zbuf_size)) ){
+	vtun_syslog(LOG_ERR,"Can't allocate buffer for the compressor");
+	return 1;
+     }	
+     if( !(wmem = lzo_malloc(mem)) ){
+	vtun_syslog(LOG_ERR,"Can't allocate buffer for the compressor");
+	return 1;
+     }	
 
-	vtun_syslog(LOG_INFO, "LZO compression[level %d] initialized", zlevel);
+     vtun_syslog(LOG_INFO, "LZO compression[level %d] initialized", zlevel);
 
-	return 0;
+     return 0;
 }
 
 /* 
  * Deinitialize compressor/decompressor.
  * Free the buffer.
- */
+ */  
 
 int free_lzo()
 {
-	lfd_free(zbuf);
-	zbuf = NULL;
-	lzo_free(wmem);
-	wmem = NULL;
-	return 0;
+     lfd_free(zbuf); zbuf = NULL;
+     lzo_free(wmem); wmem = NULL;
+     return 0;
 }
 
 /* 
  * This functions _MUST_ consume all incoming bytes in one pass,
  * that's why we expand buffer dynamicly.
- */
+ */  
 int comp_lzo(int len, char *in, char **out)
-{
-	unsigned int zlen = 0;
-	int err;
+{ 
+     unsigned int zlen = 0;    
+     int err;
+     
+     if( (err=lzo1x_compress((void *)in,len,zbuf,&zlen,wmem)) != LZO_E_OK ){
+        vtun_syslog(LOG_ERR,"Compress error %d",err);
+        return -1;
+     }
 
-	if ((err =
-	     lzo1x_compress((void *) in, len, zbuf, &zlen,
-			    wmem)) != LZO_E_OK) {
-		vtun_syslog(LOG_ERR, "Compress error %d", err);
-		return -1;
-	}
-
-	*out = (void *) zbuf;
-	return zlen;
+     *out = (void *)zbuf;
+     return zlen;
 }
 
 int decomp_lzo(int len, char *in, char **out)
 {
-	unsigned int zlen = 0;
-	int err;
+     unsigned int zlen = 0;
+     int err;
 
-	if ((err =
-	     lzo1x_decompress((void *) in, len, zbuf, &zlen,
-			      wmem)) != LZO_E_OK) {
-		vtun_syslog(LOG_ERR, "Decompress error %d", err);
-		return -1;
-	}
+     if( (err=lzo1x_decompress((void *)in,len,zbuf,&zlen,wmem)) != LZO_E_OK ){
+        vtun_syslog(LOG_ERR,"Decompress error %d",err);
+        return -1;
+     }
 
-	*out = (void *) zbuf;
-	return zlen;
+     *out = (void *) zbuf;
+     return zlen;
 }
 
 struct lfd_mod lfd_lzo = {
-	"LZO",
-	alloc_lzo,
-	comp_lzo,
-	NULL,
-	decomp_lzo,
-	NULL,
-	free_lzo,
-	NULL,
-	NULL
+     "LZO",
+     alloc_lzo,
+     comp_lzo,
+     NULL,
+     decomp_lzo,
+     NULL,
+     free_lzo,
+     NULL,
+     NULL
 };
 
-#else				/* HAVE_LZO */
+#else  /* HAVE_LZO */
 
 int no_lzo(struct vtun_host *host)
 {
      vtun_syslog(LOG_INFO, "LZO compression is not supported");
-	return -1;
+     return -1;
 }
 
 struct lfd_mod lfd_lzo = {
-	"LZO",
-	no_lzo, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+     "LZO",
+     no_lzo, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
-#endif				/* HAVE_LZO */
+#endif /* HAVE_LZO */
+
+

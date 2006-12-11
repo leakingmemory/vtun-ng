@@ -17,8 +17,8 @@
  */
 
 /*
- * udp_proto.c,v 1.6 2001/09/20 06:26:41 talby Exp
- */
+ * udp_proto.c,v 1.5.2.3.2.1 2006/11/16 04:04:43 mtbishop Exp
+ */ 
 
 #include "config.h"
 
@@ -59,53 +59,53 @@
 /* Functions to read/write UDP frames. */
 int udp_write(int fd, char *buf, int len)
 {
-	register char *ptr;
-	register int wlen;
+     register char *ptr;
+     register int wlen;
 
-	ptr = buf - sizeof(short);
+     ptr = buf - sizeof(short);
 
-	*((unsigned short *) ptr) = htons(len);
-	len = (len & VTUN_FSIZE_MASK) + sizeof(short);
+     *((unsigned short *)ptr) = htons(len); 
+     len  = (len & VTUN_FSIZE_MASK) + sizeof(short);
 
-	while (1) {
-		if ((wlen = write(fd, ptr, len)) < 0) {
-			if (errno == EAGAIN || errno == EINTR)
-				continue;
-			if (errno == ENOBUFS)
-				return 0;
-		}
-		/* Even if we wrote only part of the frame
-		 * we can't use second write since it will produce 
-		 * another UDP frame */
-		return wlen;
+     while( 1 ){
+	if( (wlen = write(fd, ptr, len)) < 0 ){ 
+	   if( errno == EAGAIN || errno == EINTR )
+	      continue;
+	   if( errno == ENOBUFS )
+	      return 0;
 	}
+	/* Even if we wrote only part of the frame
+         * we can't use second write since it will produce 
+         * another UDP frame */  
+        return wlen;
+     }
 }
 
 int udp_read(int fd, char *buf)
 {
-	unsigned short hdr, flen;
-	struct iovec iv[2];
-	register int rlen;
+     unsigned short hdr, flen;
+     struct iovec iv[2];
+     register int rlen;
 
-	/* Read frame */
-	iv[0].iov_len = sizeof(short);
-	iv[0].iov_base = (char *) &hdr;
-	iv[1].iov_len = VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD;
-	iv[1].iov_base = buf;
+     /* Read frame */
+     iv[0].iov_len  = sizeof(short);
+     iv[0].iov_base = (char *) &hdr;
+     iv[1].iov_len  = VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD;
+     iv[1].iov_base = buf;
 
-	while (1) {
-		if ((rlen = readv(fd, iv, 2)) < 0) {
-			if (errno == EAGAIN || errno == EINTR)
-				continue;
-			else
-				return rlen;
-		}
-		hdr = ntohs(hdr);
-		flen = hdr & VTUN_FSIZE_MASK;
-
-		if (rlen < 2 || (rlen - 2) != flen)
-			return VTUN_BAD_FRAME;
-
-		return hdr;
+     while( 1 ){
+        if( (rlen = readv(fd, iv, 2)) < 0 ){ 
+	   if( errno == EAGAIN || errno == EINTR )
+	      continue;
+	   else
+     	      return rlen;
 	}
-}
+        hdr = ntohs(hdr);
+        flen = hdr & VTUN_FSIZE_MASK;
+
+        if( rlen < 2 || (rlen-2) != flen )
+	   return VTUN_BAD_FRAME;
+
+	return hdr;
+     }
+}		

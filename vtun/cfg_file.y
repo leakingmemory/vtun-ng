@@ -18,7 +18,7 @@
  */
 
 /*
- * cfg_file.y,v 1.3 2002/01/05 01:23:39 noop Exp
+ * cfg_file.y,v 1.1.1.2.2.13.2.4 2006/11/16 04:02:42 mtbishop Exp
  */ 
 
 #include "config.h"
@@ -69,13 +69,13 @@ int yyerror(char *s);
    int  num;
    struct { int num1; int num2; } dnum;
 }
-%expect 36
+%expect 20
 
-%token K_OPTIONS K_DEFAULT K_PORT K_PERSIST K_TIMEOUT
+%token K_OPTIONS K_DEFAULT K_PORT K_BINDADDR K_PERSIST K_TIMEOUT
 %token K_PASSWD K_PROG K_PPP K_SPEED K_IFCFG K_FWALL K_ROUTE K_DEVICE 
 %token K_MULTI K_SRCADDR K_IFACE K_ADDR
 %token K_TYPE K_PROT K_COMPRESS K_ENCRYPT K_KALIVE K_STAT
-%token K_LINKUP K_LINKDOWN K_IFUP K_IFDOWN K_SYSLOG K_IPROUTE
+%token K_UP K_DOWN K_SYSLOG K_IPROUTE
 
 %token <str> K_HOST K_ERROR
 %token <str> WORD PATH STRING
@@ -111,10 +111,9 @@ statement: '\n'
 		  /* Copy local address */
 		  copy_addr(parse_host, &default_host);
 
-		  llist_copy(&default_host.linkup,&parse_host->linkup,cp_cmd,NULL);
-		  llist_copy(&default_host.linkdown,&parse_host->linkdown,cp_cmd,NULL);
-		  llist_copy(&default_host.ifup,&parse_host->ifup,cp_cmd,NULL);
-		  llist_copy(&default_host.ifdown,&parse_host->ifdown,cp_cmd,NULL);
+		  llist_copy(&default_host.up,&parse_host->up,cp_cmd,NULL);
+		  llist_copy(&default_host.down,&parse_host->down,cp_cmd,NULL);
+
 		}    
     '{' host_options '}'
 		{
@@ -143,8 +142,15 @@ options:
 /* Don't override command line options */
 option:  '\n'
   | K_PORT NUM 		{ 
-			  if(vtun.svr_port == -1)
-			     vtun.svr_port = $2;
+			  if(vtun.bind_addr.port == -1)
+			     vtun.bind_addr.port = $2;
+			} 
+
+  | K_BINDADDR '{' bindaddr_option '}'
+
+  | K_IFACE STRING	{ 
+			  if(vtun.svr_addr == -1)
+			    vtun.svr_addr = strdup($2);
 			} 
 
   | K_TYPE NUM 		{ 
@@ -183,6 +189,28 @@ option:  '\n'
 			}
 
   | K_SYSLOG  syslog_opt
+
+  | K_ERROR		{
+			  cfg_error("Unknown option '%s'",$1);
+			  YYABORT;
+			}
+  ;
+
+bindaddr_option: 
+  K_ADDR WORD		{
+			  vtun.bind_addr.name = strdup($2);
+			  vtun.bind_addr.type = VTUN_ADDR_NAME;
+			}
+
+  | K_IFACE WORD	{
+			  vtun.bind_addr.name = strdup($2);
+			  vtun.bind_addr.type = VTUN_ADDR_IFACE;
+			}
+
+  | K_IFACE STRING	{
+			  vtun.bind_addr.name = strdup($2);
+			  vtun.bind_addr.type = VTUN_ADDR_IFACE;
+			}
 
   | K_ERROR		{
 			  cfg_error("Unknown option '%s'",$1);
@@ -257,9 +285,10 @@ host_option: '\n'
 			compress
 
   | K_ENCRYPT NUM 	{  
-			  if( $2 )
+			  if( $2 ){
 			     parse_host->flags |= VTUN_ENCRYPT;
-			  else
+			     parse_host->cipher = $2;
+			  } else
 			     parse_host->flags &= ~VTUN_ENCRYPT;
 			}
 
@@ -294,26 +323,15 @@ host_option: '\n'
 
   | K_SRCADDR 		'{' srcaddr_options '}'
 
-  | K_LINKUP 	        { 
-			  parse_cmds = &parse_host->linkup; 
-    			  llist_free(parse_cmds, free_cmd, NULL);   
- 			} '{' command_options '}' 
-
-  | K_LINKDOWN 	        { 
-			  parse_cmds = &parse_host->linkdown; 
+  | K_UP 	        { 
+			  parse_cmds = &parse_host->up; 
    			  llist_free(parse_cmds, free_cmd, NULL);   
 			} '{' command_options '}' 
 
-  | K_IFUP 	        { 
-			  parse_cmds = &parse_host->ifup; 
+  | K_DOWN 	        { 
+			  parse_cmds = &parse_host->down; 
    			  llist_free(parse_cmds, free_cmd, NULL);   
 			} '{' command_options '}' 
-
-  | K_IFDOWN 	        { 
-			  parse_cmds = &parse_host->ifdown; 
-    			  llist_free(parse_cmds, free_cmd, NULL);   
- 			} '{' command_options '}' 
-
 
   | K_ERROR		{
 			  cfg_error("Unknown option '%s'",$1);
@@ -547,10 +565,8 @@ int free_host(void *d, void *u)
    free(h->host);   
    free(h->passwd);   
    
-   llist_free(&h->linkup, free_cmd, NULL);   
-   llist_free(&h->linkdown, free_cmd, NULL);
-   llist_free(&h->ifup, free_cmd, NULL);   
-   llist_free(&h->ifdown, free_cmd, NULL);
+   llist_free(&h->up, free_cmd, NULL);   
+   llist_free(&h->down, free_cmd, NULL);
 
    free_addr(h);
  

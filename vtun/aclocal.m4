@@ -36,7 +36,7 @@ AC_DEFUN( AC_SEARCH_HEADERS,
     done 
     if test "$ac_hdr_found" = "yes" ; then
 	if test -n "$p"; then
-	CPPFLAGS="$CPPFLAGS -I$p"
+	  CPPFLAGS="$CPPFLAGS -I$p"
 	fi
         AC_MSG_RESULT( [($dir) yes] ) 
 	ifelse([$3], , :,[$3])

@@ -18,7 +18,7 @@
  */
 
 /*
- * cfg_file.l,v 1.2 2001/09/20 06:26:41 talby Exp
+ * cfg_file.l,v 1.1.1.2.2.1.2.2 2006/11/16 04:02:39 mtbishop Exp
  */ 
 
 #include "config.h"
@@ -187,7 +187,7 @@ int yywrap(void)
 int find_keyword(struct kword *kw, char *str)
 {
     while( kw->str ){
-	if( !strncmp(str,kw->str,5) )
+	if( !strncmp(str,kw->str,20) )
 	   return kw->type;
 	kw++;
     }

@@ -17,8 +17,8 @@
  */
 
 /*
- * tun_dev.c,v 1.3 2001/09/20 06:26:41 talby Exp
- */
+ * tun_dev.c,v 1.2.2.1.2.1 2006/11/16 04:04:40 mtbishop Exp
+ */ 
 
 #include "config.h"
 
@@ -35,40 +35,40 @@
 /* 
  * Allocate TUN device, returns opened fd. 
  * Stores dev name in the first arg(must be large enough).
- */
+ */  
 int tun_open(char *dev)
 {
-	char tunname[14];
-	int i, fd;
+    char tunname[14];
+    int i, fd;
 
-	if (*dev) {
-		sprintf(tunname, "/dev/%s", dev);
-		return open(tunname, O_RDWR);
-	}
+    if( *dev ) {
+       sprintf(tunname, "/dev/%s", dev);
+       return open(tunname, O_RDWR);
+    }
 
-	for (i = 0; i < 255; i++) {
-		sprintf(tunname, "/dev/tun%d", i);
-		/* Open device */
-		if ((fd = open(tunname, O_RDWR)) > 0) {
-			sprintf(dev, "tun%d", i);
-			return fd;
-		}
-	}
-	return -1;
+    for(i=0; i < 255; i++){
+       sprintf(tunname, "/dev/tun%d", i);
+       /* Open device */
+       if( (fd=open(tunname, O_RDWR)) > 0 ){
+          sprintf(dev, "tun%d", i);
+          return fd;
+       }
+    }
+    return -1;
 }
 
 int tun_close(int fd, char *dev)
 {
-	return close(fd);
+    return close(fd);
 }
 
 /* Read/write frames from TUN device */
 int tun_write(int fd, char *buf, int len)
 {
-	return write(fd, buf, len);
+    return write(fd, buf, len);
 }
 
 int tun_read(int fd, char *buf, int len)
 {
-	return read(fd, buf, len);
+    return read(fd, buf, len);
 }

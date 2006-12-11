@@ -17,8 +17,8 @@
  */
 
 /*
- * lib.c,v 1.2 2001/09/20 06:26:41 talby Exp
- */
+ * lib.c,v 1.1.1.2.2.9.2.1 2006/11/16 04:03:17 mtbishop Exp
+ */ 
 
 #include "config.h"
 
@@ -45,11 +45,11 @@ volatile sig_atomic_t __io_canceled = 0;
 /* Functions to manipulate with program title */
 
 extern char **environ;
-char *title_start;		/* start of the proc title space */
-char *title_end;		/* end of the proc title space */
-int title_size;
+char	*title_start;	/* start of the proc title space */
+char	*title_end;     /* end of the proc title space */
+int	title_size;
 
-void init_title(int argc, char *argv[], char *envp[], char *name)
+void init_title(int argc,char *argv[], char *envp[], char *name)
 {
 	int i;
 
@@ -60,10 +60,10 @@ void init_title(int argc, char *argv[], char *envp[], char *name)
 
 	for (i = 0; envp[i]; i++);
 
-	environ = (char **) malloc(sizeof(char *) * (i + 1));
+	environ = (char **) malloc(sizeof (char *) * (i + 1));
 
-	for (i = 0; envp[i]; i++)
-		environ[i] = strdup(envp[i]);
+	for(i = 0; envp[i]; i++)
+	   environ[i] = strdup(envp[i]);
 	environ[i] = NULL;
 
 	/*
@@ -75,15 +75,15 @@ void init_title(int argc, char *argv[], char *envp[], char *name)
 	/*
 	 *  Determine how much space we can use for set_title.  
 	 *  Use all contiguous argv and envp pointers starting at argv[0]
-	 */
-	for (i = 0; i < argc; i++)
-		if (!i || title_end == argv[i])
-			title_end = argv[i] + strlen(argv[i]) + 1;
+ 	 */
+	for(i=0; i<argc; i++)
+	    if( !i || title_end == argv[i])
+	       title_end = argv[i] + strlen(argv[i]) + 1;
 
-	for (i = 0; envp[i]; i++)
-		if (title_end == envp[i])
-			title_end = envp[i] + strlen(envp[i]) + 1;
-
+	for(i=0; envp[i]; i++)
+  	    if( title_end == envp[i] )
+	       title_end = envp[i] + strlen(envp[i]) + 1;
+	
 	strcpy(title_start, name);
 	title_start += strlen(name);
 	title_size = title_end - title_start;
@@ -94,53 +94,52 @@ void set_title(const char *fmt, ...)
 	char buf[255];
 	va_list ap;
 
-	memset(title_start, 0, title_size);
+	memset(title_start,0,title_size);
 
 	/* print the argument string */
 	va_start(ap, fmt);
 	vsprintf(buf, fmt, ap);
 	va_end(ap);
 
-	if (strlen(buf) > title_size - 1)
-		buf[title_size - 1] = '\0';
+	if( strlen(buf) > title_size - 1)
+	   buf[title_size - 1] = '\0';
 
 	strcat(title_start, buf);
 }
-#endif				/* HAVE_SETPROC_TITLE */
+#endif  /* HAVE_SETPROC_TITLE */
 
 /* 
  * Print padded messages.
  * Used by 'auth' function to force all messages 
  * to be the same len.
  */
-int print_p(int fd, const char *fmt, ...)
+int print_p(int fd,const char *fmt, ...)
 {
 	char buf[VTUN_MESG_SIZE];
 	va_list ap;
 
-	memset(buf, 0, sizeof(buf));
+	memset(buf,0,sizeof(buf));
 
 	/* print the argument string */
 	va_start(ap, fmt);
-	vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
+	vsnprintf(buf,sizeof(buf)-1, fmt, ap);
 	va_end(ap);
-
+  
 	return write_n(fd, buf, sizeof(buf));
 }
 
 /* Read N bytes with timeout */
-int readn_t(int fd, void *buf, size_t count, time_t timeout)
+int readn_t(int fd, void *buf, size_t count, time_t timeout) 
 {
 	fd_set fdset;
 	struct timeval tv;
 
-	tv.tv_usec = 0;
-	tv.tv_sec = timeout;
+	tv.tv_usec=0; tv.tv_sec=timeout;
 
 	FD_ZERO(&fdset);
-	FD_SET(fd, &fdset);
-	if (select(fd + 1, &fdset, NULL, NULL, &tv) <= 0)
-		return -1;
+	FD_SET(fd,&fdset);
+	if( select(fd+1,&fdset,NULL,NULL,&tv) <= 0)
+	   return -1;
 
 	return read_n(fd, buf, count);
 }
@@ -149,75 +148,74 @@ int readn_t(int fd, void *buf, size_t count, time_t timeout)
  * Substitutes opt in place off '%X'. 
  * Returns new string.
  */
-char *subst_opt(char *str, struct vtun_sopt *opt)
+char * subst_opt(char *str, struct vtun_sopt *opt)
 {
-	register int slen, olen, sp, np;
-	register char *optr, *nstr, *tmp;
-	char buf[10];
+    register int slen, olen, sp, np;
+    register char *optr, *nstr, *tmp;
+    char buf[10];
 
-	if (!str)
-		return NULL;
+    if( !str ) return NULL;
 
-	slen = strlen(str) + 1;
-	if (!(nstr = malloc(slen)))
-		return str;
+    slen = strlen(str) + 1;
+    if( !(nstr = malloc(slen)) )
+       return str;
 
-	sp = np = 0;
-	while (str[sp]) {
-		switch (str[sp]) {
-		case '%':
-			optr = NULL;
-			/* Check supported opt */
-			switch (str[sp + 1]) {
-			case '%':
-			case 'd':
-				optr = opt->dev;
-				break;
-			case 'A':
-				optr = opt->laddr;
-				break;
-			case 'P':
-				sprintf(buf, "%d", opt->lport);
-				optr = buf;
-				break;
-			case 'a':
-				optr = opt->raddr;
-				break;
-			case 'p':
-				sprintf(buf, "%d", opt->rport);
-				optr = buf;
-				break;
-			default:
-				sp++;
-				continue;
-			}
-			if (optr) {
-				/* Opt found substitute */
-				olen = strlen(optr);
-				slen = slen - 2 + olen;
-				if (!(tmp = realloc(nstr, slen))) {
-					free(nstr);
-					return str;
-				}
-				nstr = tmp;
-				memcpy(nstr + np, optr, olen);
-				np += olen;
-			}
-			sp += 2;
-			continue;
+    sp = np = 0;
+    while( str[sp] ){
+       switch( str[sp] ){
+          case '%':
+             optr = NULL;
+             /* Check supported opt */
+             switch( str[sp+1] ){
+                case '%':
+                case 'd':
+                   optr=opt->dev;
+                   break;
+                case 'A':
+                   optr=opt->laddr;
+                   break;
+                case 'P':
+		   sprintf(buf,"%d",opt->lport);
+                   optr=buf;
+                   break;
+                case 'a':
+                   optr=opt->raddr;
+                   break;
+                case 'p':
+		   sprintf(buf,"%d",opt->rport);
+                   optr=buf;
+                   break;
+                default:
+                   sp++;
+                   continue;
+             }
+             if( optr ){
+                /* Opt found substitute */
+                olen = strlen(optr);
+                slen = slen - 2 + olen;
+                if( !(tmp = realloc(nstr, slen)) ){
+                   free(nstr);
+                   return str;
+                }
+                nstr = tmp;
+                memcpy(nstr + np, optr, olen);
+                np += olen;
+             }
+             sp += 2;
+             continue;
 
-		case '\\':
-			nstr[np++] = str[sp++];
-			if (!nstr[sp])
-				continue;
-			/* fall through */
-		default:
-			nstr[np++] = str[sp++];
-			break;
-		}
-	}
-	nstr[np] = '\0';
-	return nstr;
+          case '\\':
+             nstr[np++] = str[sp++];
+             if( !nstr[sp] )
+                continue;
+             /* fall through */
+          default:
+             nstr[np++] = str[sp++];
+             break;
+       }
+    }
+    nstr[np] = '\0';
+    return nstr;
 }
 
 /* 
@@ -226,128 +224,123 @@ char *subst_opt(char *str, struct vtun_sopt *opt)
  * Modifies original string. 
  */
 void split_args(char *str, char **argv)
-{
-	register int i = 0;
-	int mode = 0;
+{       
+     register int i = 0;
+     int mode = 0;
 
-	while (str && *str) {
-		switch (*str) {
-		case ' ':
-			if (mode == 1) {
-				*str = '\0';
-				mode = 0;
-				i++;
-			}
-			break;
+     while( str && *str ){
+        switch( *str ){
+           case ' ':
+              if( mode == 1 ){
+                 *str = '\0';
+                 mode = 0;
+                 i++;
+              }
+              break;
 
-		case '\'':
-			if (!mode) {
-				argv[i] = str + 1;
-				mode = 2;
-			} else {
-				memmove(argv[i] + 1, argv[i],
-					str - argv[i]);
-				argv[i]++;
+           case '\'':
+              if( !mode ){
+                 argv[i] = str+1;
+                 mode = 2;
+              } else {
+                 memmove(argv[i]+1, argv[i], str - argv[i]);
+                 argv[i]++;
 
-				if (mode == 1)
-					mode = 2;
-				else
-					mode = 1;
-			}
-			break;
+                 if( mode == 1 )
+                    mode = 2;
+                 else
+                    mode = 1;
+              }
+              break;
 
-		case '\\':
-			if (mode) {
-				memmove(argv[i] + 1, argv[i],
-					str - argv[i]);
-				argv[i]++;
-			}
-			if (!*(++str))
-				continue;
-			/*Fall through */
+           case '\\':
+              if( mode ){
+                 memmove(argv[i]+1, argv[i], str - argv[i]);
+                 argv[i]++;
+              }
+	      if( !*(++str) ) continue;
+	      /*Fall through */
 
-		default:
-			if (!mode) {
-				argv[i] = str;
-				mode = 1;
-			}
-			break;
-		}
-		str++;
-	}
-	if (mode == 1 || mode == 2)
-		i++;
+           default:
+              if( !mode ){
+                 argv[i] = str;
+                 mode = 1;
+              }
+              break;
+        }
+        str++;
+     }
+     if( mode == 1 || mode == 2)
+	i++;
 
-	argv[i] = NULL;
+     argv[i]=NULL;
 }
-
+ 
 int run_cmd(void *d, void *opt)
 {
-	struct vtun_cmd *cmd = d;
-	char *argv[50], *args;
-	int pid, st;
+     struct vtun_cmd *cmd = d;	
+     char *argv[50], *args;
+     int pid, st;
 
-	switch ((pid = fork())) {
+     switch( (pid=fork()) ){
 	case 0:
-		break;
+	   break;
 	case -1:
-		vtun_syslog(LOG_ERR, "Couldn't fork()");
-		return 0;
+	   vtun_syslog(LOG_ERR,"Couldn't fork()");
+	   return 0;
 	default:
-		if (cmd->flags & VTUN_CMD_WAIT) {
-			/* Wait for termination */
-			if (waitpid(pid, &st, 0) > 0
-			    && (WIFEXITED(st) && WEXITSTATUS(st)))
-				vtun_syslog(LOG_INFO,
-					    "Command [%s %.20s] error %d",
-					    cmd->prog ? cmd->prog : "sh",
-					    cmd->args ? cmd->args : "",
-					    WEXITSTATUS(st));
-		}
-		if (cmd->flags & VTUN_CMD_DELAY) {
-			struct timespec tm = { VTUN_DELAY_SEC, 0 };
-			/* Small delay hack to sleep after pppd start.
-			 * Until I have no good solution for solving 
-			 * PPP + route problem  */
-			nanosleep(&tm, NULL);
-		}
-		return 0;
-	}
+    	   if( cmd->flags & VTUN_CMD_WAIT ){
+	      /* Wait for termination */
+	      if( waitpid(pid,&st,0) > 0 && (WIFEXITED(st) && WEXITSTATUS(st)) )
+		 vtun_syslog(LOG_INFO,"Command [%s %.20s] error %d", 
+				cmd->prog ? cmd->prog : "sh",
+				cmd->args ? cmd->args : "", 
+				WEXITSTATUS(st) );
+	   }
+    	   if( cmd->flags & VTUN_CMD_DELAY ){
+	      struct timespec tm = { VTUN_DELAY_SEC, 0 };
+	      /* Small delay hack to sleep after pppd start.
+	       * Until I have no good solution for solving 
+	       * PPP + route problem  */
+	      nanosleep(&tm, NULL);
+	   }
+	   return 0;	 
+     }
 
-	args = subst_opt(cmd->args, opt);
-	if (!cmd->prog) {
-		/* Run using shell */
-		cmd->prog = "/bin/sh";
-		argv[0] = "sh";
-		argv[1] = "-c";
-		argv[2] = args;
-		argv[3] = NULL;
-	} else {
-		argv[0] = cmd->prog;
-		split_args(args, argv + 1);
-	}
-	execv(cmd->prog, argv);
+     args = subst_opt(cmd->args, opt);
+     if( !cmd->prog ){
+	/* Run using shell */
+	cmd->prog = "/bin/sh";
+        argv[0] = "sh";	
+	argv[1] = "-c";
+	argv[2] = args;
+	argv[3] = NULL;
+     } else {
+        argv[0] = cmd->prog;	
+        split_args(args, argv + 1);
+     }
+     execv(cmd->prog, argv);
 
-	vtun_syslog(LOG_ERR, "Couldn't exec program %s", cmd->prog);
-	exit(1);
+     vtun_syslog(LOG_ERR,"Couldn't exec program %s", cmd->prog);
+     exit(1);
 }
 
-void free_sopt(struct vtun_sopt *opt)
+void free_sopt( struct vtun_sopt *opt )
 {
-	if (opt->dev) {
-		free(opt->dev);
-		opt->dev = NULL;
-	}
+     if( opt->dev ){
+	free(opt->dev);
+        opt->dev = NULL;
+     }
 
-	if (opt->laddr) {
-		free(opt->laddr);
-		opt->laddr = NULL;
-	}
+     if( opt->laddr ){
+	free(opt->laddr);
+        opt->laddr = NULL;
+     }
 
-	if (opt->raddr) {
-		free(opt->raddr);
-		opt->raddr = NULL;
-	}
+     if( opt->raddr ){
+	free(opt->raddr);
+        opt->raddr = NULL;
+     }
 }
 
 void vtun_syslog (int priority, char *format, ...)

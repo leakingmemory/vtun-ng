@@ -1,11 +1,11 @@
 VTun - Virtual Tunnel over TCP/IP network.
-Copyright (C) 1998-2000 Maxim Krasnyansky <max_mk@yahoo.com>
+Copyright (C) 1998-2004 Maxim Krasnyansky <max_mk@yahoo.com>
 
 This product includes software developed by the OpenSSL Project
 for use in the OpenSSL Toolkit. (http://www.openssl.org/).
-Copyright (c) 1998-2000 The OpenSSL Project.  All rights reserved.
+Copyright (c) 1998-2004 The OpenSSL Project.  All rights reserved.
 
-Compilation and Installation.
+Compilation and Installation:
 
 In order to compile VTun you need several software packages.
 Required packages: 
@@ -16,8 +16,8 @@ Required packages:
   - OpenSSL encryption library 	http://www.openssl.org 
 
 Optional packages:
-  - Zlib compression library
-  - LZO compression library 	http://wildsau.idv.uni-linz.ac.at/mfx/lzo.html
+  - Zlib compression library	http://www.gzip.org/zlib/
+  - LZO compression library 	http://www.oberhumer.com/opensource/lzo/
   - SOCKS library:
 	 Socks5 by NEC (recommended)	http://www.socks.nec.com 
 	 Dante Socks4/5 	http://www.inet.no/dante 
@@ -30,9 +30,9 @@ Optional support:
   --disable-shaper  	compile without Traffic shaping support
   --enable-socks 	compile with SOCKS support
 
-Configure automatically searches for all required library and header files. 
-However you might need to specify location of the files which could not be 
-found in default location:
+Configure automatically searches for all required library and header
+files.  However you might need to specify location of the files which
+could not be found in default location:
   SSL(Crypto) library:
   --with-ssl-lib=/path/to/library (libcrypto.a) 
   --with-ssl-headers=/path/to/headers (md5.h blowfish.h)
@@ -47,15 +47,16 @@ found in default location:
 To compile and install run:
   make install
 
-Read manual page for 'vtund' and example of the config file for the 
-configuration and other details.
+Read manual page for 'vtund' and the config file example for
+configuration and other suggestions.
 
-VTun has the mailing lists vtun-users@lists.sourceforge.net and
-vtun-devel@lists.sourceforge.net
-To receive information about the mailing lists and how to subscribe
-please visit http://vtun.sourceforge.net/mlist.html
+VTun has the mailing list vtun-users@lists.sourceforge.net
+To receive information about mailing list and how to subscribe to it,
+send an e-mail to vtun-users-request@lists.sourceforge.net with the
+word 'help' in the Subject.
 
 If you have any suggestions, ideas, wishes send them to 
 vtun-users@lists.sourceforge.net
  
-Maxim Krasnyansky <max_mk@yahoo.com> 
+Vtun (c) Maxim Krasnyansky
+Maintained loosely by Bishop Clark <bishop@platypus.bc.ca>

@@ -1,5 +1,5 @@
 .\" Manual page for vtund
-.\" $Id$
+.\" vtund.8,v 1.4.2.3.2.2 2006/11/16 04:03:59 mtbishop Exp
 .\" SH section heading
 .\" SS subsection heading
 .\" LP paragraph
@@ -35,6 +35,9 @@ vtund \- VTun(Virtual Tunnel) daemon.
 ]
 [ 
 .I -p 
+]
+[ 
+.I -m 
 ]
 [ 
 .I -t timeout 
@@ -97,6 +100,9 @@ the 'port' option of config file.
 Reconnect to the server after connection termination. By default vtund will
 exit if connection has been terminated. This options is equivalent to 
 the 'persist' option of config file.
+.TP
+.I -m
+Force memory pages to be locked memory-resident to prevent potential VM deadlock.  Useful with NFS traffic.  This option has no config file equivalent.
 .TP
 .I -t timeout
 Connect 

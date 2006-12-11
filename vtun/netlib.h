@@ -17,8 +17,9 @@
  */
 
 /*
- * netlib.h,v 1.3 2001/09/20 06:26:41 talby Exp
- */
+ * netlib.h,v 1.2.2.1.2.2 2006/11/16 04:03:50 mtbishop Exp
+ */ 
+
 #ifndef _VTUN_NETDEV_H
 #define _VTUN_NETDEV_H
 
@@ -31,11 +32,12 @@
 #include <netinet/in.h>
 #endif
 
-unsigned long getifaddr(char *ifname);
-int connect_t(int s, struct sockaddr *svr, time_t timeout);
-int udp_session(struct vtun_host *host);
+unsigned long getifaddr(char * ifname);
+int connect_t(int s, struct sockaddr *svr, time_t timeout); 
+int udp_session(struct vtun_host *host); 
 
 int local_addr(struct sockaddr_in *addr, struct vtun_host *host, int con);
 int server_addr(struct sockaddr_in *addr, struct vtun_host *host);
+int generic_addr(struct sockaddr_in *addr, struct vtun_addr *vaddr);
 
-#endif				/* _VTUN_NETDEV_H */
+#endif /* _VTUN_NETDEV_H */

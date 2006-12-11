@@ -1,3 +1,60 @@
+
+3.0.0:
+	Configure looks for liblzo2 when available. (bc)
+	
+3.0.0-pre2:
+	obsoleted linux/tap_dev (mjt)
+	fixed Bug#1062819 - multi killold parsing bug (dpf)	
+	changed rpm macros to support '--with socks' syntax (bc)
+	changed rpm macros to support '--without lzo' syntax (bc)
+	reworked rpm macro matrix for various distros (bc)
+	started on UNSUPPORTED rpmbuild option (bc)
+	Fixed Bug#1176343 SIGINT kills foreground server process (bc)
+	Added RFE#936523 Bind VTun Server to Specific Interface (bc)
+	Completely Rewrote the Bind To Specific Interface (alan grow)
+	
+3.0.0-pre1:
+	Implementation of Nickolai 'kolya' Zeldovich's mlockall() patch	(bc)
+	Some cleanup with respect to SSL on Apple (dpf)
+	Added upper time bound to packet-based resync to reduce resync
+	delay (dpf)
+	Added xinetd prototype file for vtund (bc)
+	added missing --with-blowfish-headers=DIR option (Daniel Macks)
+	
+3.0.0-pre0:
+	Added multiple cipher support. (dpf)
+	Added multiple cipher modes support. (dpf)
+	Added support for different sized keys. (dpf)
+	Re-sync ciphers when using non-ECB modes over a UDP
+	connection. (dpf)
+	Fixed Bug#908824 (persist=keep not re-applying routes) (dpf)
+
+ver 2.6:
+	No changes;  just renumber.
+	
+ver 2.5.3:
+	$DESTDIR in makefile for packaging glee (PLD)
+	Tighter code in generic/pty_dev.c where available (PLD)
+	Various spec file improvements from (PLD)
+	
+ver 2.5.2:
+	Configure fixes, to ensure vtun will build under Mac OS/X (Kurt Werle)
+	exclude <rand.h> #inclusion under OS/X
+
+ver 2.5.1:
+	Cleanups, reformat code, Automake improvements (Greg)
+
+	Improvement of Special SuSE init files (Willems Luc)
+	Spec file improvements and testing under SuSE (Willems Luc)
+	PLD build patch from Arkadiusz Miskiewicz
+
+	re-execute up-commands on re-up under persist-keep (David Kimdon, Leo Bergolth)
+	prevent reentering syslog in signal handlers (Leo Bergolth)
+	fd leak in tunnel.c (David Kimdon, Leo Bergolth)
+	fix configure wrt openSSL and SASL to pick correct MD5.h (Leo Bergolth)
+	prevent closing non-existant stat file (Edan Ayal)
+	minor packaging improvements (Bishop Clark)
+
 ver 2.5:
 	 New config option to keep tun device always open
 	 iproute support

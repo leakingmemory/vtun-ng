@@ -17,8 +17,8 @@
  */
 
 /*
- * lfd_zlib.c,v 1.2 2001/09/20 06:26:41 talby Exp
- */
+ * lfd_zlib.c,v 1.1.1.2.2.6.2.1 2006/11/16 04:03:14 mtbishop Exp
+ */ 
 
 /* ZLIB compression module */
 
@@ -37,157 +37,153 @@
 
 #include <zlib.h>
 
-static z_stream zi, zd;
+static z_stream zi, zd; 
 static unsigned char *zbuf;
 static int zbuf_size = VTUN_FRAME_SIZE + 200;
 
 /* 
  * Initialize compressor/decompressor.
  * Allocate the buffer.
- */
+ */  
 int zlib_alloc(struct vtun_host *host)
 {
-	int zlevel = host->zlevel ? host->zlevel : 1;
+     int zlevel = host->zlevel ? host->zlevel : 1;
 
-	zd.zalloc = (alloc_func) 0;
-	zd.zfree = (free_func) 0;
-	zd.opaque = (voidpf) 0;
-	zi.zalloc = (alloc_func) 0;
-	zi.zfree = (free_func) 0;
-	zi.opaque = (voidpf) 0;
-
-	if (deflateInit(&zd, zlevel) != Z_OK) {
-		vtun_syslog(LOG_ERR, "Can't initialize compressor");
-		return 1;
-	}
-	if (inflateInit(&zi) != Z_OK) {
-		vtun_syslog(LOG_ERR, "Can't initialize decompressor");
-		return 1;
-	}
-	if (!(zbuf = (void *) lfd_alloc(zbuf_size))) {
-		vtun_syslog(LOG_ERR,
-		       "Can't allocate buffer for the compressor");
-		return 1;
-	}
-
-	vtun_syslog(LOG_INFO, "ZLIB compression[level %d] initialized.",
-	       zlevel);
-	return 0;
+     zd.zalloc = (alloc_func)0;
+     zd.zfree  = (free_func)0;
+     zd.opaque = (voidpf)0;
+     zi.zalloc = (alloc_func)0;
+     zi.zfree  = (free_func)0;
+     zi.opaque = (voidpf)0;
+    
+     if( deflateInit(&zd, zlevel ) != Z_OK ){
+	vtun_syslog(LOG_ERR,"Can't initialize compressor");
+	return 1;
+     }	
+     if( inflateInit(&zi) != Z_OK ){
+	vtun_syslog(LOG_ERR,"Can't initialize decompressor");
+	return 1;
+     }	
+     if( !(zbuf = (void *) lfd_alloc(zbuf_size)) ){
+	vtun_syslog(LOG_ERR,"Can't allocate buffer for the compressor");
+	return 1;
+     }
+   
+     vtun_syslog(LOG_INFO,"ZLIB compression[level %d] initialized.", zlevel);
+     return 0;
 }
 
 /* 
  * Deinitialize compressor/decompressor.
  * Free the buffer.
- */
+ */  
 
 int zlib_free()
 {
-	deflateEnd(&zd);
-	inflateEnd(&zi);
+     deflateEnd(&zd);
+     inflateEnd(&zi);
 
-	lfd_free(zbuf);
-	zbuf = NULL;
+     lfd_free(zbuf); zbuf = NULL;
 
-	return 0;
+     return 0;
 }
 
-static int expand_zbuf(z_stream * zs, int len)
+static int expand_zbuf(z_stream *zs, int len)
 {
-	if (!(zbuf = lfd_realloc(zbuf, zbuf_size + len)))
-		return -1;
-	zs->next_out = zbuf + zbuf_size;
-	zs->avail_out = len;
-	zbuf_size += len;
+     if( !(zbuf = lfd_realloc(zbuf,zbuf_size+len)) )
+         return -1;
+     zs->next_out = zbuf + zbuf_size;
+     zs->avail_out = len;
+     zbuf_size += len;     
 
-	return 0;
+     return 0;
 }
 
 /* 
  * This functions _MUST_ consume all incoming bytes in one pass,
  * That's why we expand buffer dynamically.
  * Practice shows that buffer will not grow larger that 16K.
- */
+ */  
 int zlib_comp(int len, char *in, char **out)
-{
-	int oavail, olen = 0;
-	int err;
+{ 
+     int oavail, olen = 0;    
+     int err;
+ 
+     zd.next_in = (void *) in;
+     zd.avail_in = len;
+     zd.next_out = (void *) zbuf;
+     zd.avail_out = zbuf_size;
+    
+     while(1) {
+        oavail = zd.avail_out;
+        if( (err=deflate(&zd, Z_SYNC_FLUSH)) != Z_OK ){
+           vtun_syslog(LOG_ERR,"Deflate error %d",err);
+           return -1;
+        }
+        olen += oavail - zd.avail_out;
+        if(!zd.avail_in)
+	   break;
 
-	zd.next_in = (void *) in;
-	zd.avail_in = len;
-	zd.next_out = (void *) zbuf;
-	zd.avail_out = zbuf_size;
-
-	while (1) {
-		oavail = zd.avail_out;
-		if ((err = deflate(&zd, Z_SYNC_FLUSH)) != Z_OK) {
-			vtun_syslog(LOG_ERR, "Deflate error %d", err);
-			return -1;
-		}
-		olen += oavail - zd.avail_out;
-		if (!zd.avail_in)
-			break;
-
-		if (expand_zbuf(&zd, 100)) {
-			vtun_syslog(LOG_ERR, "Can't expand compression buffer");
-			return -1;
-		}
+        if( expand_zbuf(&zd,100) ) {
+	   vtun_syslog( LOG_ERR, "Can't expand compression buffer");
+           return -1;
 	}
-	*out = (void *) zbuf;
-	return olen;
+     }
+     *out = (void *) zbuf;
+     return olen;
 }
 
 int zlib_decomp(int len, char *in, char **out)
 {
-	int oavail = 0, olen = 0;
-	int err;
+     int oavail = 0, olen = 0;     
+     int err;
 
-	zi.next_in = (void *) in;
-	zi.avail_in = len;
-	zi.next_out = (void *) zbuf;
-	zi.avail_out = zbuf_size;
+     zi.next_in = (void *) in;
+     zi.avail_in = len;
+     zi.next_out = (void *) zbuf;
+     zi.avail_out = zbuf_size;
 
-	while (1) {
-		oavail = zi.avail_out;
-		if ((err = inflate(&zi, Z_SYNC_FLUSH)) != Z_OK) {
-			vtun_syslog(LOG_ERR, "Inflate error %d len %d", err,
-				    len);
-			return -1;
-		}
-		olen += oavail - zi.avail_out;
-		if (!zi.avail_in)
-			break;
-		if (expand_zbuf(&zi, 100)) {
-			vtun_syslog(LOG_ERR, "Can't expand compression buffer");
-			return -1;
-		}
+     while(1) {
+        oavail = zi.avail_out;
+        if( (err=inflate(&zi, Z_SYNC_FLUSH)) != Z_OK ) {
+           vtun_syslog(LOG_ERR,"Inflate error %d len %d", err, len);
+           return -1;
+        }
+        olen += oavail - zi.avail_out;
+        if(!zi.avail_in)
+	   break;
+        if( expand_zbuf(&zi,100) ) {
+	   vtun_syslog( LOG_ERR, "Can't expand compression buffer");
+           return -1;
 	}
-	*out = (void *) zbuf;
-	return olen;
+     }
+     *out = (void *) zbuf;
+     return olen;
 }
 
 struct lfd_mod lfd_zlib = {
-	"ZLIB",
-	zlib_alloc,
-	zlib_comp,
-	NULL,
-	zlib_decomp,
-	NULL,
-	zlib_free,
-	NULL,
-	NULL
+     "ZLIB",
+     zlib_alloc,
+     zlib_comp,
+     NULL,
+     zlib_decomp,
+     NULL,
+     zlib_free,
+     NULL,
+     NULL
 };
 
-#else				/* HAVE_ZLIB */
+#else  /* HAVE_ZLIB */
 
 int no_zlib(struct vtun_host *host)
 {
      vtun_syslog(LOG_INFO, "ZLIB compression is not supported");
-	return -1;
+     return -1;
 }
 
 struct lfd_mod lfd_zlib = {
-	"ZLIB",
-	no_zlib, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+     "ZLIB",
+     no_zlib, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
-#endif				/* HAVE_ZLIB */
+#endif /* HAVE_ZLIB */

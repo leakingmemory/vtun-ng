@@ -18,31 +18,30 @@
  */
 
 /*
- * llist.h,v 1.1.1.2 2000/03/28 17:19:30 maxk Exp
- */
+ * llist.h,v 1.1.1.2.6.1 2006/11/16 04:03:32 mtbishop Exp
+ */ 
 
 #ifndef _VTUN_LLIST_H
 #define _VTUN_LLIST_H
 
 struct llist_element {
-	struct llist_element *next;
-	void *data;
+	struct llist_element * next;
+	void * data;
 };
 typedef struct llist_element llist_elm;
 
 typedef struct {
-	llist_elm *head;
-	llist_elm *tail;
+	llist_elm * head;
+	llist_elm * tail;
 } llist;
 
 
-void llist_init(llist * l);
-int llist_add(llist * l, void *d);
-int llist_empty(llist * l);
-void *llist_trav(llist * l, int (*f) (void *d, void *u), void *u);
-int llist_copy(llist * l, llist * t, void *(*f) (void *d, void *u),
-	       void *u);
-void *llist_free(llist * l, int (*f) (void *d, void *u), void *u);
+void llist_init(llist *l);
+int  llist_add(llist *l, void *d);
+int  llist_empty(llist *l);
+void * llist_trav(llist *l, int (*f)(void *d, void *u), void *u);
+int llist_copy(llist *l, llist *t, void* (*f)(void *d, void *u), void *u);
+void * llist_free(llist *l, int (*f)(void *d, void *u), void *u);
 
 
-#endif				/* _VTUN_LLIST_H */
+#endif /* _VTUN_LLIST_H */

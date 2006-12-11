@@ -1,5 +1,5 @@
 .\" Manual page for vtund.conf
-.\" $Id$
+.\" vtund.conf.5,v 1.1.2.6.2.3 2006/11/16 04:04:12 mtbishop Exp
 .TH VTUND.CONF 5
 
 .SH NAME
@@ -55,8 +55,32 @@ mode (\fBstand\fR), that is the default, or be invoked from
 server port number to listen on or connect to.
 By default, \fBvtund\fR(8) uses port 5000.
 
+.IP \fBbindaddr\ \fIlist\fR
+server listen address. Used to force vtund to bind to the specific
+address and port in server mode.  Format:
+.nf
+  \fBbindaddr\fR {
+   \fIoption \fIvalue\fR;
+  };
+.fi
+.IP
+\fBbindaddr\fR options:
+.RS
+.IP \fBiface\ \fIif_name\fR
+use interface address \fIif_name\fR as the bind address.
+.IP \fBaddr\ \fIaddr\fR
+bind address.  Can be either IP address or host name.
+.RE
+
 .IP \fBtimeout\ \fIseconds\fR
 General timeout.
+
+.IP \fBpersist\fR\ \fByes\fR|\fBkeep\fR|\fBno\fR
+persist mode.  If \fByes\fR, the client will try to reconnect to the server
+after connection termination.  If \fBkeep\fR, the client will not remove
+and re-add the \fBtun\fIXX\fR or \fBtap\fIXX\fR device when reconnecting.
+If \fBno\fR, the client will exit (default).
+This option is ignored by the server.
 
 .IP \fBsyslog\fR\ \fBnumber\fR|\fBname\fR
 syslog facility specification, either numeric or name (from syslog (3)).
@@ -90,7 +114,7 @@ inside \fBdefault\fR section.  Default parameters apply
 to any session section but can be overwritten there.
 Parameters are:
 
-.IP \fBpassword\ \fIsecret\fR
+.IP \fBpasswd\ \fIsecret\fR
 password for authentication.  This should be the same in
 client and server.
 
@@ -123,13 +147,6 @@ This option is ignored by the client.
 
 .IP \fBtimeout\ \fIsecounds\fR
 Connect timeout.
-
-.IP \fBpersist\fR\ \fByes\fR|\fBkeep\fR|\fBno\fR
-persist mode.  If \fByes\fR, the client will try to reconnect to the server
-after connection termination.  If \fBkeep\fR, the client will not remove
-and re-add the \fBtun\fIXX\fR or \fBtap\fIXX\fR device when reconnecting.
-If \fBno\fR, the client will exit (default).
-This option is ignored by the server.
 
 .IP \fBcompress\ \fImethod\fR[\fB:\fIlevel\fR]
 specifies compression method to use.  Compression \fImethod\fRs includes:

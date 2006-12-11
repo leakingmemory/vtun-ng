@@ -1,8 +1,8 @@
 dnl
 dnl VTun - Virtual Tunnel over TCP/IP network.
-dnl Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+dnl Copyright (C) 1998-2006  Maxim Krasnyansky <max_mk@yahoo.com>
 dnl
-dnl configure.in,v 1.10.2.3 2000/12/28 05:35:10 maxk Exp
+dnl configure.in,v 1.10.2.12.2.6 2006/12/11 01:47:45 mtbishop Exp
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -43,12 +43,7 @@ AC_ARG_ENABLE(socks,
 
 AC_ARG_WITH(ssl-headers,
    --with-ssl-headers=DIR  Crypto Include files location,
-   MD5_HDR_DIR="$withval"
-   CPPFLAGS="$CPPFLAGS -I$withval" 
-)
-AC_ARG_WITH(ssl-headers,
-   --with-ssl-headers=DIR  Crypto Include files location,
-   BLOWFISH_HDR_DIR="$withval"
+   SSL_HDR_DIR="$withval"
    CPPFLAGS="$CPPFLAGS -I$withval" 
 )
 AC_ARG_WITH(ssl-lib,
@@ -63,6 +58,11 @@ AC_ARG_WITH(lzo-headers,
 AC_ARG_WITH(lzo-lib,
    --with-lzo-lib=DIR         LZO Library location,
    LIBS="$LIBS -L$withval" 
+)
+
+AC_ARG_WITH(blowfish-headers,
+   --with-blowfish-headers=DIR     Blowfish Include files location,
+   BLOWFISH_HDR_DIR="$withval"
 )
 
 AC_ARG_WITH(socks-lib,
@@ -119,27 +119,48 @@ if test "$ZLIB" = "yes"; then
    )
 fi
 
+dnl very servicable code borrowed heavily from openvpn.
 if test "$LZO" = "yes"; then
+   LZOCHK=""
    AC_MSG_RESULT()
    AC_CHECKING( for LZO Library and Header files ... )
+   AC_SEARCH_HEADERS(lzo_asm.h,
+	$LZO_HDR_DIR /usr/include/lzo "" /usr/local/include,
+	LZOCHK="lzo2 lzo",
    AC_SEARCH_HEADERS(lzo1x.h, 
 	$LZO_HDR_DIR /usr/include/lzo "" /usr/local/include,
-        AC_CHECK_LIB(lzo, lzo1x_decompress,
+		LZOCHK="lzo",
+		AC_MSG_ERROR( LZO library not found. )
+		)
+	)
+
+   if test -n "$LZOCHK"; then
+      havelzo=0;
+      for I in $LZOCHK ; do
+         if test $havelzo = 0; then
+	    AC_CHECK_LIB($I, lzo1x_decompress,
 	    [
-	       LIBS="$LIBS -llzo"
+	          LIBS="$LIBS -l"$I
 	       AC_DEFINE(HAVE_LZO)
-	    ],
+	          havelzo=1
+	      ]
+	    )
+	 fi
+      done
+      if test $havelzo = 0; then
 	    AC_MSG_ERROR( LZO library not found. )
-	),
+      fi
+   else
         AC_MSG_ERROR( LZO headers not found. )
-   )
+   fi
 fi
 
 if test "$SSL" = "yes"; then
    AC_MSG_RESULT()
    AC_CHECKING( for md5 Library and Header files ... )
-   AC_SEARCH_HEADERS( sys/md5.h openssl/md5.h crypto/blowfish.h openssl/blowfish.h,
-    $SSL_HDR_DIR "" /usr/include /usr/include/ssl /usr/local/include /usr/local/ssl/include,
+AC_SEARCH_HEADERS(md5.h,
+    $SSL_HDR_DIR /usr/include/openssl "" /usr/include /usr/include/ssl /usr/local/include /usr/local/ssl/include /usr/include/sys, 
+    ,
     AC_MSG_ERROR( SSL headers not found. )
    )
 fi
@@ -148,15 +169,46 @@ if test "$SSL" = "yes"; then
    AC_MSG_RESULT()
    AC_CHECKING( for blowfish Library and Header files ... )
    AC_SEARCH_HEADERS(blowfish.h,
-	$BLOWFISH_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include  /usr/include/crypto,
+    $BLOWFISH_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include  /usr/include/crypto,
 	AC_CHECK_LIB(crypto, BF_set_key,
 	    [
 	       LIBS="$LIBS -lcrypto"
 	       AC_DEFINE(HAVE_SSL)
+	       AC_DEFINE(HAVE_SSL_BLOWFISH)
 	    ],
 	    AC_MSG_ERROR( SSL library not found. )
 	),
 	AC_MSG_ERROR( SSL headers not found. )
+   )
+fi
+
+if test "$SSL" = "yes"; then
+   AC_MSG_RESULT()
+   AC_CHECKING( for AES Library and Header files ... )
+   AC_SEARCH_HEADERS(aes.h,
+    $SSL_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include  /usr/include/crypto,
+	AC_CHECK_LIB(crypto, AES_set_encrypt_key,
+	    [
+	       AC_DEFINE(HAVE_SSL_AES)
+	    ],
+	    AC_MSG_ERROR( AES library not found. )
+	),
+	AC_MSG_ERROR( AES headers not found. )
+   )
+fi
+
+if test "$SSL" = "yes"; then
+   AC_MSG_RESULT()
+   AC_CHECKING( for EVP Library and Header files ... )
+   AC_SEARCH_HEADERS(evp.h,
+    $SSL_HDR_DIR /usr/include/ssl /usr/include/openssl /usr/include /usr/local/include /usr/local/ssl/include  /usr/include/crypto,
+	AC_CHECK_LIB(crypto, EVP_EncryptInit,
+	    [
+	       AC_DEFINE(HAVE_SSL_EVP)
+	    ],
+	    AC_MSG_ERROR( EVP library not found. )
+	),
+	AC_MSG_ERROR( EVP headers not found. )
    )
 fi
 
@@ -179,6 +231,8 @@ if test "$SOCKS" = "yes"; then
 fi
 
 AC_MSG_RESULT()
+
+AC_CHECK_FUNCS([getpt grantpt unlockpt ptsname])
 
 OS_REL=`uname -r | tr -d '[A-Za-z\-\_\.]'`
 case $host_os in
@@ -206,7 +260,7 @@ AC_MSG_RESULT()
 
 dnl Build release name
 changequote(<,>)
-REL=`echo 'substr($Name,0)$' | tr -d '$: \-' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
+REL=`echo 'BRANCH-3_X' | tr -d '$: \-' | sed 's/^[A-Za-z]*//' | sed 's/\_/\./'`
 changequote([,])
 
 AC_DEFINE_UNQUOTED(VTUN_VER, "$REL `date '+%m/%d/%Y'`")

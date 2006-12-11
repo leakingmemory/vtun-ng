@@ -62,6 +62,12 @@
 /* Define if you have OpenSSL */
 #undef HAVE_SSL
 
+#undef HAVE_SSL_BLOWFISH
+
+#undef HAVE_SSL_AES
+
+#undef HAVE_SSL_EVP
+
 #undef HAVE_SHAPER
 
 /* Release version and date */

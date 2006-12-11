@@ -18,85 +18,85 @@
  */
 
 /*
- * llist.c,v 1.1.1.2 2000/03/28 17:19:34 maxk Exp
- */
+ * llist.c,v 1.1.1.2.6.1 2006/11/16 04:03:29 mtbishop Exp
+ */ 
 
 #include <stdlib.h>
 #include "llist.h"
 
 /* Function to work with the Linked Lists */
 
-void llist_init(llist * l)
+void llist_init(llist *l)
 {
 	l->head = l->tail = NULL;
-}
+} 
 
-int llist_empty(llist * l)
+int llist_empty(llist *l)
 {
 	return l->tail == NULL;
 }
 
-int llist_add(llist * l, void *d)
+int llist_add(llist *l, void * d)
 {
 	llist_elm *e;
 
-	if (!(e = malloc(sizeof(llist_elm))))
-		return -1;
+	if( !(e=malloc(sizeof(llist_elm))) )
+	   return -1; 	
 
-	if (!l->head)
-		l->head = l->tail = e;
+	if( !l->head )
+	   l->head = l->tail = e; 
 	else
-		l->tail->next = e;
+	   l->tail->next = e;
 	l->tail = e;
 
 	e->next = NULL;
 	e->data = d;
 
 	return 0;
-}
+} 
 
 /* Travel list from head to tail */
-void *llist_trav(llist * l, int (*f) (void *d, void *u), void *u)
+void * llist_trav(llist *l, int (*f)(void *d, void *u), void *u)
 {
 	llist_elm *i = l->head;
 
-	while (i) {
-		if (f(i->data, u))
-			return i->data;
-		i = i->next;
+	while( i ){
+	   if( f(i->data,u) ) return i->data;
+	   i = i->next;
 	}
 	return NULL;
 }
 
 /* Copy list from (l) to (t) */
-int llist_copy(llist * l, llist * t, void *(*f) (void *d, void *u),
-	       void *u)
+int llist_copy(llist *l, llist *t, void* (*f)(void *d, void *u), void *u)
 {
 	llist_elm *i = l->head;
 
 	llist_init(t);
-
-	while (i) {
-		llist_add(t, f(i->data, u));
-		i = i->next;
+	
+	while( i ){
+	   llist_add(t,f(i->data,u));
+	   i = i->next;
 	}
 	return 0;
 }
 
 /* Travel list from head to tail, deallocate each element */
-void *llist_free(llist * l, int (*f) (void *d, void *u), void *u)
+void * llist_free(llist *l, int (*f)(void *d, void *u), void *u)
 {
 	llist_elm *i = l->head, *n;
-	void *ff = NULL;
+        void *ff = NULL; 
 
-	while (i) {
-		n = i->next;
-		if (f(i->data, u))
-			ff = i->data;
-		else
-			free(i);
-		i = n;
+	while( i ){
+	   n = i->next; 	
+	   if( f(i->data,u) ) 
+ 	      ff = i->data;
+	   else
+	      free(i); 
+	   i = n;
 	}
 	l->head = l->tail = NULL;
 	return ff;
 }
+
+

@@ -17,14 +17,15 @@
  */
 
 /*
- * lock.h,v 1.1.1.1 2000/03/28 17:19:44 maxk Exp
- */
+ * lock.h,v 1.1.1.1.6.1 2006/11/16 04:03:38 mtbishop Exp
+ */ 
+
 #ifndef _VTUN_LOCK_H
 #define _VTUN_LOCK_H
 
-pid_t read_lock(char *host);
-int create_lock(char *host);
-int lock_host(struct vtun_host *host);
-void unlock_host(struct vtun_host *host);
+pid_t read_lock(char * host);
+int   create_lock(char * host);
+int   lock_host(struct vtun_host * host);
+void  unlock_host(struct vtun_host * host);
 
-#endif				/* _VTUN_LOCK_H */
+#endif /* _VTUN_LOCK_H */

@@ -17,8 +17,8 @@
  */
 
 /*
- * tun_dev.c,v 1.2 2001/09/20 06:26:41 talby Exp
- */
+ * $Id$
+ */ 
 
 #include "config.h"
 
@@ -40,87 +40,93 @@
 /* 
  * Allocate TUN device, returns opened fd. 
  * Stores dev name in the first arg(must be large enough).
- */
-int tun_open_old(char *dev)
+ */  
+static int tun_open_common0(char *dev, int istun)
 {
-	char tunname[14];
-	int i, fd;
+    char tunname[14];
+    int i, fd, err;
 
-	if (*dev) {
-		sprintf(tunname, "/dev/%s", dev);
-		return open(tunname, O_RDWR);
-	}
+    if( *dev ) {
+       sprintf(tunname, "/dev/%s", dev);
+       return open(tunname, O_RDWR);
+    }
 
-	for (i = 0; i < 255; i++) {
-		sprintf(tunname, "/dev/tun%d", i);
-		/* Open device */
-		if ((fd = open(tunname, O_RDWR)) > 0) {
-			sprintf(dev, "tun%d", i);
-			return fd;
-		}
-	}
-	return -1;
+    sprintf(tunname, "/dev/%s", istun ? "tun" : "tap");
+    err = 0;
+    for(i=0; i < 255; i++){
+       sprintf(tunname + 8, "%d", i);
+       /* Open device */
+       if( (fd=open(tunname, O_RDWR)) > 0 ) {
+          strcpy(dev, tunname + 5);
+          return fd;
+       }
+       else if (errno != ENOENT)
+          err = errno;
+       else if (i)	/* don't try all 256 devices */
+          break;
+    }
+    if (err)
+	errno = err;
+    return -1;
 }
 
-#ifdef HAVE_LINUX_IF_TUN_H	/* New driver support */
+#ifdef HAVE_LINUX_IF_TUN_H /* New driver support */
 #include <linux/if_tun.h>
 
+#ifndef OTUNSETNOCSUM
 /* pre 2.4.6 compatibility */
-#define OTUNSETNOCSUM  (('T'<< 8) | 200)
-#define OTUNSETDEBUG   (('T'<< 8) | 201)
-#define OTUNSETIFF     (('T'<< 8) | 202)
-#define OTUNSETPERSIST (('T'<< 8) | 203)
+#define OTUNSETNOCSUM  (('T'<< 8) | 200) 
+#define OTUNSETDEBUG   (('T'<< 8) | 201) 
+#define OTUNSETIFF     (('T'<< 8) | 202) 
+#define OTUNSETPERSIST (('T'<< 8) | 203) 
 #define OTUNSETOWNER   (('T'<< 8) | 204)
+#endif
 
-int tun_open(char *dev)
+static int tun_open_common(char *dev, int istun)
 {
-	struct ifreq ifr;
-	int fd;
+    struct ifreq ifr;
+    int fd;
 
-	if ((fd = open("/dev/net/tun", O_RDWR)) < 0)
-		return tun_open_old(dev);
+    if ((fd = open("/dev/net/tun", O_RDWR)) < 0)
+       return tun_open_common0(dev, istun);
 
-	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
-	if (*dev)
-		strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+    memset(&ifr, 0, sizeof(ifr));
+    ifr.ifr_flags = (istun ? IFF_TUN : IFF_TAP) | IFF_NO_PI;
+    if (*dev)
+       strncpy(ifr.ifr_name, dev, IFNAMSIZ);
 
-	if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
-		if (errno == EBADFD) {
-			/* Try old ioctl */
-			if (ioctl(fd, OTUNSETIFF, (void *) &ifr) < 0)
-				goto failed;
-		} else
-			goto failed;
-	}
+    if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
+       if (errno == EBADFD) {
+	  /* Try old ioctl */
+ 	  if (ioctl(fd, OTUNSETIFF, (void *) &ifr) < 0) 
+	     goto failed;
+       } else
+          goto failed;
+    } 
 
-	strcpy(dev, ifr.ifr_name);
-	return fd;
+    strcpy(dev, ifr.ifr_name);
+    return fd;
 
-      failed:
-	close(fd);
-	return -1;
+failed:
+    close(fd);
+    return -1;
 }
 
 #else
-int tun_open(char *dev)
-{
-	return tun_open_old(dev);
-}
-#endif				/* New driver support */
 
-int tun_close(int fd, char *dev)
-{
-	return close(fd);
-}
+# define tun_open_common(dev, type) tun_open_common0(dev, type)
+
+#endif /* New driver support */
+
+int tun_open(char *dev) { return tun_open_common(dev, 1); }
+int tap_open(char *dev) { return tun_open_common(dev, 0); }
+
+int tun_close(int fd, char *dev) { return close(fd); }
+int tap_close(int fd, char *dev) { return close(fd); }
 
 /* Read/write frames from TUN device */
-int tun_write(int fd, char *buf, int len)
-{
-	return write(fd, buf, len);
-}
+int tun_write(int fd, char *buf, int len) { return write(fd, buf, len); }
+int tap_write(int fd, char *buf, int len) { return write(fd, buf, len); }
 
-int tun_read(int fd, char *buf, int len)
-{
-	return read(fd, buf, len);
-}
+int tun_read(int fd, char *buf, int len) { return read(fd, buf, len); }
+int tap_read(int fd, char *buf, int len) { return read(fd, buf, len); }

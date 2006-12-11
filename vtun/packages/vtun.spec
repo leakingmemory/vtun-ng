@@ -1,4 +1,4 @@
-# vtun.spec,v 1.24.2.2 2006/12/11 14:09:34 mtbishop Exp
+# $Id$
 
 # By default, builds without socks-support.
 # To build with socks-support, issue:
@@ -37,7 +37,7 @@ Release: 	%{release}
 License: 	GPL
 Group: 		System Environment/Daemons
 Url: 		http://vtun.sourceforge.net/
-Source: 	http://vtun.sourceforge.net/%{name}-%{version}.tar.gz
+Source: 	http://easynews.dl.sourceforge.net/sourceforge/%{name}/%{name}-%{version}.tar.gz
 Summary: 	Virtual tunnel over TCP/IP networks.
 Summary(pl):	Wirtualne tunele poprzez sieci TCP/IP
 Vendor: 	Maxim Krasnyansky <max_mk@yahoo.com>

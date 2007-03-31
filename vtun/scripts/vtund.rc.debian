@@ -1,92 +1,61 @@
-#! /usr/bin/perl -w
+#! /bin/sh
+#
+# submitted by Morgon Kanter
+# 
 
-### vtund-start
-###
-### script to start vtund as either a server or a client, according to
-### the config file /etc/vtund-start.conf
-###
-### Copyright 1999 Craig Sanders <cas@taz.net.au>
-###
-### Written for the Debian GNU/Linux distribution.  This script is free
-### software licensed under the terms of the GNU General Public License.
-
-$DAEMON="/usr/sbin/vtund" ;
-
-$do_what = shift ;
-$args="start|stop|reload|force-reload|restart" ;
-if ( $do_what !~ /^($args)$/i ) {
-    print "Usage: /etc/init.d/vtun {$args}\n" ;
-        exit 0 ;
-}
-
-$SSD="/sbin/start-stop-daemon" ;
-$SSDARGS="--verbose --exec $DAEMON" ;
-
-$sconf="/etc/vtund-start.conf" ;
-open(SCONF,"<$sconf") || die "couldn't open $sconf: $!\n" ;
-while (<SCONF>) {
-        chomp ;
-        s/#.*//;
-        s/^ +| +$//;
-        next if (/^$/) ;
-
-        @line = split ;
-        $host = shift(@line) ;
-        $server = shift(@line) ;
-        $args = "" ;
-        foreach (@line) { $args .= " $_" } ;
-
-        $host='' if ($host =~ /--server--/i ) ;
-
-        if ( $do_what eq 'start' ) {
-                &start($host,$server,$args) ;
-        } elsif ( $do_what eq 'stop' ) {
-                &stop($host,$server,$args) ;
-        } elsif ( $do_what eq 'restart' ) {
-                &stop($pidfile) ;
-                &start($host,$server,$args) ;
-        } elsif ( $do_what =~ /^(reload|force-reload)$/ ) {
-                &reload($host,$server) ;
-        }
-}
-close (SCONF);
-
-
-sub start {
-        my($host,$server,$args) = @_ ;
-    print "  Starting vtun " ;
-        if ($host eq '') {
-                print "server\n" ;
-        system "$SSD --start $SSDARGS -- $args -s -P $server" ;
-        } else {
-                print "client $host to $server\n" ;
-                $pidfile="/var/run/vtun.$host.$server" ;
-        system "$SSD --start $SSDARGS --pidfile $pidfile -- $args $host $server" ;
-        }
-} ;
-
-sub stop {
-        my($host,$server,$args) = @_ ;
-    print "  Stopping vtun " ;
-        if ($host eq '') {
-                print "server\n" ;
-        system "$SSD --stop $SSDARGS" ;
-        } else {
-                print "client $host to $server\n" ;
-                $pidfile="/var/run/vtun.$host.$server" ;
-        system "$SSD --stop $SSDARGS --pidfile $pidfile" ;
-        }
-} ;
-
-sub reload {
-        my($host,$server) = @_ ;
-    print "  Reloading vtun " ;
-        if ($host eq '') {
-                print "server\n" ;
-        system "$SSD --stop $SSDARGS --signal 1" ;
-        } else {
-                print "client $host to $server\n" ;
-                $pidfile="/var/run/vtun.$host.$server" ;
-        system "$SSD --stop $SSDARGS --signal 1 --pidfile $pidfile" ;
-        }
-}
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+DAEMON=/usr/sbin/vtund
+CONFFILE=/etc/vtund-start.conf
+PIDPREFIX=/var/run/vtund
+  
+test -f $DAEMON || exit 0
+  
+case "$1" in 
+       start)
+      # find all the defined tunnels
+      egrep -v '^[:space:]*(#.*)?$' $CONFFILE | while true;
+      do
+          read i
+          # no more lines available? done, then.
+          if [ $? != 0 ] ; then break; fi
+              SARGS=`echo $i|sed -ne 's/--server--\s*/-s -P /p'`;
+              if [ -n "$SARGS" ];
+              then
+                 echo "Starting vtund server."
+                  start-stop-daemon --start --exec $DAEMON --pidfile $PIDPREFIX.pid -- $SARGS;
+              else
+                  # split args into host and rest
+                  HOST=`echo $i|cut -f 1 -d " "`;
+                  TARGET=`echo $i|cut -f 2 -d " "`;
+                  echo  "Starting vtund client $HOST to $TARGET.";
+                  start-stop-daemon --start --exec $DAEMON --pidfile $PIDPREFIX.$HOST.pid -- $i;
+ 
+              fi
+          done
+              ;;
+       stop) 
+          echo "Stopping vtund.";
+          for i in $PIDPREFIX*;
+          do
+              start-stop-daemon --stop --pidfile $i; 
+              rm -f $i;
+          done
+               ;;
+       reload|force-reload)
+          echo "Reloading vtund.";
+          for i in $PIDPREFIX*;
+          do
+              start-stop-daemon --stop --signal 1 --pidfile $i; 
+          done
+              ;;
+       restart) 
+          $0 stop
+          sleep 1;
+          $0 start
+          ;;
+   *)
+      echo "Usage: $0 {start|stop|restart|reload|force-reload}" >&2
+       exit 1
+               ;;
+esac
+exit 0

@@ -1,4 +1,7 @@
 
+3.0.0:
+	Configure looks for liblzo2 when available. (bc)
+	
 3.0.0-pre2:
 	obsoleted linux/tap_dev (mjt)
 	fixed Bug#1062819 - multi killold parsing bug (dpf)	
@@ -8,6 +11,7 @@
 	started on UNSUPPORTED rpmbuild option (bc)
 	Fixed Bug#1176343 SIGINT kills foreground server process (bc)
 	Added RFE#936523 Bind VTun Server to Specific Interface (bc)
+	Completely Rewrote the Bind To Specific Interface (alan grow)
 	
 3.0.0-pre1:
 	Implementation of Nickolai 'kolya' Zeldovich's mlockall() patch	(bc)

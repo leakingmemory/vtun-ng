@@ -109,6 +109,7 @@ Yan Seiner <yan@cardinalengineering.com>
 	Testing. Bug reports. Suggestions.
 
 James Yonan <jim@funnybee.ntlp.com>
+	Configure.in updates (liblzo)
 	Encryption and other fixes. Suggestions.
 
 Greg Olszewski <noop@nwonknu.org>
@@ -133,3 +134,7 @@ Dale Fountain <dpf-vtun@fountainbay.com>
 	Added support for different sized keys.
 	Re-sync ciphers when using non-ECB modes over a UDP connection.
 	Fixed Bug#908824 (persist=keep not re-applying routes)
+
+Alan Grow <agrow-at-thegotonerd.com>
+	Added a Listening Address/Interface (rfe936523)
+	Code Cleanup

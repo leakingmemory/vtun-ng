@@ -26,3 +26,4 @@
 # spread out over the entire source repository.
 vtun vtun
 tun  tun
+vtunsite/Changelog -a vtun/Changelog

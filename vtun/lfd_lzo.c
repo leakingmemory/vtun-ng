@@ -36,6 +36,7 @@
 #ifdef HAVE_LZO
 
 #include "lzo1x.h"
+#include "lzoutil.h"
 
 static lzo_byte *zbuf;
 static lzo_voidp wmem;

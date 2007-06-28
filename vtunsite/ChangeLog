@@ -1,4 +1,7 @@
-
+3.0.1:
+	rfe1602625 - fix build for lzo2 (bc,db,ruzsi)
+	rfe780607 - new debian rc scripts (surgo)
+	
 3.0.0:
 	Configure looks for liblzo2 when available. (bc)
 	

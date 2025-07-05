@@ -137,3 +137,33 @@ Dale Fountain <dpf-vtun@fountainbay.com>
 Alan Grow <agrow-at-thegotonerd.com>
 	Added a Listening Address/Interface (rfe936523)
 	Cleaned up the code around that portion of the config.
+
+Hans Carlos Hoffman <hchs.de>
+	Inventive method for vtund3c->vtund2s encryption (rfe1685781)
+
+Serge B. Khvatov <xbatob@users.sf.net>
+	Makefile fix for LDFLAGS (rfe2149137)
+
+Yasuyuki <fryasu@yahoo.co.jp>
+	Mem leak in cfg_file.y (rfe2405993)
+
+Dragos Vingarzan <dragos.vingarzan@gmail.com>
+	Delayed UDP for unpredictable ports on bad NATs. (rfe2636157)
+
+Sergey Popov (Pinkbyte) <@pinkbyte.ru>
+	Parallel make Makefile.in race condition (rfe3540779)
+
+Eugene Berdnikov
+	Link timeout in UDP mode (deb339364)
+	Types cleanup
+
+Sean MacLennan
+	Reduce connection chatter 
+
+Andrey Mazo <ahippo@sf>
+	Clean up Configure.in for autoheader
+	Static declarations where sensible
+	Check/handle no fork() for no-MMU client systems (eg blackfin)
+
+Alfred Heisner <aheisner@sf>
+	Race condition between syslog socket and vtun (bug53)

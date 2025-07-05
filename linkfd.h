@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * linkfd.h,v 1.1.1.2.2.2.2.3 2006/11/16 04:03:26 mtbishop Exp
+ * $Id: linkfd.h,v 1.4.2.4 2016/10/01 21:37:39 mtbishop Exp $
  */ 
 
 #ifndef _LINKFD_H
@@ -87,6 +87,7 @@ struct lfd_mod {
 extern struct lfd_mod lfd_zlib;
 extern struct lfd_mod lfd_lzo;
 extern struct lfd_mod lfd_encrypt;
+extern struct lfd_mod lfd_legacy_encrypt;
 extern struct lfd_mod lfd_shaper;
 
 #endif

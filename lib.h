@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * lib.h,v 1.2.2.5.2.1 2006/11/16 04:03:20 mtbishop Exp
+ * $Id: lib.h,v 1.7.2.4 2016/10/01 21:27:51 mtbishop Exp $
  */ 
 #ifndef _VTUN_LIB_H
 #define _VTUN_LIB_H
@@ -46,7 +46,9 @@
 int readn_t(int fd, void *buf, size_t count, time_t timeout);
 int print_p(int f, const char *ftm, ...);
 
+#ifdef HAVE_WORKING_FORK
 int  run_cmd(void *d, void *opt);
+#endif
 void free_sopt(struct vtun_sopt *opt);
 
 /* IO cancelation */

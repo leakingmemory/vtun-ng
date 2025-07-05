@@ -850,6 +850,7 @@ Optional Features:
 --disable-zlib     	   Don not compile ZLIB compression module
 --disable-lzo     	   Don not compile LZO compression module
 --enable-socks     	   Compile with SOCKS support
+--disable-nathack	   Do not enable Nat Hack code
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -1349,6 +1350,15 @@ if test "${enable_socks+set}" = set; then
   SOCKS=$enableval
 else
   SOCKS=no
+
+fi;
+
+# Check whether --enable-nathack or --disable-nathack was given.
+if test "${enable_nathack+set}" = set; then
+  enableval="$enable_nathack"
+  NATHACK=$enableval
+else
+  NATHACK=yes
 
 fi;
 
@@ -6053,6 +6063,13 @@ echo "$as_me: error: EVP headers not found. " >&2;}
    { (exit 1); exit 1; }; }
 
     fi
+
+fi
+
+if test "$NATHACK" = "yes"; then
+   cat >>confdefs.h <<\_ACEOF
+#define ENABLE_NAT_HACK 1
+_ACEOF
 
 fi
 

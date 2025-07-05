@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * cfg_kwords.h,v 1.1.1.1.2.3.2.8 2006/11/16 04:02:45 mtbishop Exp
+ * $Id: cfg_kwords.h,v 1.6.2.5 2016/10/01 21:27:51 mtbishop Exp $
  */ 
 
 extern int lineno;
@@ -49,6 +49,8 @@ struct kword cfg_keyword[] = {
    { "encrypt",  K_ENCRYPT }, 
    { "type",	 K_TYPE }, 
    { "proto",	 K_PROT }, 
+   { "nat_hack", K_NAT_HACK },
+   { "delay_udp",K_NAT_HACK },
    { "device",	 K_DEVICE }, 
    { "ppp",	 K_PPP },
    { "ifconfig", K_IFCFG },
@@ -75,6 +77,8 @@ struct kword cfg_param[] = {
    { "tun",	 VTUN_TUN }, 
    { "tcp",      VTUN_TCP }, 
    { "udp",      VTUN_UDP }, 
+   { "client",   VTUN_NAT_HACK_CLIENT },
+   { "server",   VTUN_NAT_HACK_SERVER },   
    { "lzo",      VTUN_LZO }, 
    { "zlib",     VTUN_ZLIB }, 
    { "wait",	 1 },
@@ -82,6 +86,7 @@ struct kword cfg_param[] = {
    { "inetd",	 VTUN_INETD },
    { "stand",	 VTUN_STAND_ALONE },
    { "keep",     VTUN_PERSIST_KEEPIF },
+   { "oldblowfish128ecb", VTUN_LEGACY_ENCRYPT },
    { "blowfish128ecb", VTUN_ENC_BF128ECB },
    { "blowfish128cbc", VTUN_ENC_BF128CBC },
    { "blowfish128cfb", VTUN_ENC_BF128CFB },

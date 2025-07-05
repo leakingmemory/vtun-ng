@@ -1,5 +1,5 @@
 .\" Manual page for vtund.conf
-.\" vtund.conf.5,v 1.1.2.6.2.3 2006/11/16 04:04:12 mtbishop Exp
+.\" $Id: vtund.conf.5,v 1.4.2.6 2016/09/17 20:01:24 mtbishop Exp $
 .TH VTUND.CONF 5
 
 .SH NAME
@@ -48,7 +48,7 @@ specifies general options to use by
 Possible \fIkeyword\fRs are:
 .IP \fBtype\fR\ \fBstand\fR|\fBinetd\fR
 server type. \fBvtund\fR(8) can operate in standalone
-mode (\fBstand\fR), that is the default, or be invoked from
+mode (\fBstand\fR), that is the default (but not available on no-MMU systems), or be invoked from
 .BR inetd (8).
 
 .IP \fBport\ \fIportnumber\fR
@@ -145,11 +145,38 @@ protocol to use.  By default, \fBvtund\fR(8) will use TCP protocol.
 UDP is recommended for \fBether\fR and \fBtun\fR tunnels only.
 This option is ignored by the client.
 
+.IP \fBnat_hack\ \fBclient\fR|\fBserver\fR|\fBno\fR
+side to use nat_hack on.  By default, \fBvtund\fR(8) uses a 'no' setting.
+The side that the NAT hack is enabled on will perform a delayed UDP socket
+connect. Should only be enabled for the side outside of the NAT (typically 
+the server)! Setting 'client' on the server or 'server' on the client is 
+ignored, as to make a single configuration file reusable on both sides.
+
+This is only relevant if you use \fBproto udp\fR. The NAT hack delays
+the UDP socket connect until the first UDP packet is received from the other
+side of the tunnel. The socket is then connected to the actual source port of
+the packet (on the NAT box) and not to the one indicated in the handshake 
+(which is behind NAT and probably unreachable). 
+The first echo request is also disabled on the side with the NAT hack enabled.
+
+Currently the mechanism works only for one side, for a single NAT traversal.
+If you enable it for both sides, both will wait for a first packet and the 
+tunnel will never transport any data.
+
+\fBSecurity warning!\fR Due to the nature of the delayed connection, the tunnel
+can be hijacked in theory by an attacker behind the same NAT, sending the first 
+UDP packet to the server UDP port, before the real client does. If you do not 
+understand the risks, or want to remain as secure as possible behind this kind
+of NAT router, use \fBproto tcp\fR as a NAT traversal solution.
+
+Because of the security issue mentioned above, this option might be disabled
+during compilation (configure --disable-nathack). 
+
 .IP \fBtimeout\ \fIsecounds\fR
 Connect timeout.
 
 .IP \fBcompress\ \fImethod\fR[\fB:\fIlevel\fR]
-specifies compression method to use.  Compression \fImethod\fRs includes:
+specifies compression method to use.  Compression \fImethod\fRs include:
 .RS
 .IP \fBno\fR
 no compression
@@ -163,12 +190,58 @@ LZO compression (if compiled in)
 .IP
 You can also specify \fIlevel\fR of compression using one
 digit (1 is best speed, 9 is best compression ratio).
-This option ignored by the client.
-.IP \fBencrypt\ \fByes\fR|\fBno\fR
-enable or disable encryption.  This option ignored by the client.
-.IP \fBkeepalive\ \fByes\fR|\fBno\fR
-enable or disable connection keep-alive.
 This option is ignored by the client.
+
+.IP \fBencrypt\ \fImethod\fR[\fB:\fIlevel\fR]
+specifies encryption method to use.  Encryption \fImethod\fRs include:
+.RS
+.IP \fBno\fR
+no encryption
+.IP \fByes\fR
+default encryption method (\fBblowfish128ecb\fR)
+.IP \fBblowfish128ecb\fR
+Blowfish cipher, 128 bit key, mode ECB
+.IP \fBblowfish128cbc\fR
+Blowfish cipher, 128 bit key, mode CBC
+.IP \fBblowfish128cfb\fR
+Blowfish cipher, 128 bit key, mode CFB
+.IP \fBblowfish128ofb\fR
+Blowfish cipher, 128 bit key, mode OFB
+.IP \fBblowfish256ecb\fR
+Blowfish cipher, 256 bit key, mode ECB
+.IP \fBblowfish256cbc\fR
+Blowfish cipher, 256 bit key, mode CBC
+.IP \fBblowfish256cfb\fR
+Blowfish cipher, 256 bit key, mode CFB
+.IP \fBblowfish256ofb\fR
+Blowfish cipher, 256 bit key, mode OFB
+.IP \fBaes128ecb\fR
+.IP \fBoldblowfish128ecb\fR
+Blowfish cipher, 128bit key, mode ECB 
+ (for use with 2.6 clients only)
+AES cipher, 128 bit key, mode ECB
+.IP \fBaes128cbc\fR
+AES cipher, 128 bit key, mode CBC
+.IP \fBaes128cfb\fR
+AES cipher, 128 bit key, mode CFB
+.IP \fBaes128ofb\fR
+AES cipher, 128 bit key, mode OFB
+.IP \fBaes256ecb\fR
+AES cipher, 256 bit key, mode ECB
+.IP \fBaes256cbc\fR
+AES cipher, 256 bit key, mode CBC
+.IP \fBaes256cfb\fR
+AES cipher, 256 bit key, mode CFB
+.IP \fBaes256ofb\fR
+AES cipher, 256 bit key, mode OFB
+.RE
+.IP
+This option is ignored by the client.
+.IP \fBkeepalive\ \fByes\fR|\fBno\fR|\fIinterval\fB:\fIcount\fR
+enable or disable connection keep-alive. Time \fIinterval\fR is a period
+between connection checks, in seconds, and \fIcount\fR is the maximum number
+of retries (\fByes\fR = \fI30\fB:\fI4\fR).
+This option is ignored by the server.
 .IP \fBstat\ \fByes\fR|\fBno\fR
 enable or disable statistics.  If enabled \fBvtund\fR(8) will log
 statistic counters to /var/log/vtund/session_X every 5 minutes.
@@ -210,6 +283,7 @@ Ignored by the client.
 list of programs to run after connection has been established.
 Used to initialize protocols, devices, routing and firewall.
 This option looks like whole section inside of session section.
+For now, it's impossible to run \fBup\fR commands on no-MMU systems, so the section is ignored there.
 Format:
 .nf
  \fBup\fR {
@@ -242,6 +316,8 @@ Special characters that can be used inside \fIarguments\fR parameter:
 \fB%a\fR - Remote IP address
 .br
 \fB%p\fR - Remote TCP or UDP port
+.br
+\fB%h\fR - Host profile name
 .IP \fBppp\ \fIarguments\fR
 run program specified by \fBppp\fR statement in \fBoptions\fR section.
 All special character described above are valid in \fIarguments\fR here.
@@ -257,6 +333,7 @@ run program specified by \fBfirewall\fR statement in \fBoptions\fR section.
 .IP \fBdown\ \fIlist\fR
 list of programs to run after connection has been terminated.
 It is similar to \fBup\fR parameter above.
+Not available on no-MMU systems too.
 Format:
 .nf
  \fBdown\fR {

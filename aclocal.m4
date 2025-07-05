@@ -51,7 +51,8 @@ dnl Create links to all files($1) in the directory($2)
 AC_DEFUN( AC_LINK_DIR, 
 [
     for i in $1; do
-      if test -f $2/$i -a ! -f $i; then
+      dnl if test -f $2/$i -a ! -f $i; then
+      if test -f $2/$i; then
          AC_MSG_RESULT(linking $2/$i  to  $i)
          ln -f -s $2/$i $i
       fi
@@ -64,8 +65,8 @@ AC_DEFUN( AC_LINK_DRV,
 [
     AC_MSG_RESULT( creating driver and protocol links ... )
 
+    AC_LINK_DIR($1, generic)
     if test "$2" != ""; then
        AC_LINK_DIR($1, $2)
     fi
-    AC_LINK_DIR($1, generic)
 ])

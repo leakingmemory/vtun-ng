@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * server.c,v 1.4.2.5.2.4 2006/11/16 04:03:53 mtbishop Exp
+ * $Id: server.c,v 1.9.2.5 2016/10/01 21:27:51 mtbishop Exp $
  */ 
 
 #include "config.h"
@@ -49,6 +49,7 @@
 #include "auth.h"
 
 #include "compat.h"
+#include "netlib.h"
 
 static volatile sig_atomic_t server_term;
 static void sig_term(int sig)
@@ -57,7 +58,7 @@ static void sig_term(int sig)
      server_term = VTUN_SIG_TERM;
 }
 
-void connection(int sock)
+static void connection(int sock)
 {
      struct sockaddr_in my_addr, cl_addr;
      struct vtun_host *host;
@@ -110,7 +111,8 @@ void connection(int sock)
      exit(0);
 }
 
-void listener(void)
+#ifdef HAVE_WORKING_FORK
+static void listener(void)
 {
      struct sigaction sa;
      struct sockaddr_in my_addr, cl_addr;
@@ -171,6 +173,7 @@ void listener(void)
 	}
      }  
 }	
+#endif
 
 void server(int sock)
 {
@@ -189,7 +192,11 @@ void server(int sock)
 
      switch( vtun.svr_type ){
 	case VTUN_STAND_ALONE:
+#ifdef HAVE_WORKING_FORK
 	   listener();
+#else
+	   vtun_syslog(LOG_ERR,"Standalone server is not supported: fork() not available");
+#endif
 	   break;
         case VTUN_INETD:
 	   connection(sock);

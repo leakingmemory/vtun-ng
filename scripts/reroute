@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Maxim Krasnyansky <max_mk@yahoo.com>
-# reroute,v 1.2.6.1 2006/11/16 04:04:59 mtbishop Exp
+# $Id: reroute,v 1.3.2.1 2007/06/29 05:27:18 mtbishop Exp $
 #
 IP=/sbin/ip
 

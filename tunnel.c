@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * tunnel.c,v 1.5.2.8.2.2 2006/11/16 04:03:56 mtbishop Exp
+ * $Id: tunnel.c,v 1.14.2.4 2016/10/01 21:27:51 mtbishop Exp $
  */ 
 
 #include "config.h"
@@ -147,6 +147,7 @@ int tunnel(struct vtun_host *host)
 	   break;
      }
 
+#ifdef HAVE_WORKING_FORK
         switch( (pid=fork()) ){
 	   case -1:
 	      vtun_syslog(LOG_ERR,"Couldn't fork()");
@@ -187,6 +188,9 @@ int tunnel(struct vtun_host *host)
 
 	   exit(0);           
 	}
+#else
+     vtun_syslog(LOG_ERR,"Couldn't run up commands: fork() not available");
+#endif
 
      switch( host->flags & VTUN_TYPE_MASK ){
         case VTUN_TTY:
@@ -222,8 +226,12 @@ int tunnel(struct vtun_host *host)
 
      opt = linkfd(host);
 
+#ifdef HAVE_WORKING_FORK
      set_title("%s running down commands", host->host);
      llist_trav(&host->down, run_cmd, &host->sopt);
+#else
+     vtun_syslog(LOG_ERR,"Couldn't run down commands: fork() not available");
+#endif
 
      if(! ( host->persist == VTUN_PERSIST_KEEPIF ) ) {
         set_title("%s closing", host->host);

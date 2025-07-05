@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * main.c,v 1.1.1.2.2.8.2.4 2006/11/16 04:03:41 mtbishop Exp
+ * $Id: main.c,v 1.9.2.8 2016/10/01 21:37:39 mtbishop Exp $
  */ 
 
 #include "config.h"
@@ -39,26 +39,42 @@
 #include "lib.h"
 #include "compat.h"
 
+#define OPTSTRING "mif:P:L:t:npq"
+#ifdef HAVE_WORKING_FORK
+#  define SERVOPT_STRING "s"
+#else
+#  define SERVOPT_STRING ""
+#endif
+
 /* Global options for the server and client */
 struct vtun_opts vtun;
 struct vtun_host default_host;
 
-void write_pid(void);
-void reread_config(int sig);
-void usage(void);
+static void write_pid(void);
+static void reread_config(int sig);
+static void usage(void);
 
 extern int optind,opterr,optopt;
 extern char *optarg;
 
+/* for the NATHack bit.  Is our UDP session connected? */
+int is_rmt_fd_connected=1; 
+
 int main(int argc, char *argv[], char *env[])
 {
-     int svr, daemon, sock, dofork, fd, opt;
+     int svr, daemon, sock, fd, opt;
+#if defined(HAVE_WORKING_FORK) || defined(HAVE_WORKING_VFORK)
+     int dofork;
+#endif
      struct vtun_host *host = NULL;
      struct sigaction sa;
      char *hst;
 
      /* Configure default settings */
-     svr = 0; daemon = 1; sock = 0; dofork = 1;
+     svr = 0; daemon = 1; sock = 0;
+#if defined(HAVE_WORKING_FORK) || defined(HAVE_WORKING_VFORK)
+     dofork = 1;
+#endif
 
      vtun.cfg_file = VTUN_CONFIG_FILE;
      vtun.persist = -1;
@@ -83,13 +99,13 @@ int main(int argc, char *argv[], char *env[])
      default_host.multi   = VTUN_MULTI_ALLOW;
      default_host.timeout = VTUN_CONNECT_TIMEOUT;
      default_host.ka_interval = 30;
-     default_host.ka_failure  = 4;
+     default_host.ka_maxfail  = 4;
      default_host.loc_fd = default_host.rmt_fd = -1;
 
      /* Start logging to syslog and stderr */
      openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
 
-     while( (opt=getopt(argc,argv,"misf:P:L:t:np")) != EOF ){
+     while( (opt=getopt(argc,argv,OPTSTRING SERVOPT_STRING)) != EOF ){
 	switch(opt){
 	    case 'm':
 	        if (mlockall(MCL_CURRENT | MCL_FUTURE) < 0) {
@@ -99,7 +115,9 @@ int main(int argc, char *argv[], char *env[])
 		break;
 	    case 'i':
 		vtun.svr_type = VTUN_INETD;
+#ifdef HAVE_WORKING_FORK
 	    case 's':
+#endif
 		svr = 1;
 		break;
 	    case 'L':
@@ -120,6 +138,9 @@ int main(int argc, char *argv[], char *env[])
 	    case 't':
 	        vtun.timeout = atoi(optarg);	
 	        break;
+	    case 'q':
+		vtun.quiet = 1;
+		break;
 	    default:
 		usage();
 	        exit(1);
@@ -132,6 +153,8 @@ int main(int argc, char *argv[], char *env[])
  	closelog();
  	openlog("vtund", LOG_PID|LOG_NDELAY|LOG_PERROR, vtun.syslog);
      }
+
+	clear_nat_hack_flags(svr);
 
      if(!svr){
 	if( argc - optind < 2 ){
@@ -165,13 +188,20 @@ int main(int argc, char *argv[], char *env[])
 	   break;
 	case VTUN_INETD:
 	   sock = dup(0);
+#if defined(HAVE_WORKING_FORK) || defined(HAVE_WORKING_VFORK)
 	   dofork = 0; 
+#endif
 	   break;
      }
 
      if( daemon ){
+#ifdef HAVE_WORKING_FORK
 	if( dofork && fork() )
 	   exit(0);
+#elif defined(HAVE_WORKING_VFORK)
+	if( dofork && vfork() )
+	   exit(0);
+#endif
 
         /* Direct stdin,stdout,stderr to '/dev/null' */
         fd = open("/dev/null", O_RDWR);
@@ -192,8 +222,14 @@ int main(int argc, char *argv[], char *env[])
 
         init_title(argc,argv,env,"vtund[s]: ");
 
-	if( vtun.svr_type == VTUN_STAND_ALONE )	
+	if( vtun.svr_type == VTUN_STAND_ALONE ){
+#ifdef HAVE_WORKING_FORK
 	   write_pid();
+#else
+	   vtun_syslog(LOG_ERR,"Standalone server is not supported. Use -i");
+	   exit(1);
+#endif
+	}
 	
 	server(sock);
      } else {	
@@ -210,7 +246,7 @@ int main(int argc, char *argv[], char *env[])
  * Very simple PID file creation function. Used by server.
  * Overrides existing file. 
  */
-void write_pid(void)
+static void write_pid(void)
 {
      FILE *f;
 
@@ -223,7 +259,7 @@ void write_pid(void)
      fclose(f);
 }
 
-void reread_config(int sig)
+static void reread_config(int sig)
 {
      if( !read_config(vtun.cfg_file) ){
 	vtun_syslog(LOG_ERR,"No hosts defined");
@@ -231,14 +267,18 @@ void reread_config(int sig)
      }
 }
 
-void usage(void)
+static void usage(void)
 {
      printf("VTun ver %s\n", VTUN_VER);
      printf("Usage: \n");
      printf("  Server:\n");
-     printf("\tvtund <-s> [-f file] [-P port] [-L local address]\n");
+#ifdef HAVE_WORKING_FORK
+     printf("\tvtund <-s|-i> [-f file] [-P port] [-L local address]\n");
+#else
+     printf("\tvtund <-i> [-f file] [-P port] [-L local address]\n");
+#endif
      printf("  Client:\n");
      /* I don't think these work. I'm disabling the suggestion - bish 20050601*/
      printf("\tvtund [-f file] " /* [-P port] [-L local address] */
-	    "[-p] [-m] [-t timeout] <host profile> <server address>\n");
+	    "[-q] [-p] [-m] [-t timeout] <host profile> <server address>\n");
 }

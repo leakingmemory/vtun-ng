@@ -1,7 +1,7 @@
 #
 #   VTun - Virtual Tunnel over TCP/IP network. 
 #
-#   Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+#   Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 #
 #   VTun has been derived from VPPP package by Maxim Krasnyansky. 
 #
@@ -15,11 +15,11 @@
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU General Public License for more details.
 #
-#   Makefile.in,v 1.6.2.4.2.1 2006/11/16 04:03:44 mtbishop Exp
+#   $Id: Makefile.in,v 1.11.2.8 2016/10/01 21:46:00 mtbishop Exp $
 #  
 CC = @CC@
 CFLAGS = @CFLAGS@ @CPPFLAGS@
-LDFLAGS = @LIBS@
+LDFLAGS = @LDFLAGS@ @LIBS@
 
 YACC = @YACC@
 YACCFLAGS = -d
@@ -34,6 +34,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 
 SBIN_DIR = @sbindir@
+BIN_DIR  = @bindir@
 MAN_DIR  = @mandir@
 ETC_DIR  = @sysconfdir@
 VAR_DIR  = @localstatedir@
@@ -50,7 +51,7 @@ OBJS = main.o cfg_file.tab.o cfg_file.lex.o server.o client.o lib.o \
        llist.o auth.o tunnel.o lock.o netlib.o  \
        tun_dev.o tap_dev.o pty_dev.o pipe_dev.o \
        tcp_proto.o udp_proto.o \
-       linkfd.o lfd_shaper.o lfd_zlib.o lfd_lzo.o lfd_encrypt.o 
+       linkfd.o lfd_shaper.o lfd_zlib.o lfd_lzo.o lfd_encrypt.o lfd_legacy_encrypt.o
 
 CONFIGURE_FILES = Makefile config.status config.cache config.h config.log 
 
@@ -60,17 +61,19 @@ CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
 vtund: $(OBJS)
 	$(CC) $(CFLAGS) -o vtund $(OBJS) $(LFD_OBJS) $(LDFLAGS)
 
-cfg_file.tab.c: cfg_file.y cfg_kwords.h config.h
+cfg_file.tab.h:
 	$(YACC) $(YACCFLAGS) -b cfg_file cfg_file.y
 
-cfg_file.lex.c: cfg_file.l cfg_kwords.h config.h
+cfg_file.tab.c: cfg_file.y cfg_kwords.h config.h cfg_file.tab.h
+
+cfg_file.lex.c: cfg_file.l cfg_kwords.h config.h cfg_file.tab.h
 	$(LEX) $(LEXFLAGS) cfg_file.l > cfg_file.lex.c 
 
 depend:
 	makedepend -- $(CFLAGS) -- *.c
 
 clean:
-	rm -f core cfg_file.tab.* cfg_file.lex.* *.o *~ *.bak vtund
+	rm -f core cfg_file.tab.* cfg_file.lex.* *.o *~ .#* *.bak vtund
 
 distclean: clean
 	rm -f $(CONFIGURE_FILES)
@@ -96,5 +99,6 @@ install: vtund install_config install_man
 	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(DESTDIR)$(LOCK_DIR)
 	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(DESTDIR)$(SBIN_DIR)
 	$(INSTALL) -m 755 $(INSTALL_OWNER) vtund $(DESTDIR)$(SBIN_DIR)
+	$(BIN_DIR)/strip $(DESTDIR)$(SBIN_DIR)/vtund
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.

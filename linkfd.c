@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * linkfd.c,v 1.4.2.15.2.2 2006/11/16 04:03:23 mtbishop Exp
+ * $Id: linkfd.c,v 1.13.2.7 2016/10/01 21:27:51 mtbishop Exp $
  */
 
 #include "config.h"
@@ -56,14 +56,14 @@ int send_a_packet = 0;
 /* Host we are working with. 
  * Used by signal handlers that's why it is global. 
  */
-struct vtun_host *lfd_host;
+static struct vtun_host *lfd_host;
 
-struct lfd_mod *lfd_mod_head = NULL, *lfd_mod_tail = NULL;
+static struct lfd_mod *lfd_mod_head = NULL, *lfd_mod_tail = NULL;
 
 /* Modules functions*/
 
 /* Add module to the end of modules list */
-void lfd_add_mod(struct lfd_mod *mod)
+static void lfd_add_mod(struct lfd_mod *mod)
 {
      if( !lfd_mod_head ){
         lfd_mod_head = lfd_mod_tail = mod;
@@ -77,7 +77,7 @@ void lfd_add_mod(struct lfd_mod *mod)
 }
 
 /*  Initialize and allocate each module */
-int lfd_alloc_mod(struct vtun_host *host)
+static int lfd_alloc_mod(struct vtun_host *host)
 {
      struct lfd_mod *mod = lfd_mod_head;
 
@@ -91,7 +91,7 @@ int lfd_alloc_mod(struct vtun_host *host)
 }
 
 /* Free all modules */
-int lfd_free_mod(void)
+static int lfd_free_mod(void)
 {
      struct lfd_mod *mod = lfd_mod_head;
 
@@ -105,7 +105,7 @@ int lfd_free_mod(void)
 }
 
  /* Run modules down (from head to tail) */
-inline int lfd_run_down(int len, char *in, char **out)
+static inline int lfd_run_down(int len, char *in, char **out)
 {
      register struct lfd_mod *mod;
      
@@ -119,7 +119,7 @@ inline int lfd_run_down(int len, char *in, char **out)
 }
 
 /* Run modules up (from tail to head) */
-inline int lfd_run_up(int len, char *in, char **out)
+static inline int lfd_run_up(int len, char *in, char **out)
 {
      register struct lfd_mod *mod;
      
@@ -133,7 +133,7 @@ inline int lfd_run_up(int len, char *in, char **out)
 }
 
 /* Check if modules are accepting the data(down) */
-inline int lfd_check_down(void)
+static inline int lfd_check_down(void)
 {
      register struct lfd_mod *mod;
      int err = 1;
@@ -145,7 +145,7 @@ inline int lfd_check_down(void)
 }
 
 /* Check if modules are accepting the data(up) */
-inline int lfd_check_up(void)
+static inline int lfd_check_up(void)
 {
      register struct lfd_mod *mod;
      int err = 1;
@@ -175,20 +175,38 @@ static void sig_hup(int sig)
      linker_term = VTUN_SIG_HUP;
 }
 
-/* Statistic dump */
-void sig_alarm(int sig)
+/* Statistic dump and keep-alive monitor */
+static volatile sig_atomic_t ka_need_verify = 0;
+static time_t stat_timer = 0, ka_timer = 0; 
+
+static void sig_alarm(int sig)
 {
-     static time_t tm;
+     static time_t tm_old, tm = 0;
      static char stm[20];
-  
+ 
+     tm_old = tm;
      tm = time(NULL);
-     strftime(stm, sizeof(stm)-1, "%b %d %H:%M:%S", localtime(&tm)); 
-     fprintf(lfd_host->stat.file,"%s %lu %lu %lu %lu\n", stm, 
-	lfd_host->stat.byte_in, lfd_host->stat.byte_out,
-	lfd_host->stat.comp_in, lfd_host->stat.comp_out); 
-     
-     alarm(VTUN_STAT_IVAL);
-}    
+
+     if( (lfd_host->flags & VTUN_KEEP_ALIVE) && (ka_timer -= tm-tm_old) <= 0){
+	ka_need_verify = 1;
+	ka_timer = lfd_host->ka_interval
+	  + 1; /* We have to complete select() on idle */
+     }
+
+     if( (lfd_host->flags & VTUN_STAT) && (stat_timer -= tm-tm_old) <= 0){
+        strftime(stm, sizeof(stm)-1, "%b %d %H:%M:%S", localtime(&tm)); 
+        fprintf(lfd_host->stat.file,"%s %lu %lu %lu %lu\n", stm, 
+	   lfd_host->stat.byte_in, lfd_host->stat.byte_out,
+	   lfd_host->stat.comp_in, lfd_host->stat.comp_out); 
+	stat_timer = VTUN_STAT_IVAL;
+     }
+
+     if ( ka_timer*stat_timer ){
+       alarm( (ka_timer < stat_timer) ? ka_timer : stat_timer );
+     } else {
+       alarm( (ka_timer) ? ka_timer : stat_timer );
+     }
+}
 
 static void sig_usr1(int sig)
 {
@@ -197,7 +215,7 @@ static void sig_usr1(int sig)
      lfd_host->stat.comp_in = lfd_host->stat.comp_out = 0; 
 }
 
-int lfd_linker(void)
+static int lfd_linker(void)
 {
      int fd1 = lfd_host->rmt_fd;
      int fd2 = lfd_host->loc_fd; 
@@ -211,8 +229,12 @@ int lfd_linker(void)
 	vtun_syslog(LOG_ERR,"Can't allocate buffer for the linker"); 
         return 0; 
      }
-
-     proto_write(fd1, buf, VTUN_ECHO_REQ);
+	
+     /* Delay sending of first UDP packet over broken NAT routers
+	because we will probably be disconnected.  Wait for the remote
+	end to send us something first, and use that connection. */
+     if (!VTUN_USE_NAT_HACK(lfd_host))
+        proto_write(fd1, buf, VTUN_ECHO_REQ);
 
      maxfd = (fd1 > fd2 ? fd1 : fd2) + 1;
 
@@ -234,6 +256,21 @@ int lfd_linker(void)
 	   else
 	      continue;
 	} 
+
+	if( ka_need_verify ){
+	  if( idle > lfd_host->ka_maxfail ){
+	    vtun_syslog(LOG_INFO,"Session %s network timeout", lfd_host->host);
+	    break;
+	  }
+	  if (idle++ > 0) {  /* No input frames, check connection with ECHO */
+	    if( proto_write(fd1, buf, VTUN_ECHO_REQ) < 0 ){
+	      vtun_syslog(LOG_ERR,"Failed to send ECHO_REQ");
+	      break;
+	    }
+	  }
+	  ka_need_verify = 0;
+	}
+
 	if (send_a_packet)
         {
            send_a_packet = 0;
@@ -245,35 +282,11 @@ int lfd_linker(void)
 	      break;
 	   lfd_host->stat.comp_out += tmplen; 
         }
-	if( !len ){
-           if (send_a_packet)
-           {
-              send_a_packet = 0;
-              tmplen = 1;
-	      lfd_host->stat.byte_out += tmplen; 
-   	      if( (tmplen=lfd_run_down(tmplen,buf,&out)) == -1 )
-	         break;
-	      if( tmplen && proto_write(fd1, out, tmplen) < 0 )
-	         break;
-	      lfd_host->stat.comp_out += tmplen; 
-           }
-	   /* We are idle, lets check connection */
-	   if( lfd_host->flags & VTUN_KEEP_ALIVE ){
-	      if( ++idle > lfd_host->ka_failure ){
-	         vtun_syslog(LOG_INFO,"Session %s network timeout", lfd_host->host);
-		 break;	
-	      }
-	      /* Send ECHO request */
-	      if( proto_write(fd1, buf, VTUN_ECHO_REQ) < 0 )
-		 break;
-	   }
-	   continue;
-	}	   
 
 	/* Read frames from network(fd1), decode and pass them to 
          * the local device (fd2) */
 	if( FD_ISSET(fd1, &fdset) && lfd_check_up() ){
-	   idle = 0; 
+	   idle = 0;  ka_need_verify = 0;
 	   if( (len=proto_read(fd1, buf)) <= 0 )
 	      break;
 
@@ -292,7 +305,7 @@ int lfd_linker(void)
 		 continue;
 	      }
    	      if( fl==VTUN_ECHO_REP ){
-		 /* Just ignore ECHO reply */
+		 /* Just ignore ECHO reply, ka_need_verify==0 already */
 		 continue;
 	      }
 	      if( fl==VTUN_CONN_CLOSE ){
@@ -365,8 +378,12 @@ int linkfd(struct vtun_host *host)
 	lfd_add_mod(&lfd_lzo);
 
      if(host->flags & VTUN_ENCRYPT)
-	lfd_add_mod(&lfd_encrypt);
-
+       if(host->cipher == VTUN_LEGACY_ENCRYPT) {
+	 lfd_add_mod(&lfd_legacy_encrypt);
+       } else {
+	 lfd_add_mod(&lfd_encrypt);
+       }
+     
      if(host->flags & VTUN_SHAPE)
 	lfd_add_mod(&lfd_shaper);
 
@@ -380,6 +397,15 @@ int linkfd(struct vtun_host *host)
      sa.sa_handler=sig_hup;
      sigaction(SIGHUP,&sa,&sa_oldhup);
 
+     /* Initialize keep-alive timer */
+     if( host->flags & (VTUN_STAT|VTUN_KEEP_ALIVE) ){
+        sa.sa_handler=sig_alarm;
+        sigaction(SIGALRM,&sa,NULL);
+
+	alarm( (host->ka_interval < VTUN_STAT_IVAL) ?
+		host->ka_interval : VTUN_STAT_IVAL );
+     }
+
      /* Initialize statstic dumps */
      if( host->flags & VTUN_STAT ){
 	char file[40];
@@ -392,7 +418,6 @@ int linkfd(struct vtun_host *host)
 	sprintf(file,"%s/%.20s", VTUN_STAT_DIR, host->host);
 	if( (host->stat.file=fopen(file, "a")) ){
 	   setvbuf(host->stat.file, NULL, _IOLBF, 0);
-	   alarm(VTUN_STAT_IVAL);
 	} else
 	   vtun_syslog(LOG_ERR, "Can't open stats file %s", file);
      }
@@ -401,7 +426,7 @@ int linkfd(struct vtun_host *host)
 
      lfd_linker();
 
-     if( host->flags & VTUN_STAT ){
+     if( host->flags & (VTUN_STAT|VTUN_KEEP_ALIVE) ){
         alarm(0);
 	if (host->stat.file)
 	  fclose(host->stat.file);

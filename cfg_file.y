@@ -2,7 +2,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -18,7 +18,7 @@
  */
 
 /*
- * cfg_file.y,v 1.1.1.2.2.13.2.4 2006/11/16 04:02:42 mtbishop Exp
+ * $Id: cfg_file.y,v 1.8.2.8 2016/10/01 21:27:51 mtbishop Exp $
  */ 
 
 #include "config.h"
@@ -74,7 +74,7 @@ int yyerror(char *s);
 %token K_OPTIONS K_DEFAULT K_PORT K_BINDADDR K_PERSIST K_TIMEOUT
 %token K_PASSWD K_PROG K_PPP K_SPEED K_IFCFG K_FWALL K_ROUTE K_DEVICE 
 %token K_MULTI K_SRCADDR K_IFACE K_ADDR
-%token K_TYPE K_PROT K_COMPRESS K_ENCRYPT K_KALIVE K_STAT
+%token K_TYPE K_PROT K_NAT_HACK K_COMPRESS K_ENCRYPT K_KALIVE K_STAT
 %token K_UP K_DOWN K_SYSLOG K_IPROUTE
 
 %token <str> K_HOST K_ERROR
@@ -107,6 +107,7 @@ statement: '\n'
 	  	  memcpy(parse_host, &default_host, sizeof(struct vtun_host));
 		  parse_host->host = strdup($1);
 		  parse_host->passwd = NULL;
+		  parse_host->sopt.host = strdup($1);
 
 		  /* Copy local address */
 		  copy_addr(parse_host, &default_host);
@@ -149,7 +150,7 @@ option:  '\n'
   | K_BINDADDR '{' bindaddr_option '}'
 
   | K_IFACE STRING	{ 
-			  if(vtun.svr_addr == -1)
+			  if(vtun.svr_addr == NULL)
 			    vtun.svr_addr = strdup($2);
 			} 
 
@@ -320,6 +321,15 @@ host_option: '\n'
 			  parse_host->flags &= ~VTUN_PROT_MASK;
 			  parse_host->flags |= $2;
 			}
+			
+  | K_NAT_HACK NUM 	{  
+#ifdef ENABLE_NAT_HACK
+			  parse_host->flags &= ~VTUN_NAT_HACK_MASK;
+			  parse_host->flags |= $2;
+#else
+			  cfg_error("This vtund binary was built with the NAT hack disabled for security purposes.");
+#endif
+			}
 
   | K_SRCADDR 		'{' srcaddr_options '}'
 
@@ -368,7 +378,7 @@ keepalive:
 			  if( yylval.dnum.num1 ){
 			     parse_host->flags |= VTUN_KEEP_ALIVE;
 			     parse_host->ka_interval = yylval.dnum.num1;
-		             parse_host->ka_failure  = yylval.dnum.num2;
+		             parse_host->ka_maxfail  = yylval.dnum.num2;
 			  }
   			}
 
@@ -569,6 +579,12 @@ int free_host(void *d, void *u)
    llist_free(&h->down, free_cmd, NULL);
 
    free_addr(h);
+
+   /* releases only host struct instances which were
+    * allocated in the case of K_HOST except default_host */
+   if( h->passwd )
+      free(h);
+
  
    return 0;   
 }
@@ -579,6 +595,27 @@ int free_host(void *d, void *u)
 inline struct vtun_host* find_host(char *host)
 {
    return (struct vtun_host *)llist_free(&host_list, free_host, host);
+}
+
+int clear_nat_hack_server(void *d, void *u)
+{
+	((struct vtun_host*)d)->flags &= ~VTUN_NAT_HACK_CLIENT;
+	return 0;
+}
+
+int clear_nat_hack_client(void *d, void *u)
+{
+	((struct vtun_host*)d)->flags &= ~VTUN_NAT_HACK_SERVER;
+	return 0;
+}
+
+/* Clear the VTUN_NAT_HACK flag which are not relevant to the current operation mode */
+inline void clear_nat_hack_flags(int svr)
+{
+	if (svr)
+		llist_trav(&host_list,clear_nat_hack_server,NULL);
+	else 
+		llist_trav(&host_list,clear_nat_hack_client,NULL);
 }
 
 inline void free_host_list(void)
@@ -621,6 +658,7 @@ int parse_syslog(char *facility)
          return(0);
       }
    }
+   return -1;
 }
 
 /* 

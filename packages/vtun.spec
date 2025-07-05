@@ -1,4 +1,4 @@
-# $Id$
+# $Id: vtun.spec,v 1.24.2.11 2016/09/17 20:01:58 mtbishop Exp $
 
 # By default, builds without socks-support.
 # To build with socks-support, issue:
@@ -14,12 +14,12 @@
 
 # define variables here for older RPM versions.
 %define name	vtun
-%define version	3.0.1
+%define version	3.0.4
 %define release	1
 
 # expansion of the previous part.
 # get the distro mark (eg rh70)
-%define	_dis	%(case `rpm -qf /etc/issue 2>/dev/null` in (redhat-*) echo rh;; (mandrake-*) echo mdk ;; (fedora-*) echo fc ;; (openlinux-*) echo ol ;; (whitebox-*) echo wb ;; (xos-*) echo xos ;;(SuSE-*) echo suse ;; esac)
+%define	_dis	%(rpm -qf /etc/issue 2>/dev/null|sed 's/-release.*//;s/redhat/rh/;s/mandrake/mdk/;s/fedora/fc/;s/openlinux/ol/;s/whitebox/wb/')
 %define _tro	%(rpm -qf --qf "%%{version}" /etc/issue | sed 's/\\.//g' )
 
 %define	rc_dir_suse	/etc/init.d
@@ -38,14 +38,16 @@
 Name: 		%{name}
 Version: 	%{version}
 Release: 	%{release}
-License: 	GPL
+License: 	GPL2
 Group: 		System Environment/Daemons
 Url: 		http://vtun.sourceforge.net/
-Source: 	http://easynews.dl.sourceforge.net/sourceforge/%{name}/%{name}-%{version}.tar.gz
+Source0: 	http://prdownloads.sourceforge.net/%{name}/%{name}-%{version}.tar.gz
 Summary: 	Virtual tunnel over TCP/IP networks.
 Summary(pl):	Wirtualne tunele poprzez sieci TCP/IP
 Vendor: 	Maxim Krasnyansky <max_mk@yahoo.com>
 Packager: 	Bishop Clark (LC957) <bishop@platypus.bc.ca>
+
+		# Remember this is ignored for recent distros (Backward Compatibility is dumb)
 BuildRoot: 	%{?_tmppath:%{_tmppath}}%{!?_tmppath:%{tmpdir}}/%{name}-%{version}-root-%(id -u -n)
 Obsoletes: 	vppp
 BuildRequires:  autoconf
@@ -53,6 +55,7 @@ BuildRequires: 	bison
 BuildRequires: 	flex
 BuildRequires: 	autoconf
 BuildRequires: 	automake
+Requires:	xinetd
 
 # must specify like so to get the right package for gcc (eg ecgs)
 BuildRequires:  %{_bindir}/gcc
@@ -75,6 +78,8 @@ BuildRequires:  %{_bindir}/gcc
 %define	_buildreq_fc	zlib-devel %{!?_without_ssl:openssl-devel} %{?_with_lzo2:lzo2-devel} %{!?_with_lzo2:%{!?_without_lzo: lzo-devel}}
 %define	_requires_rhel	%_requires_fc
 %define	_buildreq_rhel	%_buildreq_fc
+%define	_requires_centos	%_requires_fc
+%define	_buildreq_centos	%_buildreq_fc
 
 # SuSE doesn't permit lzo and lzo2 to be installed simultaneously so
 # we do not need to care so much.
@@ -123,7 +128,7 @@ protoko³ów szeregowych.
 %if "%_dis" == "suse"
 %{__make} LOCK_DIR=%{lock_dir} STAT_DIR=/var/log/vtunnel
 %else
-%{__make}
+%{__make} %{?_smp_mflags}
 %endif
 
 %install
@@ -175,19 +180,19 @@ sbin/insserv etc/init.d/vtund
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
 
 %files
-%defattr(644,root,root)
-%doc ChangeLog Credits FAQ README README.Setup README.Shaper TODO
+%defattr(-,root,root,-)
+%doc ChangeLog Credits FAQ README README.LZO README.Setup README.Shaper TODO vtund.conf
 %doc TODO vtund.conf 
-%attr(755,root,root) %config %{rc_dir}/vtund
-%attr(600,root,root) %config(noreplace) /etc/vtund.conf
-%attr(755,root,root) %{_sbindir}/vtund
+%config(noreplace) %{_sysconfdir}/vtund.conf
+%config(noreplace) %{_sysconfdir}/xinetd.d/vtun
+%config %{rc_dir}/vtund
+%{_sbindir}/vtund
 %attr(755,root,root) %dir %{log_dir}
 %attr(755,root,root) %dir %{lock_dir}
-%{_mandir}/man8/vtund.8*
 %{_mandir}/man5/vtund.conf.5*
-/etc/xinetd.d/vtun
-%if "%_dis" == "suse"
 %{_mandir}/man8/vtun.8*
+%{_mandir}/man8/vtund.8*
+%if "%_dis" == "suse"
 %attr(755,root,root) %{_sbindir}/rcvtund
 /var/adm/fillup-templates/rc.config.vtund
 %endif

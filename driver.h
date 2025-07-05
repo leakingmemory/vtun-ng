@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,14 +17,14 @@
  */
 
 /*
- * driver.h,v 1.1.1.1.2.1.2.1 2006/11/16 04:02:57 mtbishop Exp
+ * $Id: driver.h,v 1.4.2.4 2016/10/01 21:27:51 mtbishop Exp $
  */ 
 #ifndef _DRIVER_H
 #define _DRIVER_H
 
 /* Definitions for device and protocol drivers 
  * Interface will be completely rewritten in 
- * version 3.0
+ * future versions.
  */
 
 extern int (*dev_write)(int fd, char *buf, int len);

@@ -1,8 +1,9 @@
 VTun - Virtual Tunnel over TCP/IP network.
-Copyright (C) 1998-2004 Maxim Krasnyansky <max_mk@yahoo.com>
+Copyright (C) 1998-2016 Maxim Krasnyansky <max_mk@yahoo.com>
 
 This product includes software developed by the OpenSSL Project
 for use in the OpenSSL Toolkit. (http://www.openssl.org/).
+
 Copyright (c) 1998-2004 The OpenSSL Project.  All rights reserved.
 
 Compilation and Installation:
@@ -23,6 +24,8 @@ Optional packages:
 	 Dante Socks4/5 	http://www.inet.no/dante 
 
 To configure VTun run:
+  aclocal
+  autoconf
   ./configure 
 Optional support:
   --disable-lzo  	compile without LZO compression support

@@ -2,7 +2,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -18,7 +18,7 @@
  */
 
 /*
- * cfg_file.l,v 1.1.1.2.2.1.2.2 2006/11/16 04:02:39 mtbishop Exp
+ * $Id: cfg_file.l,v 1.4.2.3 2016/10/01 21:27:51 mtbishop Exp $
  */ 
 
 #include "config.h"

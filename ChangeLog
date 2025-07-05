@@ -1,4 +1,33 @@
 
+3.0.4
+	bug53 - Race condition in socket() vs syslog (AH)
+	patch23 - check for fork and work around lack (AM)
+	patch22 - static declarations where possible (AM)
+	patch21 - fix up configure.in for newer autoheader (AM)
+	
+3.0.3:
+	rfe2636157 - Delayed UDP connection (dv)
+	rfe2149137 - makefile ignores LDFLAGS (sbk)
+	rfe2405993 - mem leak in config parser (frY)
+	rfe1685781 - vtun3 server should offer vtun2-compatible encryption (if)
+	pat3540779 - Parallel make Makefile.in race condition (pb)
+	pat2972369 - link timeout in UDP mode (Eugene Berdnikov - deb339364)
+ 	             Minor fixes in lfd_lzo.c to ensure correct type casting
+ 	             Add description of "keepalive timeout:count;" syntax
+	              to man page and vtund.conf sample.
+ 	             Remove doubled if(send_a_file){...} block in linkfd.c.
+	pat2951972 - reduce connection chatter
+	rfe2711212 - improve linking on rebuilds (hmld)
+	
+3.0.2:
+	rfe1685781 - vtun3 client should parse vtun2 server encr directives (hch)
+	rfe1744575 - cfg_file.y bugs (mf)
+	rfe1738167 - build on c5 still fails (bc)
+
+3.0.1:
+	rfe1602625 - fix build for lzo2 (bc,db,ruzsi)
+	rfe780607 - new debian rc scripts (surgo)
+	
 3.0.0:
 	Configure looks for liblzo2 when available. (bc)
 	
@@ -61,7 +90,7 @@ ver 2.5:
 	 Fixes to support both Linux TUN/TAP drivers.
 
 ver 2.5b1:
-	 Encryption fixes: improved challenge generation, padding check.
+	 Encryption fixes: improved challenge generation (jy), padding check.
 	 Config parser fixes. Don't allow empty passwords.
 	 New config option to specify syslog logging facility.
 	 Support for new Linux TUN/TAP driver.

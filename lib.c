@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * lib.c,v 1.1.1.2.2.9.2.1 2006/11/16 04:03:17 mtbishop Exp
+ * $Id: lib.c,v 1.9.2.5 2016/10/01 21:46:01 mtbishop Exp $
  */ 
 
 #include "config.h"
@@ -45,9 +45,9 @@ volatile sig_atomic_t __io_canceled = 0;
 /* Functions to manipulate with program title */
 
 extern char **environ;
-char	*title_start;	/* start of the proc title space */
-char	*title_end;     /* end of the proc title space */
-int	title_size;
+static char	*title_start;	/* start of the proc title space */
+static char	*title_end;     /* end of the proc title space */
+static int	title_size;
 
 void init_title(int argc,char *argv[], char *envp[], char *name)
 {
@@ -148,7 +148,7 @@ int readn_t(int fd, void *buf, size_t count, time_t timeout)
  * Substitutes opt in place off '%X'. 
  * Returns new string.
  */
-char * subst_opt(char *str, struct vtun_sopt *opt)
+static char * subst_opt(char *str, struct vtun_sopt *opt)
 {
     register int slen, olen, sp, np;
     register char *optr, *nstr, *tmp;
@@ -185,6 +185,9 @@ char * subst_opt(char *str, struct vtun_sopt *opt)
 		   sprintf(buf,"%d",opt->rport);
                    optr=buf;
                    break;
+	        case 'h':
+		   optr=opt->host;
+		   break;
                 default:
                    sp++;
                    continue;
@@ -223,7 +226,7 @@ char * subst_opt(char *str, struct vtun_sopt *opt)
  * ' ' - group arguments
  * Modifies original string. 
  */
-void split_args(char *str, char **argv)
+static void split_args(char *str, char **argv)
 {       
      register int i = 0;
      int mode = 0;
@@ -276,6 +279,7 @@ void split_args(char *str, char **argv)
      argv[i]=NULL;
 }
  
+#ifdef HAVE_WORKING_FORK
 int run_cmd(void *d, void *opt)
 {
      struct vtun_cmd *cmd = d;	
@@ -324,6 +328,7 @@ int run_cmd(void *d, void *opt)
      vtun_syslog(LOG_ERR,"Couldn't exec program %s", cmd->prog);
      exit(1);
 }
+#endif
 
 void free_sopt( struct vtun_sopt *opt )
 {
@@ -355,6 +360,7 @@ void vtun_syslog (int priority, char *format, ...)
       va_start(ap, format);
       vsnprintf(buf, sizeof(buf)-1, format, ap);
       syslog(priority, "%s", buf);
+      closelog();
       va_end(ap);
 
       in_syslog = 0;

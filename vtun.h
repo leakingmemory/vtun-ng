@@ -1,7 +1,7 @@
 /*  
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2000  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 
     VTun has been derived from VPPP package by Maxim Krasnyansky. 
 
@@ -17,7 +17,7 @@
  */
 
 /*
- * vtun.h,v 1.7.2.6.2.6 2006/11/16 04:04:17 mtbishop Exp
+ * $Id: vtun.h,v 1.12.2.9 2016/10/01 21:27:51 mtbishop Exp $
  */ 
 
 #ifndef _VTUN_H
@@ -51,6 +51,7 @@ struct vtun_sopt {
     int  lport;
     char *raddr;
     int  rport;
+    char *host;
 };
 
 struct vtun_stat {
@@ -107,7 +108,7 @@ struct vtun_host {
 
    /* Keep Alive */
    int ka_interval;
-   int ka_failure;
+   int ka_maxfail;
 
    /* Source address */
    struct vtun_addr src_addr;
@@ -155,11 +156,24 @@ extern llist host_list;
 #define VTUN_ENC_AES256CFB	15
 #define VTUN_ENC_AES256OFB	16
 
+#define VTUN_LEGACY_ENCRYPT	999
+
 /* Mask to drop the flags which will be supplied by the server */
 #define VTUN_CLNT_MASK  0xf000
 
 #define VTUN_STAT	0x1000
 #define VTUN_PERSIST    0x2000
+
+#ifdef ENABLE_NAT_HACK
+/* Flags for the NAT hack with delayed UDP socket connect */
+#define VTUN_NAT_HACK_CLIENT	0x4000
+#define VTUN_NAT_HACK_SERVER	0x8000
+#define VTUN_NAT_HACK_MASK	(VTUN_NAT_HACK_CLIENT | VTUN_NAT_HACK_SERVER)
+
+#define VTUN_USE_NAT_HACK(host)	((host)->flags & VTUN_NAT_HACK_MASK)
+#else
+#define VTUN_USE_NAT_HACK(host)	0
+#endif
 
 /* Constants and flags for VTun protocol */
 #define VTUN_FRAME_SIZE     2048
@@ -206,6 +220,7 @@ struct vtun_opts {
    struct vtun_addr bind_addr;	 /* Server should listen on this address */
    int  svr_type;	 /* Server mode */
    int  syslog; 	 /* Facility to log messages to syslog under */
+   int  quiet;		 /* Be quiet about common errors */
 };
 #define VTUN_STAND_ALONE	0 
 #define VTUN_INETD		1	
@@ -217,5 +232,6 @@ void client(struct vtun_host *host);
 int  tunnel(struct vtun_host *host);
 int  read_config(char *file);
 struct vtun_host * find_host(char *host);
+inline void clear_nat_hack_flags(int svr);
 
 #endif

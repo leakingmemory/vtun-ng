@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <syslog.h>
+#include <time.h>
 
 #include "vtun.h"
 #include "linkfd.h"

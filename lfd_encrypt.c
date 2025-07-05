@@ -45,6 +45,10 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef __linux__
+#include <arpa/inet.h>
+#endif
+
 #include "vtun.h"
 #include "linkfd.h"
 #include "lib.h"

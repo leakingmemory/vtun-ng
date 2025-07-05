@@ -22,6 +22,11 @@
 
 #include "config.h"
 
+#ifdef __linux__
+#define _GNU_SOURCE // getpt, grantpt
+#define _XOPEN_SOURCE // unlockpt
+#endif
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>

@@ -34,6 +34,7 @@
 #include <sys/wait.h>
 #include <syslog.h>
 #include <errno.h>
+#include <time.h>
 
 #include "vtun.h"
 #include "linkfd.h"

@@ -27,6 +27,14 @@
 #include <signal.h>
 #include <errno.h>
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#ifdef __linux__
+#include <bsd/unistd.h>  /* For setproctitle on Linux */
+#endif
+
+
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
 #endif

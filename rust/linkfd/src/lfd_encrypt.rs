@@ -445,7 +445,11 @@ impl LfdEncrypt {
                 let mut iv: Vec<u8> = Vec::new();
                 iv.resize(self.blocksize as usize, 0u8);
                 openssl::rand::rand_bytes(&mut iv).unwrap();
-                outbuf.append(&mut iv);
+                let ivstart = outbuf.len();
+                outbuf.resize(ivstart + (self.blocksize as usize), 0u8);
+                for i in 0..self.blocksize {
+                    outbuf[ivstart + (i as usize)] = iv[i as usize];
+                }
                 if (!self.cipher_enc_init(&*iv)) {
                     return None;
                 }
@@ -461,6 +465,7 @@ impl LfdEncrypt {
                     outbuf[before + i] = tmpbuf[i];
                 }
                 let outlen = outbuf.len();
+                outbuf.resize(outlen + (self.blocksize as usize), 0u8);
                 match self.ctx_enc_ecb.cipher_update_inplace(&mut *outbuf, outlen) {
                     Ok(rlen) => { outbuf.resize(rlen, 0u8); },
                     Err(_) => return None
@@ -581,7 +586,7 @@ impl LfdEncrypt {
                 return None;
             }
             let mut outp: Vec<u8> = Vec::new();
-            outp.resize((self.blocksize as usize) * 2, 0u8);
+            outp.resize((self.blocksize as usize) * 3, 0u8);
             match self.ctx_dec_ecb.cipher_update(&buf[..(self.blocksize as usize * 2)], Some(&mut *outp)) {
                 Ok(rlen) => { outp.resize(rlen, 0u8); },
                 Err(_) => return None

@@ -102,4 +102,4 @@ pub const LOG_WARNING: libc::c_int = 4;
 pub const LOG_NOTICE: libc::c_int = 5;
 pub const LOG_INFO: libc::c_int = 6;
 pub const LOG_DEBUG: libc::c_int = 7;
-pub unsafe extern "C" fn vtun_syslog(priority: libc::c_int, format: *mut libc::c_char) {}
+pub unsafe extern "C" fn vtun_syslog(_priority: libc::c_int, _format: *mut libc::c_char) {}

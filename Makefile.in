@@ -23,8 +23,8 @@ LDFLAGS = @LDFLAGS@ @LIBS@
 
 CARGO = @CARGO@
 STRIP = @STRIP@
-YACC = @YACC@
-YACCFLAGS = -d
+BISON = @BISON@
+BISONFLAGS = -d
 
 LEX = @LEX@
 LEXFLAGS = -t 
@@ -73,7 +73,7 @@ $(RUSTLIB):
 	cd rust/linkfd && $(CARGO) build --release
 
 cfg_file.tab.h:
-	$(YACC) $(YACCFLAGS) -b cfg_file cfg_file.y
+	$(BISON) $(BISONFLAGS) -b cfg_file cfg_file.y
 
 cfg_file.tab.c: cfg_file.y cfg_kwords.h config.h cfg_file.tab.h
 

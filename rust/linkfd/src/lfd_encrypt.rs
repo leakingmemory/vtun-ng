@@ -1,3 +1,44 @@
+/*
+    VTun - Virtual Tunnel over TCP/IP network.
+
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 2025  Jan-Espen Oversand <sigsegv@radiotube.org>
+
+    VTun has been derived from VPPP package by Maxim Krasnyansky.
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ */
+
+/*
+ * From lfd_encrypt.c:
+   Encryption module uses software developed by the OpenSSL Project
+   for use in the OpenSSL Toolkit. (http://www.openssl.org/)
+   Copyright (c) 1998-2000 The OpenSSL Project.  All rights reserved.
+ */
+
+/*
+ * From lfd_encrypt.c:
+ * This lfd_encrypt module uses MD5 to create 128 bits encryption
+ * keys and BlowFish for actual data encryption.
+ * It is based on code written by Chris Todd<christ@insynq.com> with
+ * several improvements and modifications by me.
+ */
+
+/*
+ * From lfd_encrypt.c:
+ * The current lfd_encrypt module is based on code attributed above and
+ * uses new code written by Dale Fountain <dpf-vtun@fountainbay.com> to
+ * allow multiple ciphers, modes, and key sizes. Feb 2004.
+ */
+
 use std::ptr::null_mut;
 use std::time::SystemTime;
 use openssl::cipher::{Cipher, CipherRef};

@@ -44,7 +44,7 @@ use std::time::SystemTime;
 use openssl::cipher::{Cipher, CipherRef};
 use openssl::cipher_ctx::CipherCtx;
 use openssl::hash::{hash, MessageDigest};
-use lfd_mod;
+use crate::lfd_mod;
 use lfd_mod::{VtunHost, VTUN_ENC_AES128CBC, VTUN_ENC_AES128CFB, VTUN_ENC_AES128OFB, VTUN_ENC_AES256CBC, VTUN_ENC_AES256CFB, VTUN_ENC_AES256OFB, VTUN_ENC_BF128CBC, VTUN_ENC_BF128CFB, VTUN_ENC_BF128OFB, VTUN_ENC_BF256CBC, VTUN_ENC_BF256CFB, VTUN_ENC_BF256OFB};
 
 const MAX_GIBBERISH: i32	= 10;

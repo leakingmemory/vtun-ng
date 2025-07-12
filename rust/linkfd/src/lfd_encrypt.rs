@@ -370,7 +370,6 @@ impl LfdEncrypt {
     {
         let mut var_key: bool = false;
         let mut cipher_type: Option<&CipherRef> = None;
-        //char tmpstr[64];
         let mut cipher_name = "";
 
         if (self.cipher == VTUN_ENC_AES256OFB) {
@@ -437,6 +436,7 @@ impl LfdEncrypt {
     pub fn send_msg(&mut self) -> Option<Vec<u8>> {
         if (matches!(self.cipher_enc_state, CipherState::CipherInit)) {
             let mut outbuf: Vec<u8> = Vec::new();
+            outbuf.reserve((self.blocksize as usize) * 3);
             outbuf.push(b'i');
             outbuf.push(b'v');
             outbuf.push(b'e');
@@ -484,6 +484,7 @@ impl LfdEncrypt {
         /* To simplify matters, I assume that blocksize
               will not be less than 8 bytes */
         if (matches!(self.cipher_enc_state, CipherState::CipherSequence)) {
+            output.reserve(self.blocksize as usize);
             output.push(b's');
             output.push(b'e');
             output.push(b'q');
@@ -496,6 +497,7 @@ impl LfdEncrypt {
                 output.resize(self.blocksize as usize, 0u8);
             }
         } else if (matches!(self.cipher_enc_state, CipherState::CipherReqInit)) {
+            output.reserve(self.blocksize as usize);
             output.push(b'r');
             output.push(b's');
             output.push(b'y');
@@ -520,6 +522,13 @@ impl LfdEncrypt {
         let mut sendbuf = self.send_msg();
 
         let mut ib = self.send_ib_mesg();
+        {
+            let mut expectedlen = ib.len() + buf.len();
+            let p = (expectedlen & ((self.blocksize-1) as usize));
+            expectedlen += (self.blocksize as usize) - p;
+            expectedlen += self.blocksize as usize;
+            outbuf.reserve(expectedlen);
+        }
         outbuf.append(& mut ib);
         {
             let prelen = outbuf.len();
@@ -555,19 +564,17 @@ impl LfdEncrypt {
 
         match sendbuf {
             Some(mut sendbuf) => {
-                {
-                    let mut prefixer: Vec<u8> = Vec::new();
-                    prefixer.resize(LINKFD_FRAME_RESERV, 0u8);
-                    prefixer.append(&mut sendbuf);
-                    sendbuf = prefixer;
-                }
-                let mut finalbuf = sendbuf;
+                let mut finalbuf = Vec::new();
+                finalbuf.reserve(LINKFD_FRAME_RESERV + sendbuf.len() + outbuf.len() + LINKFD_FRAME_APPEND);
+                finalbuf.resize(LINKFD_FRAME_RESERV, 0u8);
+                finalbuf.append(&mut sendbuf);
                 finalbuf.append(&mut outbuf);
                 finalbuf.resize(finalbuf.len() + LINKFD_FRAME_APPEND, 0u8);
                 return Some(finalbuf);
             }
             None => {
                 let mut prefixer: Vec<u8> = Vec::new();
+                prefixer.reserve(LINKFD_FRAME_RESERV + outbuf.len() + LINKFD_FRAME_APPEND);
                 prefixer.resize(LINKFD_FRAME_RESERV, 0u8);
                 prefixer.append(&mut outbuf);
                 prefixer.resize(prefixer.len() + LINKFD_FRAME_APPEND, 0u8);
@@ -654,6 +661,7 @@ impl LfdEncrypt {
             }
         }
         let mut outbuf = Vec::new();
+        outbuf.reserve(buf.len() + (self.blocksize as usize));
         outbuf.resize(buf.len(), 0u8);
         for i in 0..buf.len() {
             outbuf[i as usize] = buf[i as usize];
@@ -732,6 +740,7 @@ impl LfdEncrypt {
         }
         ib.resize(iblen - pad as usize, 0u8);
         let mut prefixer: Vec<u8> = Vec::new();
+        prefixer.reserve(LINKFD_FRAME_RESERV + ib.len() + LINKFD_FRAME_APPEND);
         prefixer.resize(LINKFD_FRAME_RESERV, 0u8);
         prefixer.append(&mut ib);
         prefixer.resize(prefixer.len() + LINKFD_FRAME_APPEND, 0u8);

@@ -1,0 +1,9 @@
+[package]
+name = "vtun_linkfd"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+libc = "0.2"
+openssl = "0.10"  # Modern OpenSSL bindings

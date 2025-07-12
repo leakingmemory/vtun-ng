@@ -246,6 +246,16 @@ fi
 
 AC_MSG_RESULT()
 
+AC_CHECK_PROG(CARGO, cargo, cargo)
+if test "x$CARGO" = "x"; then
+    AC_MSG_ERROR([Requires cargo to compile rust modules])
+fi
+
+AC_CHECK_PROG(STRIP, strip, strip)
+if text "x$STRIP" = "x"; then
+    AC_MSG_ERROR([Requires strip to install binaries])
+fi
+
 AC_CHECK_FUNCS([getpt grantpt unlockpt ptsname])
 
 OS_REL=`uname -r | tr -d '[A-Za-z\-\_\.]'`

@@ -18,7 +18,7 @@ jobs:
       - name: Create Release Tarball
         run: |
           chmod +x release/release.sh
-          ./release/release.sh
+          ./release/release.sh ${GITHUB_REF_NAME#v}
 
       - name: Create Release
         uses: softprops/action-gh-release@v1

@@ -1,9 +1,10 @@
 #
-#   VTun - Virtual Tunnel over TCP/IP network. 
+#   VTun-ng - Virtual Tunnel over TCP/IP network.
 #
 #   Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
 #
-#   VTun has been derived from VPPP package by Maxim Krasnyansky. 
+#   VTun-ng is a fork of VTun maintained by Bishop Clark up until around 2016.
+#   VTun has been derived from VPPP package by Maxim Krasnyansky.
 #
 #   This program is free software; you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -15,8 +16,7 @@
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU General Public License for more details.
 #
-#   $Id: Makefile.in,v 1.11.2.8 2016/10/01 21:46:00 mtbishop Exp $
-#  
+#
 CC = @CC@
 CFLAGS = @CFLAGS@ @CPPFLAGS@
 LDFLAGS = @LDFLAGS@ @LIBS@

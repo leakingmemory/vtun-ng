@@ -1,3 +1,5 @@
+VTun-ng - Forked from VTun maintained by Bishop Clark up until around 2016.
+
 VTun - Virtual Tunnel over TCP/IP network.
 Copyright (C) 1998-2016 Maxim Krasnyansky <max_mk@yahoo.com>
 
@@ -12,9 +14,10 @@ In order to compile VTun you need several software packages.
 Required packages: 
   - Good C compiler (gcc, egcs, etc)
   - Lexical Analyzer (flex, lex)
-  - YACC (yacc, bison, byacc)
+  - YACC (bison)
   - Universal TUN/TAP driver 	http://vtun.sourceforge.net/tun
-  - OpenSSL encryption library 	http://www.openssl.org 
+  - OpenSSL encryption library 	http://www.openssl.org
+  - Rust and cargo
 
 Optional packages:
   - Zlib compression library	http://www.gzip.org/zlib/
@@ -49,17 +52,15 @@ could not be found in default location:
 
 To compile and install run:
   make install
+Currently VTun-ng is a hybrid rust, C and bison setup, which
+unfortunately means it can be a little bit painful to compile
+and install. The rust part is contained in a shared object for
+now, which enables the rust part to be independent of the C
+part with regards to runtime dependencies.
 
-Read manual page for 'vtund' and the config file example for
+Read manual page for 'vtunngd' and the config file example for
 configuration and other suggestions.
 
-VTun has the mailing list vtun-users@lists.sourceforge.net
-To receive information about mailing list and how to subscribe to it,
-send an e-mail to vtun-users-request@lists.sourceforge.net with the
-word 'help' in the Subject.
-
-If you have any suggestions, ideas, wishes send them to 
-vtun-users@lists.sourceforge.net
- 
 Vtun (c) Maxim Krasnyansky
 Maintained loosely by Bishop Clark <bishop@platypus.bc.ca>
+VTun-ng forked by Jan-Espen Oversand <sigsegv@radiotube.org>

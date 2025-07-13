@@ -65,8 +65,8 @@ impl LfdLegacyEncrypt {
         match hs {
             Err(_) => return None,
             Ok(key) => {
-                lfdLegacyEncrypt.ctx_enc.encrypt_init(Some(Cipher::bf_ecb()), Some(&key), None).unwrap();
-                lfdLegacyEncrypt.ctx_dec.decrypt_init(Some(Cipher::bf_ecb()), Some(&key), None).unwrap();
+                lfdLegacyEncrypt.ctx_enc.encrypt_init(Some(Cipher::bf_ecb()), Some(&key[0..16]), None).unwrap();
+                lfdLegacyEncrypt.ctx_dec.decrypt_init(Some(Cipher::bf_ecb()), Some(&key[0..16]), None).unwrap();
             }
         }
 

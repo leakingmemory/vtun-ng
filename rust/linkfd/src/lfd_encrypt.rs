@@ -50,8 +50,6 @@ use lfd_mod::{VtunHost, VTUN_ENC_AES128CBC, VTUN_ENC_AES128CFB, VTUN_ENC_AES128O
 const MAX_GIBBERISH: i32	= 10;
 const MIN_GIBBERISH: i32   = 1;
 const MAX_GIBBERISH_TIME: u64   = 2;
-const LINKFD_FRAME_RESERV: usize = 128;
-const LINKFD_FRAME_APPEND: usize = 64;
 
 pub enum CipherState {
     None,  CipherInit, CipherCode, CipherSequence, CipherReqInit
@@ -565,19 +563,19 @@ impl LfdEncrypt {
         match sendbuf {
             Some(mut sendbuf) => {
                 let mut finalbuf = Vec::new();
-                finalbuf.reserve(LINKFD_FRAME_RESERV + sendbuf.len() + outbuf.len() + LINKFD_FRAME_APPEND);
-                finalbuf.resize(LINKFD_FRAME_RESERV, 0u8);
+                finalbuf.reserve(lfd_mod::LINKFD_FRAME_RESERV + sendbuf.len() + outbuf.len() + lfd_mod::LINKFD_FRAME_APPEND);
+                finalbuf.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
                 finalbuf.append(&mut sendbuf);
                 finalbuf.append(&mut outbuf);
-                finalbuf.resize(finalbuf.len() + LINKFD_FRAME_APPEND, 0u8);
+                finalbuf.resize(finalbuf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
                 return Some(finalbuf);
             }
             None => {
                 let mut prefixer: Vec<u8> = Vec::new();
-                prefixer.reserve(LINKFD_FRAME_RESERV + outbuf.len() + LINKFD_FRAME_APPEND);
-                prefixer.resize(LINKFD_FRAME_RESERV, 0u8);
+                prefixer.reserve(lfd_mod::LINKFD_FRAME_RESERV + outbuf.len() + lfd_mod::LINKFD_FRAME_APPEND);
+                prefixer.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
                 prefixer.append(&mut outbuf);
-                prefixer.resize(prefixer.len() + LINKFD_FRAME_APPEND, 0u8);
+                prefixer.resize(prefixer.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
                 return Some(prefixer);
             }
         }
@@ -740,10 +738,10 @@ impl LfdEncrypt {
         }
         ib.resize(iblen - pad as usize, 0u8);
         let mut prefixer: Vec<u8> = Vec::new();
-        prefixer.reserve(LINKFD_FRAME_RESERV + ib.len() + LINKFD_FRAME_APPEND);
-        prefixer.resize(LINKFD_FRAME_RESERV, 0u8);
+        prefixer.reserve(lfd_mod::LINKFD_FRAME_RESERV + ib.len() + lfd_mod::LINKFD_FRAME_APPEND);
+        prefixer.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
         prefixer.append(&mut ib);
-        prefixer.resize(prefixer.len() + LINKFD_FRAME_APPEND, 0u8);
+        prefixer.resize(prefixer.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
         return Some(prefixer);
     }
 }
@@ -794,9 +792,9 @@ pub extern "C" fn encrypt_buf(len: libc::c_int, in_ptr: *mut libc::c_char, out_p
                 match output {
                     Some(outp) => {
                         lfdEncrypt.returned_enc_buffer = outp;
-                        let len = lfdEncrypt.returned_enc_buffer.len() - LINKFD_FRAME_RESERV - LINKFD_FRAME_APPEND;
+                        let len = lfdEncrypt.returned_enc_buffer.len() - lfd_mod::LINKFD_FRAME_RESERV - lfd_mod::LINKFD_FRAME_APPEND;
                         *out_ptr = *&lfdEncrypt.returned_enc_buffer.as_ptr() as *mut libc::c_char;
-                        *out_ptr = (*out_ptr).add(LINKFD_FRAME_RESERV);
+                        *out_ptr = (*out_ptr).add(lfd_mod::LINKFD_FRAME_RESERV);
                         return len as libc::c_int;
                     },
                     None => return -1
@@ -832,9 +830,9 @@ pub extern "C" fn decrypt_buf(len: libc::c_int, in_ptr: *mut libc::c_char, out_p
                 match output {
                     Some(outp) => {
                         lfdEncrypt.returned_dec_buffer = outp;
-                        let len = lfdEncrypt.returned_dec_buffer.len() - LINKFD_FRAME_RESERV - LINKFD_FRAME_APPEND;
+                        let len = lfdEncrypt.returned_dec_buffer.len() - lfd_mod::LINKFD_FRAME_RESERV - lfd_mod::LINKFD_FRAME_APPEND;
                         *out_ptr = *&lfdEncrypt.returned_dec_buffer.as_ptr() as *mut libc::c_char;
-                        *out_ptr = (*out_ptr).add(LINKFD_FRAME_RESERV);
+                        *out_ptr = (*out_ptr).add(lfd_mod::LINKFD_FRAME_RESERV);
                         return len as libc::c_int;
                     },
                     None => return -1

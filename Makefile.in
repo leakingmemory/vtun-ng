@@ -84,7 +84,8 @@ depend:
 	makedepend -- $(CFLAGS) -- *.c
 
 clean:
-	rm -f core cfg_file.tab.* cfg_file.lex.* *.o *~ .#* *.bak vtunngd rust/linkfd/target/release/libvtun_linkfd.so rust/linkfd/target/release/libvtun_linkfd.rlib
+	rm -f core cfg_file.tab.* cfg_file.lex.* *.o *~ .#* *.bak vtunngd
+	rm -rf rust/linkfd/target
 
 distclean: clean
 	rm -f $(CONFIGURE_FILES)

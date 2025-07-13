@@ -49,79 +49,10 @@
 
 #ifdef HAVE_SSL
 
-#ifndef __APPLE_CC__
-/* OpenSSL includes */
-#include <openssl/md5.h>
-#include <openssl/blowfish.h>
-#else /* YAY - We're MAC OS */
-#include <sys/md5.h>
-#include <crypto/blowfish.h>
-#endif  /* __APPLE_CC__ */
-
-#define ENC_BUF_SIZE VTUN_FRAME_SIZE + 16 
-#define ENC_KEY_SIZE 16
-
-static BF_KEY key;
-static char * enc_buf;
-
-static int alloc_legacy_encrypt(struct vtun_host *host)
-{
-   if( !(enc_buf = lfd_alloc(ENC_BUF_SIZE)) ){
-      vtun_syslog(LOG_ERR,"Can't allocate buffer for legacy encryptor");
-      return -1;
-   }
-
-   BF_set_key(&key, ENC_KEY_SIZE, MD5(host->passwd,strlen(host->passwd),NULL));
-
-   vtun_syslog(LOG_INFO, "BlowFish legacy encryption initialized");
-   return 0;
-}
-
-static int free_legacy_encrypt()
-{
-   lfd_free(enc_buf); enc_buf = NULL;
-   return 0;
-}
-
-static int legacy_encrypt_buf(int len, char *in, char **out)
-{ 
-   register int pad, p;
-   register char *in_ptr = in, *out_ptr = enc_buf;
-
-   /* 8 - ( len % 8 ) */
-   pad = (~len & 0x07) + 1; p = 8 - pad;
-
-   memset(out_ptr, 0, pad);
-   *out_ptr = (char) pad;
-   memcpy(out_ptr + pad, in_ptr, p);  
-   BF_ecb_encrypt(out_ptr, out_ptr, &key, BF_ENCRYPT);
-   out_ptr += 8; in_ptr += p; 
-   len = len - p;
-
-   for (p=0; p < len; p += 8)
-      BF_ecb_encrypt(in_ptr + p,  out_ptr + p, &key, BF_ENCRYPT);
-
-   *out = enc_buf;
-   return len + 8;
-}
-
-static int legacy_decrypt_buf(int len, char *in, char **out)
-{
-   register int p;
-
-   for (p = 0; p < len; p += 8)
-      BF_ecb_encrypt(in + p, in + p, &key, BF_DECRYPT);
-
-   p = *in;
-   if (p < 1 || p > 8) {
-      vtun_syslog(LOG_INFO, "legacy_decrypt_buf: bad pad length");
-      return 0;
-   }
-
-   *out = in + p;
-
-   return len - p;
-}
+int alloc_legacy_encrypt(struct vtun_host *host);
+int free_legacy_encrypt();
+int legacy_encrypt_buf(int len, char *in, char **out);
+int legacy_decrypt_buf(int len, char *in, char **out);
 
 /* 
  * Module structure.

@@ -95,8 +95,8 @@ install_man:
 	$(INSTALL) -m 644 $(INSTALL_OWNER) vtunngd.8 $(DESTDIR)$(MAN_DIR)/man8
 	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(DESTDIR)$(MAN_DIR)/man5
 	$(INSTALL) -m 644 $(INSTALL_OWNER) vtunngd.conf.5 $(DESTDIR)$(MAN_DIR)/man5
-	rm -f $(DESTDIR)$(MAN_DIR)/man8/vtun.8 
-	ln -s vtunngd.8 $(DESTDIR)$(MAN_DIR)/man8/vtun.8
+	rm -f $(DESTDIR)$(MAN_DIR)/man8/vtunng.8
+	ln -s vtunngd.8 $(DESTDIR)$(MAN_DIR)/man8/vtunng.8
 
 install_config: 
 	$(INSTALL) -d -m 755 $(INSTALL_OWNER) $(DESTDIR)$(ETC_DIR)

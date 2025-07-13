@@ -54,6 +54,7 @@ static mut LFD_LEGACY_ENCRYPT: Option<LfdLegacyEncrypt> = None;
 
 impl LfdLegacyEncrypt {
     pub fn alloc(host: *mut VtunHost) -> Option<LfdLegacyEncrypt> {
+        openssl::provider::Provider::load(None, "legacy").unwrap();
         let mut lfdLegacyEncrypt = LfdLegacyEncrypt {
             ctx_enc: CipherCtx::new().unwrap(),
             ctx_dec: CipherCtx::new().unwrap(),

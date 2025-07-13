@@ -52,9 +52,17 @@ pub struct LfdLegacyEncrypt {
 
 static mut LFD_LEGACY_ENCRYPT: Option<LfdLegacyEncrypt> = None;
 
+static LEGACY: once_cell::sync::Lazy<Vec<openssl::provider::Provider>> = once_cell::sync::Lazy::new(|| {
+    openssl::init();
+    let mut vec: Vec<openssl::provider::Provider> = Vec::new();
+    vec.push(openssl::provider::Provider::load(None, "default").expect("default"));
+    vec.push(openssl::provider::Provider::load(None, "legacy").expect("legacy"));
+    return vec;
+});
+
 impl LfdLegacyEncrypt {
     pub fn alloc(host: *mut VtunHost) -> Option<LfdLegacyEncrypt> {
-        openssl::provider::Provider::load(None, "legacy").unwrap();
+        once_cell::sync::Lazy::force(&LEGACY);
         let mut lfdLegacyEncrypt = LfdLegacyEncrypt {
             ctx_enc: CipherCtx::new().unwrap(),
             ctx_dec: CipherCtx::new().unwrap(),
@@ -64,14 +72,14 @@ impl LfdLegacyEncrypt {
         let passwd = unsafe { std::ffi::CStr::from_ptr((*host).passwd).to_str().unwrap() };
         let hs = hash(openssl::hash::MessageDigest::md5(), passwd.as_bytes());
         match hs {
-            Err(_) => return None,
+            Err(err) => return None,
             Ok(key) => {
                 lfdLegacyEncrypt.ctx_enc.encrypt_init(Some(Cipher::bf_ecb()), Some(&key[0..16]), None).unwrap();
                 lfdLegacyEncrypt.ctx_dec.decrypt_init(Some(Cipher::bf_ecb()), Some(&key[0..16]), None).unwrap();
             }
         }
 
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized".as_ptr() as *mut libc::c_char); }
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized\n\0".as_ptr() as *mut libc::c_char); }
 
         return Some(lfdLegacyEncrypt);
     }
@@ -113,7 +121,7 @@ impl LfdLegacyEncrypt {
         }
         let p = output[0];
         if (p < 1 || p > 8) {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length".as_ptr() as *mut libc::c_char); }
+            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length\n\0".as_ptr() as *mut libc::c_char); }
             return None;
         }
 
@@ -207,7 +215,7 @@ pub extern "C" fn legacy_decrypt_buf(len: libc::c_int, in_ptr: *mut libc::c_char
                         *out_ptr = (*out_ptr).add(lfd_mod::LINKFD_FRAME_RESERV);
                         return len as libc::c_int;
                     },
-                    None => return -1
+                    None => return 0
                 }
             },
             None => return -1

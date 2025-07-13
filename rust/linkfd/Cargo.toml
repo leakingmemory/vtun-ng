@@ -3,10 +3,6 @@ name = "vtun_linkfd"
 version = "0.1.0"
 edition = "2021"
 
-[package.metadata.system-deps]
-# Set the SONAME version
-link_name = "vtun_linkfd"
-
 
 [lib]
 crate-type = ["rlib", "cdylib"]

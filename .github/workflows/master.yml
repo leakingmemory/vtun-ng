@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install -y liblzo2-dev
+        run: sudo apt-get update && sudo apt-get install -y liblzo2-dev libbsd-dev
 
       - name: Create Release Tarball
         run: |

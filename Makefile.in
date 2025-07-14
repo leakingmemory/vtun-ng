@@ -67,7 +67,7 @@ CONFIGURE_FILES = Makefile config.status config.cache config.h config.log
 	$(CC) $(CFLAGS) $(DEFS) -c $<
 
 vtunngd: $(OBJS) $(RUSTLIB)
-	$(CC) $(CFLAGS) -o vtunngd $(OBJS) $(RUSTLIBLNK) $(LFD_OBJS) $(LDFLAGS) $(RUSTLIBDIR)
+	$(CC) $(CFLAGS) -o vtunngd $(OBJS) $(RUSTLIBLNK) $(RUSTLIBDIR) $(LFD_OBJS) $(LDFLAGS)
 
 $(RUSTLIB):
 	cd rust/linkfd && $(CARGO) build --release

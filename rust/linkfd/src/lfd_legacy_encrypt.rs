@@ -78,6 +78,8 @@ impl LfdLegacyEncrypt {
                 lfdLegacyEncrypt.ctx_dec.decrypt_init(Some(Cipher::bf_ecb()), Some(&key[0..16]), None).unwrap();
             }
         }
+        lfdLegacyEncrypt.ctx_enc.set_padding(false);
+        lfdLegacyEncrypt.ctx_dec.set_padding(false);
 
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized\n\0".as_ptr() as *mut libc::c_char); }
 

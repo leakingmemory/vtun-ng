@@ -55,67 +55,9 @@
 #include "lock.h"
 #include "auth.h"
 
-/* Encryption and Decryption of the challenge key */
-#ifdef HAVE_SSL
-
-#include <openssl/md5.h>
-#include <openssl/blowfish.h>
-#include <openssl/rand.h>
-
-static void gen_chal(char *buf)
-{
-   RAND_bytes(buf, VTUN_CHAL_SIZE);
-}
-
-static void encrypt_chal(char *chal, char *pwd)
-{ 
-   register int i;
-   BF_KEY key;
-
-   BF_set_key(&key, 16, MD5(pwd,strlen(pwd),NULL));
-
-   for(i=0; i < VTUN_CHAL_SIZE; i += 8 )
-      BF_ecb_encrypt(chal + i,  chal + i, &key, BF_ENCRYPT);
-}
-
-static void decrypt_chal(char *chal, char *pwd)
-{ 
-   register int i;
-   BF_KEY key;
-
-   BF_set_key(&key, 16, MD5(pwd,strlen(pwd),NULL));
-
-   for(i=0; i < VTUN_CHAL_SIZE; i += 8 )
-      BF_ecb_encrypt(chal + i,  chal + i, &key, BF_DECRYPT);
-}
-
-#else /* HAVE_SSL */
-
-static void encrypt_chal(char *chal, char *pwd)
-{ 
-   char * xor_msk = pwd;
-   register int i, xor_len = strlen(xor_msk);
-
-   for(i=0; i < VTUN_CHAL_SIZE; i++)
-      chal[i] ^= xor_msk[i%xor_len];
-}
-
-static void inline decrypt_chal(char *chal, char *pwd)
-{ 
-   encrypt_chal(chal, pwd);
-}
-
-/* Generate PSEUDO random challenge key. */
-static void gen_chal(char *buf)
-{
-   register int i;
- 
-   srand(time(NULL));
-
-   for(i=0; i < VTUN_CHAL_SIZE; i++)
-      buf[i] = (unsigned int)(255.0 * rand()/RAND_MAX);
-}
-#endif /* HAVE_SSL */
+void gen_chal(char *buf);
+void encrypt_chal(char *chal, char *pwd);
+void decrypt_chal(char *chal, char *pwd);
 
 /* 
  * Functions to convert binary flags to character string.

@@ -1,0 +1,20 @@
+name: master.yml
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Release Tarball
+        run: |
+          chmod +x release/release.sh
+          ./release/release.sh current
+
+      - name: Test build
+        run: ./release/buildtest.sh . current

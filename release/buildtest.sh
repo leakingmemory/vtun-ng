@@ -4,13 +4,13 @@ assetpath=$1
 version=$2
 
 rm -rf vtun-ng-$version
-tar xzvf $assetpath/vtun-ng-$version.tar.gz || die
-pushd vtun-ng-$version || die
-./configure || die
-make || die
+tar xzvf $assetpath/vtun-ng-$version.tar.gz || exit 1
+pushd vtun-ng-$version || exit 1
+./configure || exit 1
+make || exit 1
 if [ ! -f vtunngd ]; then
   echo 'Did not build the binary'
-  die
+  exit 1
 fi
 popd
 rm -rf vtun-ng-$version

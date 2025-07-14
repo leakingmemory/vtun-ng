@@ -47,8 +47,6 @@
 #include "linkfd.h"
 #include "lib.h"
 
-#ifdef HAVE_SSL
-
 int alloc_legacy_encrypt(struct vtun_host *host);
 int free_legacy_encrypt();
 int legacy_encrypt_buf(int len, char *in, char **out);
@@ -69,17 +67,3 @@ struct lfd_mod lfd_legacy_encrypt = {
      NULL
 };
 
-#else  /* HAVE_SSL */
-
-static int no_legacy_encrypt(struct vtun_host *host)
-{
-     vtun_syslog(LOG_INFO, "Encryption is not supported");
-     return -1;
-}
-
-struct lfd_mod lfd_legacy_encrypt = {
-     "Encryptor",
-     no_legacy_encrypt, NULL, NULL, NULL, NULL, NULL, NULL, NULL
-};
-
-#endif /* HAVE_SSL */

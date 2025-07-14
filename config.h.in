@@ -60,18 +60,6 @@
 /* Define to 1 if you want to enable shaper module */
 #undef HAVE_SHAPER
 
-/* Define to 1 if you have openssl */
-#undef HAVE_SSL
-
-/* Define to 1 if you have AES in openssl */
-#undef HAVE_SSL_AES
-
-/* Define to 1 if you have blowfish in openssl */
-#undef HAVE_SSL_BLOWFISH
-
-/* Define to 1 if you have EVP in openssl */
-#undef HAVE_SSL_EVP
-
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 

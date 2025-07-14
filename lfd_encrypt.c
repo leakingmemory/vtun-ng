@@ -44,20 +44,6 @@
 #include "linkfd.h"
 #include "lib.h"
 
-#ifdef HAVE_SSL
-
-/*
- * #define LFD_ENCRYPT_DEBUG
- */
-
-#define ENC_BUF_SIZE VTUN_FRAME_SIZE + 128 
-#define ENC_KEY_SIZE 16
-
-#define CIPHER_INIT		0
-#define CIPHER_CODE		1	
-#define CIPHER_SEQUENCE 	2
-#define CIPHER_REQ_INIT 	3
-
 int alloc_encrypt(struct vtun_host *host);
 int free_encrypt();
 int encrypt_buf(int len, char *in, char **out);
@@ -77,18 +63,3 @@ struct lfd_mod lfd_encrypt = {
      NULL,
      NULL
 };
-
-#else  /* HAVE_SSL */
-
-static int no_encrypt(struct vtun_host *host)
-{
-     vtun_syslog(LOG_INFO, "Encryption is not supported");
-     return -1;
-}
-
-struct lfd_mod lfd_encrypt = {
-     "Encryptor",
-     no_encrypt, NULL, NULL, NULL, NULL, NULL, NULL, NULL
-};
-
-#endif /* HAVE_SSL */

@@ -8,4 +8,4 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/rust/linkfd/"
     schedule:
-      interval: "daily"
+      interval: "weekly"

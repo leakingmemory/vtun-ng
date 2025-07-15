@@ -20,7 +20,6 @@ Required packages:
   - Rust and cargo
 
 Optional packages:
-  - Zlib compression library	http://www.gzip.org/zlib/
   - SOCKS library:
 	 Socks5 by NEC (recommended)	http://www.socks.nec.com 
 	 Dante Socks4/5 	http://www.inet.no/dante 
@@ -30,8 +29,6 @@ To configure VTun run:
   autoconf
   ./configure 
 Optional support:
-  --disable-lzo  	compile without LZO compression support
-  --disable-zlib  	compile without ZLIB compression support
   --disable-shaper  	compile without Traffic shaping support
   --enable-socks 	compile with SOCKS support
 

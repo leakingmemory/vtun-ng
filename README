@@ -29,7 +29,6 @@ To configure VTun run:
   autoconf
   ./configure 
 Optional support:
-  --disable-shaper  	compile without Traffic shaping support
   --enable-socks 	compile with SOCKS support
 
 Configure automatically searches for all required library and header

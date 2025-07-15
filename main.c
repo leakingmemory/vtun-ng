@@ -220,7 +220,7 @@ int main(int argc, char *argv[], char *env[])
         sa.sa_handler=reread_config;
         sigaction(SIGHUP,&sa,NULL);
 
-        init_title(argc,argv,env,"vtund[s]: ");
+        init_title(argc,argv,env,"vtunngd[s]: ");
 
 	if( vtun.svr_type == VTUN_STAND_ALONE ){
 #ifdef HAVE_WORKING_FORK
@@ -233,7 +233,7 @@ int main(int argc, char *argv[], char *env[])
 	
 	server(sock);
      } else {	
-        init_title(argc,argv,env,"vtund[c]: ");
+        init_title(argc,argv,env,"vtunngd[c]: ");
         client(host);
      }
 

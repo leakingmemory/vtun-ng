@@ -43,7 +43,11 @@
   void init_title(int argc,char *argv[],char *env[], char *name);
   void set_title(const char *ftm, ...);
 #else
-  #define init_title( a... ) 
+#ifdef HAVE_SETPROCTITLE_INIT
+    #define init_title(argc, argv, env, title) { setproctitle_init(argc, argv, env); setproctitle(title); }
+#else
+    #define init_title( a... )
+#endif
   #define set_title setproctitle
 #endif /* HAVE_SETPROC_TITLE */
 

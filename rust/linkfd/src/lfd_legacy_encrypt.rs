@@ -37,81 +37,37 @@
  * It is based on code written by Chris Todd<christ@insynq.com> with
  * several improvements and modifications.
  */
-use openssl::cipher_ctx::CipherCtx;
-use openssl::cipher::{Cipher};
-use openssl::hash::hash;
+use blowfish::Blowfish;
+use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
+use ecb::{Decryptor, Encryptor};
 use crate::{lfd_mod, linkfd};
 use crate::lfd_mod::VtunHost;
 use crate::linkfd::{LfdMod, LfdModFactory};
 
 pub struct LfdLegacyEncrypt {
-    pub ctx_enc: CipherCtx,
-    pub ctx_dec: CipherCtx,
-    pub returned_enc_buffer: Vec<u8>,
-    pub returned_dec_buffer: Vec<u8>,
+    pub ctx_enc: Encryptor<Blowfish>,
+    pub ctx_dec: Decryptor<Blowfish>,
 }
 
-static LEGACY: once_cell::sync::Lazy<Vec<openssl::provider::Provider>> = once_cell::sync::Lazy::new(|| {
-    openssl::init();
-    let mut vec: Vec<openssl::provider::Provider> = Vec::new();
-    vec.push(openssl::provider::Provider::load(None, "default").expect("default"));
-    vec.push(openssl::provider::Provider::load(None, "legacy").expect("legacy"));
-    return vec;
-});
+type BlowfishEcbEnc = ecb::Encryptor<Blowfish>;
+type BlowfishEcbDec = ecb::Decryptor<Blowfish>;
 
 impl LfdLegacyEncrypt {
     pub fn new(host: *mut VtunHost) -> Option<LfdLegacyEncrypt> {
-        once_cell::sync::Lazy::force(&LEGACY);
-        let mut lfdLegacyEncrypt = LfdLegacyEncrypt {
-            ctx_enc: CipherCtx::new().unwrap(),
-            ctx_dec: CipherCtx::new().unwrap(),
-            returned_enc_buffer: Vec::new(),
-            returned_dec_buffer: Vec::new(),
-        };
         let passwd = unsafe { std::ffi::CStr::from_ptr((*host).passwd).to_str().unwrap() };
-        let hs = hash(openssl::hash::MessageDigest::md5(), passwd.as_bytes());
-        match hs {
-            Err(err) => return None,
-            Ok(key) => {
-                lfdLegacyEncrypt.ctx_enc.encrypt_init(Some(Cipher::bf_ecb()), Some(&key[0..16]), None).unwrap();
-                lfdLegacyEncrypt.ctx_dec.decrypt_init(Some(Cipher::bf_ecb()), Some(&key[0..16]), None).unwrap();
-            }
+        let k = md5::compute(passwd.as_bytes());
+        let mut key: [u8; 16] = [0u8; 16];
+        for i in 0..16 {
+            key[i] = k[i];
         }
-        lfdLegacyEncrypt.ctx_enc.set_padding(false);
-        lfdLegacyEncrypt.ctx_dec.set_padding(false);
+        let mut lfdLegacyEncrypt = LfdLegacyEncrypt {
+            ctx_enc: BlowfishEcbEnc::new_from_slice(&key).unwrap(),
+            ctx_dec: BlowfishEcbDec::new_from_slice(&key).unwrap()
+        };
 
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized\n\0".as_ptr() as *mut libc::c_char); }
 
         return Some(lfdLegacyEncrypt);
-    }
-    pub fn encrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
-        let mut output = match self.encode(buf) {
-            None => return None,
-            Some(output) => *output,
-        };
-        let mut fdbuf: Vec<u8> = Vec::new();
-        fdbuf.reserve(output.len() + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
-        fdbuf.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
-        fdbuf.append(&mut output);
-        fdbuf.resize(fdbuf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-        return Some(fdbuf);
-    }
-
-    pub fn decrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
-        let mut output = match self.decode(buf) {
-            None => return None,
-            Some(output) => *output,
-        };
-
-        let mut fdbuf: Vec<u8> = Vec::new();
-        fdbuf.reserve(output.len() + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
-        let payload = output.len();
-        fdbuf.resize(lfd_mod::LINKFD_FRAME_RESERV + payload, 0u8);
-        for i in 0..payload {
-            fdbuf[lfd_mod::LINKFD_FRAME_RESERV + i] = output[i];
-        }
-        fdbuf.resize(fdbuf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-        return Some(fdbuf);
     }
 }
 
@@ -146,18 +102,22 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
         let p = 8 - pad;
 
         let mut output: Vec<u8> = Vec::new();
-        output.reserve(buf.len() + pad + 8);
+        output.reserve(buf.len() + pad);
         output.push(pad as u8);
         output.resize(pad, 0u8);
         for i in 0..buf.len() {
             output.push(buf[i]);
         }
-        let len = output.len();
-        output.resize(len + 8, 0u8);
-        match self.ctx_enc.cipher_update_inplace(&mut *output, len) {
-            Err(_) => return None,
-            Ok(reslen) => {
-                output.resize(reslen, 0u8);
+        const blocksize: usize = 8;
+        for i in 0..output.len()/blocksize {
+            let mut data: [u8;blocksize] = [0u8; blocksize];
+            for j in 0..blocksize {
+                data[j] = output[i*blocksize+j];
+            }
+            let mut block = Block::<BlowfishEcbEnc>::from(data);
+            self.ctx_enc.encrypt_block_mut(&mut block);
+            for j in 0..blocksize {
+                output[i*blocksize+j] = block[j];
             }
         }
         return Some(Box::new(output));
@@ -169,11 +129,17 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
 
     fn decode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
         let mut output: Vec<u8> = Vec::new();
-        output.resize(buf.len() + 8, 0u8);
-        match self.ctx_dec.cipher_update(buf, Some(&mut *output)) {
-            Err(_) => return None,
-            Ok(reslen) => {
-                output.resize(reslen, 0u8);
+        output.resize(buf.len(), 0u8);
+        const blocksize: usize = 8;
+        for i in 0..buf.len()/blocksize {
+            let mut data: [u8;blocksize] = [0u8; blocksize];
+            for j in 0..blocksize {
+                data[j] = buf[i*blocksize+j];
+            }
+            let mut block = Block::<BlowfishEcbDec>::from(data);
+            self.ctx_dec.decrypt_block_mut(&mut block);
+            for j in 0..blocksize {
+                output[i*blocksize+j] = block[j];
             }
         }
         let p = output[0];

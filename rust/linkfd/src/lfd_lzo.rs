@@ -21,7 +21,9 @@
 /* LZO compression module */
 
 use rust_lzo::{worst_compress, LZOContext, LZOError};
-use crate::lfd_mod;
+use crate::{lfd_mod, linkfd};
+use crate::lfd_mod::VtunHost;
+use crate::linkfd::LfdMod;
 
 struct LfdLzo {
     pub compress_ctx: LZOContext,
@@ -30,7 +32,7 @@ struct LfdLzo {
 }
 
 impl LfdLzo {
-    pub fn alloc(host: &lfd_mod::VtunHost) -> LfdLzo {
+    pub fn new(host: &lfd_mod::VtunHost) -> LfdLzo {
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "LZO compression initialized\n\0".as_ptr() as *mut libc::c_char); }
         return LfdLzo {
             compress_ctx: LZOContext::new(),
@@ -38,18 +40,47 @@ impl LfdLzo {
             returned_decomp_buf: Vec::new()
         };
     }
-    pub fn compress(&mut self, src: &[u8]) -> Option<Vec<u8>> {
+}
+
+pub(crate) struct LfdLzoFactory {
+}
+
+impl LfdLzoFactory {
+    pub fn new() -> LfdLzoFactory {
+        return LfdLzoFactory {
+        };
+    }
+}
+
+impl linkfd::LfdModFactory for LfdLzoFactory {
+    fn name(&self) -> &'static str {
+        return "LZO";
+    }
+
+    fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
+        return Some(Box::new(LfdLzo::new(host)));
+    }
+}
+
+impl linkfd::LfdMod for LfdLzo {
+    fn can_encode_inplace(&mut self) -> bool {
+        false
+    }
+    fn encode(&mut self, src: &[u8]) -> Option<Box<Vec<u8>>> {
         let mut compressed: Vec<u8> = Vec::new();
         compressed.reserve(worst_compress(src.len()));
         let err = self.compress_ctx.compress(src, &mut compressed);
         if (err == LZOError::OK) {
-            return Some(compressed);
+            return Some(Box::new(compressed));
         } else {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "LZO compression failed\n\0".as_ptr() as *mut libc::c_char)}
             return None;
         }
     }
-    pub fn decompress(&self, src: &[u8]) -> Option<Vec<u8>> {
+    fn can_decode_inplace(&mut self) -> bool {
+        false
+    }
+    fn decode(&mut self, src: &[u8]) -> Option<Box<Vec<u8>>> {
         let mut decompressed: Vec<u8> = Vec::new();
         decompressed.resize(src.len() * 4, 0u8);
         let (result, err) = LZOContext::decompress_to_slice(&src, &mut decompressed);
@@ -59,91 +90,10 @@ impl LfdLzo {
             for i in 0..result.len() {
                 resvec[i] = result[i];
             }
-            return Some(resvec);
+            return Some(Box::new(resvec));
         } else {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "LZO decompression failed\n\0".as_ptr() as *mut libc::c_char)}
             return None;
-        }
-    }
-}
-
-pub static mut LFD_LZO: Option<LfdLzo> = None;
-
-#[no_mangle]
-pub extern "C" fn alloc_lzo(host: *const lfd_mod::VtunHost) -> libc::c_int
-{
-    unsafe {
-        LFD_LZO = Some(LfdLzo::alloc(&*host));
-    }
-    return 0;
-}
-
-#[no_mangle]
-pub extern "C" fn free_lzo() -> libc::c_int
-{
-    unsafe { LFD_LZO = None; }
-    return 0;
-}
-
-/*
- * This functions _MUST_ consume all incoming bytes in one pass,
- * that's why we expand buffer dynamicly.
- */
-#[no_mangle]
-pub extern "C" fn comp_lzo(len: libc::c_int, inptr: *const libc::c_char, outptr: *mut *mut libc::c_char) -> libc::c_int
-{
-    unsafe {
-        match LFD_LZO {
-            Some(ref mut lfdLzo) => {
-                let inbuf = unsafe { std::slice::from_raw_parts(inptr as *const u8, len as usize) };
-                let outbuf = match lfdLzo.compress(inbuf) {
-                    Some(outbuf) => outbuf,
-                    None => return -1
-                };
-                let outlen = outbuf.len();
-                lfdLzo.returned_comp_buf.reserve(outlen + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
-                lfdLzo.returned_comp_buf.resize(lfd_mod::LINKFD_FRAME_RESERV + outlen, 0);
-                for i in 0..outlen {
-                    lfdLzo.returned_comp_buf[i + lfd_mod::LINKFD_FRAME_RESERV] = outbuf[i];
-                }
-                lfdLzo.returned_comp_buf.resize(lfdLzo.returned_comp_buf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0);
-                *outptr = lfdLzo.returned_comp_buf.as_ptr() as *mut libc::c_char;
-                *outptr = (*outptr).add(lfd_mod::LINKFD_FRAME_RESERV);
-                return outlen as libc::c_int;
-            },
-            None => {
-                return -1;
-            }
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn decomp_lzo(len: libc::c_int, inptr: *const libc::c_char, outptr: *mut *mut libc::c_char) -> libc::c_int
-{
-    unsafe {
-        match LFD_LZO {
-            Some(ref mut lfdLzo) => {
-                let inbuf = unsafe { std::slice::from_raw_parts(inptr as *const u8, len as usize) };
-                let outbuf = match lfdLzo.decompress(inbuf) {
-                    Some(outbuf) => outbuf,
-                    None => return -1
-                };
-                lfdLzo.returned_decomp_buf = Vec::new();
-                let outlen = outbuf.len();
-                lfdLzo.returned_decomp_buf.reserve(outlen + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
-                lfdLzo.returned_decomp_buf.resize(lfd_mod::LINKFD_FRAME_RESERV + outlen, 0);
-                for i in 0..outlen {
-                    lfdLzo.returned_decomp_buf[lfd_mod::LINKFD_FRAME_RESERV + i] = outbuf[i];
-                }
-                lfdLzo.returned_decomp_buf.resize(lfdLzo.returned_decomp_buf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0);
-                *outptr = lfdLzo.returned_decomp_buf.as_ptr() as *mut libc::c_char;
-                *outptr = (*outptr).add(lfd_mod::LINKFD_FRAME_RESERV);
-                return outlen as libc::c_int;
-            },
-            None => {
-                return -1;
-            }
         }
     }
 }

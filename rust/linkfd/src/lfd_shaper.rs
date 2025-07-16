@@ -18,7 +18,9 @@
  */
 use std::{thread, time};
 use std::time::SystemTime;
-use crate::lfd_mod;
+use crate::{lfd_mod, linkfd};
+use crate::lfd_mod::VtunHost;
+use crate::linkfd::LfdMod;
 
 struct LfdShaper {
     pub bytes : usize,
@@ -94,40 +96,31 @@ impl LfdShaper {
     }
 }
 
-pub static mut LFD_SHAPER: Option<LfdShaper> = None;
-
-#[no_mangle]
-pub extern "C" fn shaper_init(host: *const lfd_mod::VtunHost) -> libc::c_int {
-    unsafe {
-        LFD_SHAPER = Some(LfdShaper::new(host));
-    }
-    return 0;
+pub(crate) struct LfdShaperFactory {
 }
 
-#[no_mangle]
-pub extern "C" fn shaper_counter(len: libc::c_int, inptr: *mut libc::c_char, outptr: *mut *mut libc::c_char) -> libc::c_int {
-    unsafe {
-        match LFD_SHAPER {
-            Some(ref mut shaper) => shaper.count(len as usize),
-            None => {}
+impl LfdShaperFactory {
+    pub fn new() -> LfdShaperFactory {
+        return LfdShaperFactory {
         };
-        *outptr = inptr;
     }
-    return len;
 }
 
-#[no_mangle]
-pub extern "C" fn shaper_avail() -> libc::c_int {
-    let avail: bool;
-    unsafe {
-        avail = match LFD_SHAPER {
-            Some(ref mut shaper) => shaper.avail(),
-            None => true
-        };
+impl linkfd::LfdModFactory for LfdShaperFactory {
+    fn name(&self) -> &'static str {
+        "Shaper"
     }
-    if (avail) {
-        return 1;
-    } else {
-        return 0;
+
+    fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
+        return Some(Box::new(LfdShaper::new(host)));
+    }
+}
+
+impl linkfd::LfdMod for LfdShaper {
+    fn avail_encode(&mut self) -> bool {
+        return self.avail();
+    }
+    fn encode_inplace(&mut self, buf: &mut [u8]) {
+        self.count(buf.len());
     }
 }

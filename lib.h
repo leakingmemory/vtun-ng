@@ -63,28 +63,18 @@ int  run_cmd(void *d, void *opt);
 #endif
 void free_sopt(struct vtun_sopt *opt);
 
-/* IO cancelation */
-extern volatile sig_atomic_t __io_canceled;
-
-static inline void io_init(void)
-{
-	__io_canceled = 0;
-}
-
-static inline void io_cancel(void)
-{
-	__io_canceled = 1;
-}
-
 /* signal safe syslog function */
 void vtun_syslog (int priority, char *format, ...);
+
+void io_init(void);
+int is_io_cancelled(void);
 
 /* Read exactly len bytes (Signal safe)*/
 static inline int read_n(int fd, char *buf, int len)
 {
 	register int t=0, w;
 
-	while (!__io_canceled && len > 0) {
+	while (!is_io_cancelled() && len > 0) {
 	  if( (w = read(fd, buf, len)) < 0 ){
 	     if( errno == EINTR || errno == EAGAIN )
  	        continue;
@@ -103,7 +93,7 @@ static inline int write_n(int fd, char *buf, int len)
 {
 	register int t=0, w;
 
-	while (!__io_canceled && len > 0) {
+	while (!is_io_cancelled() && len > 0) {
  	  if( (w = write(fd, buf, len)) < 0 ){
 	     if( errno == EINTR || errno == EAGAIN )
   	         continue;

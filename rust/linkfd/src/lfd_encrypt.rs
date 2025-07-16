@@ -44,8 +44,9 @@ use std::time::SystemTime;
 use openssl::cipher::{Cipher, CipherRef};
 use openssl::cipher_ctx::CipherCtx;
 use openssl::hash::{hash, MessageDigest};
-use crate::lfd_mod;
+use crate::{lfd_mod, linkfd};
 use lfd_mod::{VtunHost, VTUN_ENC_AES128CBC, VTUN_ENC_AES128CFB, VTUN_ENC_AES128OFB, VTUN_ENC_AES256CBC, VTUN_ENC_AES256CFB, VTUN_ENC_AES256OFB, VTUN_ENC_BF128CBC, VTUN_ENC_BF128CFB, VTUN_ENC_BF128OFB, VTUN_ENC_BF256CBC, VTUN_ENC_BF256CFB, VTUN_ENC_BF256OFB};
+use crate::linkfd::LfdMod;
 
 const MAX_GIBBERISH: i32	= 10;
 const MIN_GIBBERISH: i32   = 1;
@@ -76,8 +77,6 @@ pub struct LfdEncrypt {
     pub ctx_enc_ecb: openssl::cipher_ctx::CipherCtx,
     pub ctx_dec_ecb: openssl::cipher_ctx::CipherCtx
 }
-
-static mut LFD_ENCRYPT: Option<LfdEncrypt> = None;
 
 impl LfdEncrypt {
     pub fn prep_key(keysize: usize, host: *mut VtunHost) -> Option<Vec<u8>> {
@@ -131,7 +130,7 @@ impl LfdEncrypt {
         }
         return Some(pkey);
     }
-    pub fn alloc(host: *mut VtunHost) -> Option<LfdEncrypt> {
+    pub fn new(host: *mut VtunHost) -> Option<LfdEncrypt> {
         let mut lfd_encrypt: LfdEncrypt = LfdEncrypt {
             sequence_num: 0,
             gibberish: 0,
@@ -515,70 +514,16 @@ impl LfdEncrypt {
     }
 
     pub fn encrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
-        let mut outbuf: Vec<u8> = Vec::new();
-
-        let mut sendbuf = self.send_msg();
-
-        let mut ib = self.send_ib_mesg();
-        {
-            let mut expectedlen = ib.len() + buf.len();
-            let p = (expectedlen & ((self.blocksize-1) as usize));
-            expectedlen += (self.blocksize as usize) - p;
-            expectedlen += self.blocksize as usize;
-            outbuf.reserve(expectedlen);
-        }
-        outbuf.append(& mut ib);
-        {
-            let prelen = outbuf.len();
-            outbuf.resize(prelen + buf.len(), 0u8);
-            for i in 0..buf.len() {
-                outbuf[prelen + i] = buf[i];
-            }
-        }
-        /* ( len % blocksize ) */
-        let p = (outbuf.len() & ((self.blocksize-1) as usize));
-        let pad = (self.blocksize as usize) - p;
-
-        outbuf.resize(outbuf.len() + pad, (pad & 0xFF) as u8);
-        if (pad == (self.blocksize as usize)) {
-            let mut rand_bytes: Vec<u8> = Vec::new();
-            rand_bytes.resize((self.blocksize - 1) as usize, 0u8);
-            openssl::rand::rand_bytes(&mut rand_bytes).unwrap();
-            for i in 0..(self.blocksize - 1) {
-                let outbuflen = outbuf.len();
-                outbuf[outbuflen - (self.blocksize as usize) + (i as usize)] = rand_bytes[i as usize];
-            }
-        }
-        {
-            let outbuflen = outbuf.len();
-            outbuf.resize(outbuflen + (self.blocksize as usize), 0u8);
-            match self.ctx_enc.cipher_update_inplace(&mut *outbuf, outbuflen) {
-                Ok(rlen) => { outbuf.resize(rlen, 0u8); },
-                Err(_) => return None
-            }
-        }
-
-        self.sequence_num += 1;
-
-        match sendbuf {
-            Some(mut sendbuf) => {
-                let mut finalbuf = Vec::new();
-                finalbuf.reserve(lfd_mod::LINKFD_FRAME_RESERV + sendbuf.len() + outbuf.len() + lfd_mod::LINKFD_FRAME_APPEND);
-                finalbuf.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
-                finalbuf.append(&mut sendbuf);
-                finalbuf.append(&mut outbuf);
-                finalbuf.resize(finalbuf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-                return Some(finalbuf);
-            }
-            None => {
-                let mut prefixer: Vec<u8> = Vec::new();
-                prefixer.reserve(lfd_mod::LINKFD_FRAME_RESERV + outbuf.len() + lfd_mod::LINKFD_FRAME_APPEND);
-                prefixer.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
-                prefixer.append(&mut outbuf);
-                prefixer.resize(prefixer.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-                return Some(prefixer);
-            }
-        }
+        let mut outbuf = match self.encode(buf) {
+            None => return None,
+            Some(b) => *b
+        };
+        let mut prefixer: Vec<u8> = Vec::new();
+        prefixer.reserve(lfd_mod::LINKFD_FRAME_RESERV + outbuf.len() + lfd_mod::LINKFD_FRAME_APPEND);
+        prefixer.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
+        prefixer.append(&mut outbuf);
+        prefixer.resize(prefixer.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
+        return Some(prefixer);
     }
 
     fn recv_msg(&mut self, buf: &[u8]) -> Option<Vec<u8>>
@@ -713,6 +658,109 @@ impl LfdEncrypt {
     }
 
     pub fn decrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
+        let mut ib = match self.decode(buf) {
+            None => return None,
+            Some(b) => *b
+        };
+        let mut prefixer: Vec<u8> = Vec::new();
+        prefixer.reserve(lfd_mod::LINKFD_FRAME_RESERV + ib.len() + lfd_mod::LINKFD_FRAME_APPEND);
+        prefixer.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
+        prefixer.append(&mut ib);
+        prefixer.resize(prefixer.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
+        return Some(prefixer);
+    }
+}
+
+pub(crate) struct LfdEncryptFactory {
+}
+
+impl LfdEncryptFactory {
+    pub fn new() -> LfdEncryptFactory {
+        LfdEncryptFactory {
+        }
+    }
+}
+
+impl linkfd::LfdModFactory for LfdEncryptFactory {
+    fn name(&self) -> &'static str {
+        "Encryptor"
+    }
+
+    fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
+        return match LfdEncrypt::new(host) {
+            None => None,
+            Some(e) => Some(Box::new(e))
+        };
+    }
+}
+
+impl linkfd::LfdMod for LfdEncrypt {
+    fn can_encode_inplace(&mut self) -> bool {
+        false
+    }
+    fn encode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
+        let mut outbuf: Vec<u8> = Vec::new();
+
+        let mut sendbuf = self.send_msg();
+
+        let mut ib = self.send_ib_mesg();
+        {
+            let mut expectedlen = ib.len() + buf.len();
+            let p = (expectedlen & ((self.blocksize-1) as usize));
+            expectedlen += (self.blocksize as usize) - p;
+            expectedlen += self.blocksize as usize;
+            outbuf.reserve(expectedlen);
+        }
+        outbuf.append(& mut ib);
+        {
+            let prelen = outbuf.len();
+            outbuf.resize(prelen + buf.len(), 0u8);
+            for i in 0..buf.len() {
+                outbuf[prelen + i] = buf[i];
+            }
+        }
+        /* ( len % blocksize ) */
+        let p = (outbuf.len() & ((self.blocksize-1) as usize));
+        let pad = (self.blocksize as usize) - p;
+
+        outbuf.resize(outbuf.len() + pad, (pad & 0xFF) as u8);
+        if (pad == (self.blocksize as usize)) {
+            let mut rand_bytes: Vec<u8> = Vec::new();
+            rand_bytes.resize((self.blocksize - 1) as usize, 0u8);
+            openssl::rand::rand_bytes(&mut rand_bytes).unwrap();
+            for i in 0..(self.blocksize - 1) {
+                let outbuflen = outbuf.len();
+                outbuf[outbuflen - (self.blocksize as usize) + (i as usize)] = rand_bytes[i as usize];
+            }
+        }
+        {
+            let outbuflen = outbuf.len();
+            outbuf.resize(outbuflen + (self.blocksize as usize), 0u8);
+            match self.ctx_enc.cipher_update_inplace(&mut *outbuf, outbuflen) {
+                Ok(rlen) => { outbuf.resize(rlen, 0u8); },
+                Err(_) => return None
+            }
+        }
+
+        self.sequence_num += 1;
+
+        match sendbuf {
+            Some(mut sendbuf) => {
+                let mut finalbuf = Vec::new();
+                finalbuf.reserve(sendbuf.len() + outbuf.len());
+                finalbuf.append(&mut sendbuf);
+                finalbuf.append(&mut outbuf);
+                return Some(Box::new(finalbuf));
+            }
+            None => {
+                return Some(Box::new(outbuf));
+            }
+        }
+    }
+    fn can_decode_inplace(&mut self) -> bool {
+        false
+    }
+    fn decode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
         let mut msg = match self.recv_msg(buf) {
             Some(msgbuf) => msgbuf,
             None => return None
@@ -737,109 +785,6 @@ impl LfdEncrypt {
             return None;
         }
         ib.resize(iblen - pad as usize, 0u8);
-        let mut prefixer: Vec<u8> = Vec::new();
-        prefixer.reserve(lfd_mod::LINKFD_FRAME_RESERV + ib.len() + lfd_mod::LINKFD_FRAME_APPEND);
-        prefixer.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
-        prefixer.append(&mut ib);
-        prefixer.resize(prefixer.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-        return Some(prefixer);
+        return Some(Box::new(ib));
     }
 }
-
-extern "C" {
-    static mut send_a_packet: libc::c_int;
-}
-#[no_mangle]
-pub extern "C" fn alloc_encrypt(host: *mut VtunHost) -> libc::c_int
-{
-    unsafe {
-        LFD_ENCRYPT = LfdEncrypt::alloc(host);
-        if (LFD_ENCRYPT.is_some()) {
-            return 0;
-        }
-    }
-    return -1;
-}
-
-#[no_mangle]
-pub extern "C" fn free_encrypt() -> libc::c_int {
-    unsafe { LFD_ENCRYPT = None; }
-    return 0;
-}
-
-#[no_mangle]
-pub extern "C" fn encrypt_buf(len: libc::c_int, in_ptr: *mut libc::c_char, out_ptr: *mut *mut libc::c_char) -> libc::c_int {
-    if in_ptr.is_null() || out_ptr.is_null() {
-        return -1;
-    }
-
-    let slice = unsafe {
-        std::slice::from_raw_parts_mut(in_ptr as *mut u8, len as usize)
-    };
-
-    let output = unsafe { match &mut LFD_ENCRYPT {
-        Some(ref mut lfdEncrypt) => lfdEncrypt.encrypt(slice),
-        None => return -1
-    } };
-
-    unsafe {
-        match &mut LFD_ENCRYPT {
-            Some(ref mut lfdEncrypt) => {
-                if (lfdEncrypt.send_a_packet) {
-                    send_a_packet = 1;
-                    lfdEncrypt.send_a_packet = false;
-                }
-                match output {
-                    Some(outp) => {
-                        lfdEncrypt.returned_enc_buffer = outp;
-                        let len = lfdEncrypt.returned_enc_buffer.len() - lfd_mod::LINKFD_FRAME_RESERV - lfd_mod::LINKFD_FRAME_APPEND;
-                        *out_ptr = *&lfdEncrypt.returned_enc_buffer.as_ptr() as *mut libc::c_char;
-                        *out_ptr = (*out_ptr).add(lfd_mod::LINKFD_FRAME_RESERV);
-                        return len as libc::c_int;
-                    },
-                    None => return -1
-                }
-            },
-            None => return -1
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn decrypt_buf(len: libc::c_int, in_ptr: *mut libc::c_char, out_ptr: *mut *mut libc::c_char) -> libc::c_int {
-    if in_ptr.is_null() || out_ptr.is_null() {
-        return -1;
-    }
-
-    let slice = unsafe {
-        std::slice::from_raw_parts_mut(in_ptr as *mut u8, len as usize)
-    };
-
-    let output = unsafe { match &mut LFD_ENCRYPT {
-        Some(ref mut lfdEncrypt) => lfdEncrypt.decrypt(slice),
-        None => return -1
-    } };
-
-    unsafe {
-        match &mut LFD_ENCRYPT {
-            Some(ref mut lfdEncrypt) => {
-                if (lfdEncrypt.send_a_packet) {
-                    send_a_packet = 1;
-                    lfdEncrypt.send_a_packet = false;
-                }
-                match output {
-                    Some(outp) => {
-                        lfdEncrypt.returned_dec_buffer = outp;
-                        let len = lfdEncrypt.returned_dec_buffer.len() - lfd_mod::LINKFD_FRAME_RESERV - lfd_mod::LINKFD_FRAME_APPEND;
-                        *out_ptr = *&lfdEncrypt.returned_dec_buffer.as_ptr() as *mut libc::c_char;
-                        *out_ptr = (*out_ptr).add(lfd_mod::LINKFD_FRAME_RESERV);
-                        return len as libc::c_int;
-                    },
-                    None => return -1
-                }
-            },
-            None => return -1
-        }
-    }
-}
-

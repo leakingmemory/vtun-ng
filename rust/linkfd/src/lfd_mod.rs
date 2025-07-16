@@ -61,19 +61,6 @@ pub struct VtunHost {
     pub sopt: VtunSopt,
 }
 
-#[repr(C)]
-pub struct LfdMod {
-    pub name: *mut libc::c_char,
-    pub alloc: Option<unsafe extern "C" fn(*mut VtunHost) -> libc::c_int>,
-    pub encode: Option<unsafe extern "C" fn(libc::c_int, *mut libc::c_char, *mut *mut libc::c_char) -> libc::c_int>,
-    pub avail_encode: Option<unsafe extern "C" fn() -> libc::c_int>,
-    pub decode: Option<unsafe extern "C" fn(libc::c_int, *mut libc::c_char, *mut *mut libc::c_char) -> libc::c_int>,
-    pub avail_decode: Option<unsafe extern "C" fn() -> libc::c_int>,
-    pub free: Option<unsafe extern "C" fn() -> libc::c_int>,
-    pub next: *mut LfdMod,
-    pub prev: *mut LfdMod,
-}
-
 pub static VTUN_ENC_BF128ECB: libc::c_int = 1;
 pub static VTUN_ENC_BF128CBC: libc::c_int = 2;
 pub static VTUN_ENC_BF128CFB: libc::c_int = 3;
@@ -104,7 +91,7 @@ pub const LOG_INFO: libc::c_int = 6;
 pub const LOG_DEBUG: libc::c_int = 7;
 
 pub const LINKFD_FRAME_RESERV: usize = 128;
-pub const LINKFD_FRAME_APPEND: usize = 64;
+pub const LINKFD_FRAME_APPEND: usize = 128;
 
 extern "C" {
     pub fn vtun_syslog(_priority: libc::c_int, _format: *mut libc::c_char);

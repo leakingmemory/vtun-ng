@@ -40,8 +40,6 @@
 #include "linkfd.h"
 #include "lib.h"
 
-volatile sig_atomic_t __io_canceled = 0;
-
 #ifndef HAVE_SETPROC_TITLE
 /* Functions to manipulate with program title */
 

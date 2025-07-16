@@ -40,8 +40,9 @@
 use openssl::cipher_ctx::CipherCtx;
 use openssl::cipher::{Cipher};
 use openssl::hash::hash;
-use crate::lfd_mod;
+use crate::{lfd_mod, linkfd};
 use crate::lfd_mod::VtunHost;
+use crate::linkfd::{LfdMod, LfdModFactory};
 
 pub struct LfdLegacyEncrypt {
     pub ctx_enc: CipherCtx,
@@ -49,8 +50,6 @@ pub struct LfdLegacyEncrypt {
     pub returned_enc_buffer: Vec<u8>,
     pub returned_dec_buffer: Vec<u8>,
 }
-
-static mut LFD_LEGACY_ENCRYPT: Option<LfdLegacyEncrypt> = None;
 
 static LEGACY: once_cell::sync::Lazy<Vec<openssl::provider::Provider>> = once_cell::sync::Lazy::new(|| {
     openssl::init();
@@ -61,7 +60,7 @@ static LEGACY: once_cell::sync::Lazy<Vec<openssl::provider::Provider>> = once_ce
 });
 
 impl LfdLegacyEncrypt {
-    pub fn alloc(host: *mut VtunHost) -> Option<LfdLegacyEncrypt> {
+    pub fn new(host: *mut VtunHost) -> Option<LfdLegacyEncrypt> {
         once_cell::sync::Lazy::force(&LEGACY);
         let mut lfdLegacyEncrypt = LfdLegacyEncrypt {
             ctx_enc: CipherCtx::new().unwrap(),
@@ -86,6 +85,63 @@ impl LfdLegacyEncrypt {
         return Some(lfdLegacyEncrypt);
     }
     pub fn encrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
+        let mut output = match self.encode(buf) {
+            None => return None,
+            Some(output) => *output,
+        };
+        let mut fdbuf: Vec<u8> = Vec::new();
+        fdbuf.reserve(output.len() + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
+        fdbuf.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
+        fdbuf.append(&mut output);
+        fdbuf.resize(fdbuf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
+        return Some(fdbuf);
+    }
+
+    pub fn decrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
+        let mut output = match self.decode(buf) {
+            None => return None,
+            Some(output) => *output,
+        };
+
+        let mut fdbuf: Vec<u8> = Vec::new();
+        fdbuf.reserve(output.len() + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
+        let payload = output.len();
+        fdbuf.resize(lfd_mod::LINKFD_FRAME_RESERV + payload, 0u8);
+        for i in 0..payload {
+            fdbuf[lfd_mod::LINKFD_FRAME_RESERV + i] = output[i];
+        }
+        fdbuf.resize(fdbuf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
+        return Some(fdbuf);
+    }
+}
+
+pub(crate) struct LfdLegacyEncryptFactory {
+}
+
+impl LfdLegacyEncryptFactory {
+    pub fn new() -> LfdLegacyEncryptFactory {
+        LfdLegacyEncryptFactory {
+        }
+    }
+}
+
+impl LfdModFactory for LfdLegacyEncryptFactory {
+    fn name(&self) -> &'static str {
+        "Encryptor"
+    }
+    fn create(&self, host: &mut VtunHost) -> Option<Box<dyn linkfd::LfdMod>> {
+        return match LfdLegacyEncrypt::new(host) {
+            None => None,
+            Some(lfdEncryptMod) => Some(Box::new(lfdEncryptMod))
+        };
+    }
+}
+
+impl linkfd::LfdMod for LfdLegacyEncrypt {
+    fn can_encode_inplace(&mut self) -> bool {
+        false
+    }
+    fn encode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
         let pad = ((!(buf.len())) & 0x07) + 1;
         let p = 8 - pad;
 
@@ -104,15 +160,14 @@ impl LfdLegacyEncrypt {
                 output.resize(reslen, 0u8);
             }
         }
-        let mut fdbuf: Vec<u8> = Vec::new();
-        fdbuf.reserve(output.len() + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
-        fdbuf.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
-        fdbuf.append(&mut output);
-        fdbuf.resize(fdbuf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-        return Some(fdbuf);
+        return Some(Box::new(output));
     }
 
-    pub fn decrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
+    fn can_decode_inplace(&mut self) -> bool {
+        false
+    }
+
+    fn decode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
         let mut output: Vec<u8> = Vec::new();
         output.resize(buf.len() + 8, 0u8);
         match self.ctx_dec.cipher_update(buf, Some(&mut *output)) {
@@ -127,100 +182,10 @@ impl LfdLegacyEncrypt {
             return None;
         }
 
-        let mut fdbuf: Vec<u8> = Vec::new();
-        fdbuf.reserve(output.len() + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
-        let payload = output.len() - (p as usize);
-        fdbuf.resize(lfd_mod::LINKFD_FRAME_RESERV + payload, 0u8);
-        for i in 0..payload {
-            fdbuf[lfd_mod::LINKFD_FRAME_RESERV + i] = output[i + (p as usize)];
+        for i in 0..(output.len() - (p as usize)) {
+            output[i] = output[i + (p as usize)];
         }
-        fdbuf.resize(fdbuf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-        return Some(fdbuf);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn alloc_legacy_encrypt(host: *mut VtunHost) -> libc::c_int
-{
-    unsafe {
-        LFD_LEGACY_ENCRYPT = LfdLegacyEncrypt::alloc(host);
-        if (LFD_LEGACY_ENCRYPT.is_some()) {
-            return 0;
-        }
-    }
-    return -1;
-}
-
-#[no_mangle]
-pub extern "C" fn free_legacy_encrypt() -> libc::c_int {
-    unsafe { LFD_LEGACY_ENCRYPT = None; }
-    return 0;
-}
-
-#[no_mangle]
-pub extern "C" fn legacy_encrypt_buf(len: libc::c_int, in_ptr: *mut libc::c_char, out_ptr: *mut *mut libc::c_char) -> libc::c_int {
-    if in_ptr.is_null() || out_ptr.is_null() {
-        return -1;
-    }
-
-    let slice = unsafe {
-        std::slice::from_raw_parts_mut(in_ptr as *mut u8, len as usize)
-    };
-
-    let output = unsafe { match &mut LFD_LEGACY_ENCRYPT {
-        Some(ref mut lfdLegacyEncrypt) => lfdLegacyEncrypt.encrypt(slice),
-        None => return -1
-    } };
-
-    unsafe {
-        match &mut LFD_LEGACY_ENCRYPT {
-            Some(ref mut lfdLegacyEncrypt) => {
-                match output {
-                    Some(outp) => {
-                        lfdLegacyEncrypt.returned_enc_buffer = outp;
-                        let len = lfdLegacyEncrypt.returned_enc_buffer.len() - lfd_mod::LINKFD_FRAME_RESERV - lfd_mod::LINKFD_FRAME_APPEND;
-                        *out_ptr = *&lfdLegacyEncrypt.returned_enc_buffer.as_ptr() as *mut libc::c_char;
-                        *out_ptr = (*out_ptr).add(lfd_mod::LINKFD_FRAME_RESERV);
-                        return len as libc::c_int;
-                    },
-                    None => return -1
-                }
-            },
-            None => return -1
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn legacy_decrypt_buf(len: libc::c_int, in_ptr: *mut libc::c_char, out_ptr: *mut *mut libc::c_char) -> libc::c_int {
-    if in_ptr.is_null() || out_ptr.is_null() {
-        return -1;
-    }
-
-    let slice = unsafe {
-        std::slice::from_raw_parts_mut(in_ptr as *mut u8, len as usize)
-    };
-
-    let output = unsafe { match &mut LFD_LEGACY_ENCRYPT {
-        Some(ref mut lfdLegacyEncrypt) => lfdLegacyEncrypt.decrypt(slice),
-        None => return -1
-    } };
-
-    unsafe {
-        match &mut LFD_LEGACY_ENCRYPT {
-            Some(ref mut lfdLegacyEncrypt) => {
-                match output {
-                    Some(outp) => {
-                        lfdLegacyEncrypt.returned_dec_buffer = outp;
-                        let len = lfdLegacyEncrypt.returned_dec_buffer.len() - lfd_mod::LINKFD_FRAME_RESERV - lfd_mod::LINKFD_FRAME_APPEND;
-                        *out_ptr = *&lfdLegacyEncrypt.returned_dec_buffer.as_ptr() as *mut libc::c_char;
-                        *out_ptr = (*out_ptr).add(lfd_mod::LINKFD_FRAME_RESERV);
-                        return len as libc::c_int;
-                    },
-                    None => return 0
-                }
-            },
-            None => return -1
-        }
+        output.resize(output.len() - p as usize, 0u8);
+        return Some(Box::new(output));
     }
 }

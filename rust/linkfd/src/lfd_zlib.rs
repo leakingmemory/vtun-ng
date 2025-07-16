@@ -19,7 +19,8 @@
 
 /* ZLIB compression module */
 use std::io::Write;
-use crate::lfd_mod;
+use crate::{lfd_mod, linkfd};
+use crate::linkfd::{LfdMod, LfdModFactory};
 
 struct LfdZlib {
     pub compressor: flate2::Compression,
@@ -30,7 +31,7 @@ struct LfdZlib {
 }
 
 impl LfdZlib {
-    pub fn alloc(host: &lfd_mod::VtunHost) -> LfdZlib {
+    pub fn new(host: &lfd_mod::VtunHost) -> LfdZlib {
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "ZLIB compression initialized\n\0".as_ptr() as *mut libc::c_char); }
         return LfdZlib {
             compressor: flate2::Compression::new(host.zlevel as u32),
@@ -40,7 +41,31 @@ impl LfdZlib {
             returned_decomp_buf: Vec::new()
         };
     }
-    pub fn compress(&mut self, src: &[u8]) -> Option<Vec<u8>> {
+}
+
+pub(crate) struct LfdZlibFactory {
+}
+
+impl LfdZlibFactory {
+    pub fn new() -> LfdZlibFactory {
+        return LfdZlibFactory {
+        };
+    }
+}
+impl LfdModFactory for LfdZlibFactory {
+    fn name(&self) -> &'static str {
+        return "zlib";
+    }
+    fn create(&self, host: &mut lfd_mod::VtunHost) -> Option<Box<dyn LfdMod>> {
+        return Some(Box::new(LfdZlib::new(host)));
+    }
+}
+
+impl linkfd::LfdMod for LfdZlib {
+    fn can_encode_inplace(&mut self) -> bool {
+        false
+    }
+    fn encode(&mut self, src: &[u8]) -> Option<Box<Vec<u8>>> {
         match self.encoder.write_all(src) {
             Ok(_) => (),
             Err(_) => {
@@ -54,9 +79,12 @@ impl LfdZlib {
         };
         let result = self.encoder.get_mut().clone();
         self.encoder.get_mut().clear();
-        return Some(result);
+        return Some(Box::new(result));
     }
-    pub fn decompress(&mut self, src: &[u8]) -> Option<Vec<u8>> {
+    fn can_decode_inplace(&mut self) -> bool {
+        false
+    }
+    fn decode(&mut self, src: &[u8]) -> Option<Box<Vec<u8>>> {
         match self.decoder.write_all(src) {
             Ok(_) => (),
             Err(_) => {
@@ -70,87 +98,6 @@ impl LfdZlib {
         };
         let result = self.decoder.get_mut().clone();
         self.decoder.get_mut().clear();
-        return Some(result)
-    }
-}
-
-pub static mut LFD_ZLIB: Option<LfdZlib> = None;
-
-#[no_mangle]
-pub extern "C" fn zlib_alloc(host: *const lfd_mod::VtunHost) -> libc::c_int
-{
-    unsafe {
-        LFD_ZLIB = Some(LfdZlib::alloc(&*host));
-    }
-    return 0;
-}
-
-#[no_mangle]
-pub extern "C" fn zlib_free() -> libc::c_int
-{
-    unsafe { LFD_ZLIB = None; }
-    return 0;
-}
-
-/*
- * This functions _MUST_ consume all incoming bytes in one pass,
- * that's why we expand buffer dynamicly.
- */
-#[no_mangle]
-pub extern "C" fn zlib_comp(len: libc::c_int, inptr: *const libc::c_char, outptr: *mut *mut libc::c_char) -> libc::c_int
-{
-    unsafe {
-        match LFD_ZLIB {
-            Some(ref mut lfdZlib) => {
-                let inbuf = unsafe { std::slice::from_raw_parts(inptr as *const u8, len as usize) };
-                let outbuf = match lfdZlib.compress(inbuf) {
-                    Some(outbuf) => outbuf,
-                    None => return -1
-                };
-                let outlen = outbuf.len();
-                lfdZlib.returned_comp_buf.reserve(outlen + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
-                lfdZlib.returned_comp_buf.resize(lfd_mod::LINKFD_FRAME_RESERV + outlen, 0);
-                for i in 0..outlen {
-                    lfdZlib.returned_comp_buf[i + lfd_mod::LINKFD_FRAME_RESERV] = outbuf[i];
-                }
-                lfdZlib.returned_comp_buf.resize(lfdZlib.returned_comp_buf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0);
-                *outptr = lfdZlib.returned_comp_buf.as_ptr() as *mut libc::c_char;
-                *outptr = (*outptr).add(lfd_mod::LINKFD_FRAME_RESERV);
-                return outlen as libc::c_int;
-            },
-            None => {
-                return -1;
-            }
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn zlib_decomp(len: libc::c_int, inptr: *const libc::c_char, outptr: *mut *mut libc::c_char) -> libc::c_int
-{
-    unsafe {
-        match LFD_ZLIB {
-            Some(ref mut lfdZlib) => {
-                let inbuf = unsafe { std::slice::from_raw_parts(inptr as *const u8, len as usize) };
-                let outbuf = match lfdZlib.decompress(inbuf) {
-                    Some(outbuf) => outbuf,
-                    None => return -1
-                };
-                lfdZlib.returned_decomp_buf = Vec::new();
-                let outlen = outbuf.len();
-                lfdZlib.returned_decomp_buf.reserve(outlen + lfd_mod::LINKFD_FRAME_RESERV + lfd_mod::LINKFD_FRAME_APPEND);
-                lfdZlib.returned_decomp_buf.resize(lfd_mod::LINKFD_FRAME_RESERV + outlen, 0);
-                for i in 0..outlen {
-                    lfdZlib.returned_decomp_buf[lfd_mod::LINKFD_FRAME_RESERV + i] = outbuf[i];
-                }
-                lfdZlib.returned_decomp_buf.resize(lfdZlib.returned_decomp_buf.len() + lfd_mod::LINKFD_FRAME_APPEND, 0);
-                *outptr = lfdZlib.returned_decomp_buf.as_ptr() as *mut libc::c_char;
-                *outptr = (*outptr).add(lfd_mod::LINKFD_FRAME_RESERV);
-                return outlen as libc::c_int;
-            },
-            None => {
-                return -1;
-            }
-        }
+        return Some(Box::new(result));
     }
 }

@@ -43,7 +43,6 @@ use std::ptr::null_mut;
 use std::time::SystemTime;
 use openssl::cipher::{Cipher, CipherRef};
 use openssl::cipher_ctx::CipherCtx;
-use openssl::hash::{hash, MessageDigest};
 use crate::{lfd_mod, linkfd};
 use lfd_mod::{VtunHost, VTUN_ENC_AES128CBC, VTUN_ENC_AES128CFB, VTUN_ENC_AES128OFB, VTUN_ENC_AES256CBC, VTUN_ENC_AES256CFB, VTUN_ENC_AES256OFB, VTUN_ENC_BF128CBC, VTUN_ENC_BF128CFB, VTUN_ENC_BF128OFB, VTUN_ENC_BF256CBC, VTUN_ENC_BF256CFB, VTUN_ENC_BF256OFB};
 use crate::linkfd::LfdMod;
@@ -68,19 +67,17 @@ pub struct LfdEncrypt {
     pub dec_init_first_time: bool,
     pub send_a_packet: bool,
     pub pkey: Vec<u8>,
-    pub returned_enc_buffer: Vec<u8>,
-    pub returned_dec_buffer: Vec<u8>,
     pub cipher_enc_state: CipherState,
     pub cipher_dec_state: CipherState,
-    pub ctx_enc: openssl::cipher_ctx::CipherCtx,
-    pub ctx_dec: openssl::cipher_ctx::CipherCtx,
-    pub ctx_enc_ecb: openssl::cipher_ctx::CipherCtx,
-    pub ctx_dec_ecb: openssl::cipher_ctx::CipherCtx
+    pub ctx_enc: CipherCtx,
+    pub ctx_dec: CipherCtx,
+    pub ctx_enc_ecb: CipherCtx,
+    pub ctx_dec_ecb: CipherCtx
 }
 
 impl LfdEncrypt {
     pub fn prep_key(keysize: usize, host: *mut VtunHost) -> Option<Vec<u8>> {
-        if (keysize != 32 && keysize != 16) {
+        if keysize != 32 && keysize != 16 {
             return None;
         }
         let mut pkey: Vec<u8> = Vec::new();
@@ -107,7 +104,7 @@ impl LfdEncrypt {
                 pkey[i] = hs[i];
             }
         }
-        return Some(pkey);
+        Some(pkey)
     }
     pub fn new(host: *mut VtunHost) -> Option<LfdEncrypt> {
         let mut lfd_encrypt: LfdEncrypt = LfdEncrypt {
@@ -122,8 +119,6 @@ impl LfdEncrypt {
             dec_init_first_time: true,
             send_a_packet: false,
             pkey: Vec::new(),
-            returned_enc_buffer: Vec::new(),
-            returned_dec_buffer: Vec::new(),
             cipher_enc_state: CipherState::None,
             cipher_dec_state: CipherState::None,
             ctx_enc: CipherCtx::new().unwrap(),
@@ -132,9 +127,10 @@ impl LfdEncrypt {
             ctx_dec_ecb: CipherCtx::new().unwrap()
         };
         let mut sb_init: bool = false;
-        let mut var_key: bool = false;
         let mut random_bytes = [0u8; 4];
-        let mut cipher_type: Option<&CipherRef> = None;
+
+        let cipher_type: Option<&CipherRef>;
+
         openssl::rand::rand_bytes(&mut random_bytes).unwrap();
         lfd_encrypt.sequence_num = u32::from_ne_bytes(random_bytes);
         lfd_encrypt.gibberish = 0;
@@ -143,27 +139,27 @@ impl LfdEncrypt {
         unsafe {
             lfd_encrypt.cipher = (*host).cipher;
         }
-        let mut cipher_name = "";
-        if (lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES256OFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES256OFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES256CFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES256CBC) {
+        let cipher_name: &str;
+        if lfd_encrypt.cipher == VTUN_ENC_AES256OFB ||
+            lfd_encrypt.cipher == VTUN_ENC_AES256OFB ||
+            lfd_encrypt.cipher == VTUN_ENC_AES256CFB ||
+            lfd_encrypt.cipher == VTUN_ENC_AES256CBC {
             lfd_encrypt.blocksize = 16;
             lfd_encrypt.keysize = 32;
             sb_init = true;
             cipher_type = Some(Cipher::aes_256_ecb());
             cipher_name = "AES-256-ECB";
         }
-        else if (lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES256ECB)
+        else if lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES256ECB
         {
             lfd_encrypt.blocksize = 16;
             lfd_encrypt.keysize = 32;
             cipher_type = Some(Cipher::aes_256_ecb());
             cipher_name = "AES-256-ECB";
         }
-        else if (lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES128OFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES128CFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES128CBC)
+        else if lfd_encrypt.cipher == VTUN_ENC_AES128OFB ||
+            lfd_encrypt.cipher == VTUN_ENC_AES128CFB ||
+            lfd_encrypt.cipher == VTUN_ENC_AES128CBC
         {
             lfd_encrypt.blocksize = 16;
             lfd_encrypt.keysize = 16;
@@ -171,39 +167,36 @@ impl LfdEncrypt {
             cipher_type = Some(Cipher::aes_128_ecb());
             cipher_name = "AES-128-ECB";
         }
-        else if (lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES128ECB)
+        else if lfd_encrypt.cipher == lfd_mod::VTUN_ENC_AES128ECB
         {
             lfd_encrypt.blocksize = 16;
             lfd_encrypt.keysize = 16;
             cipher_type = Some(Cipher::aes_128_ecb());
             cipher_name = "AES-128-ECB";
         }
-        else if (lfd_encrypt.cipher == lfd_mod::VTUN_ENC_BF256OFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_BF256CFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_BF256CBC)
+        else if lfd_encrypt.cipher == VTUN_ENC_BF256OFB ||
+            lfd_encrypt.cipher == VTUN_ENC_BF256CFB ||
+            lfd_encrypt.cipher == VTUN_ENC_BF256CBC
         {
             lfd_encrypt.blocksize = 8;
             lfd_encrypt.keysize = 32;
-            var_key = true;
             sb_init = true;
             cipher_type = Some(Cipher::bf_ecb());
             cipher_name = "BF-ECB";
         }
-        else if (lfd_encrypt.cipher == lfd_mod::VTUN_ENC_BF256ECB)
+        else if lfd_encrypt.cipher == lfd_mod::VTUN_ENC_BF256ECB
         {
             lfd_encrypt.blocksize = 8;
             lfd_encrypt.keysize = 32;
-            var_key = true;
             cipher_type = Some(Cipher::bf_ecb());
             cipher_name = "BF-ECB";
         }
-        else if (lfd_encrypt.cipher == lfd_mod::VTUN_ENC_BF128OFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_BF128CFB ||
-            lfd_encrypt.cipher == lfd_mod::VTUN_ENC_BF128CBC)
+        else if lfd_encrypt.cipher == VTUN_ENC_BF128OFB ||
+            lfd_encrypt.cipher == VTUN_ENC_BF128CFB ||
+            lfd_encrypt.cipher == VTUN_ENC_BF128CBC
         {
             lfd_encrypt.blocksize = 8;
             lfd_encrypt.keysize = 16;
-            var_key = true;
             sb_init = true;
             cipher_type = Some(Cipher::bf_ecb());
             cipher_name = "BF-ECB";
@@ -212,7 +205,6 @@ impl LfdEncrypt {
         {
             lfd_encrypt.blocksize = 8;
             lfd_encrypt.keysize = 16;
-            var_key = true;
             cipher_type = Some(Cipher::bf_ecb());
             cipher_name = "BF-ECB";
         }
@@ -229,39 +221,26 @@ impl LfdEncrypt {
                     lfd_encrypt.pkey = pkey;
                 }
             }
-            if (sb_init) {
-                lfd_encrypt.ctx_enc_ecb.encrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
-                lfd_encrypt.ctx_dec_ecb.decrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
-            } else {
-                lfd_encrypt.ctx_enc.encrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
-                lfd_encrypt.ctx_dec.decrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
-            }
-        } else if (lfd_encrypt.keysize == 16) {
+        } else if lfd_encrypt.keysize == 16 {
             match Self::prep_key(16, host) {
                 None => return None,
                 Some(pkey) => {
                     lfd_encrypt.pkey = pkey;
                 }
             }
-            if (sb_init) {
-                lfd_encrypt.ctx_enc_ecb.encrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
-                lfd_encrypt.ctx_dec_ecb.decrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
-            } else {
-                lfd_encrypt.ctx_enc.encrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
-                lfd_encrypt.ctx_dec.decrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
-            }
         } else {
             return None;
         }
-        if (sb_init)
-        {
+        if sb_init {
+            lfd_encrypt.ctx_enc_ecb.encrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
+            lfd_encrypt.ctx_dec_ecb.decrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
             lfd_encrypt.ctx_enc_ecb.set_padding(false);
             lfd_encrypt.ctx_dec_ecb.set_padding(false);
             lfd_encrypt.cipher_enc_state = CipherState::CipherInit;
             lfd_encrypt.cipher_dec_state = CipherState::CipherInit;
-        }
-        else
-        {
+        } else {
+            lfd_encrypt.ctx_enc.encrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
+            lfd_encrypt.ctx_dec.decrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
             lfd_encrypt.ctx_enc.set_padding(false);
             lfd_encrypt.ctx_dec.set_padding(false);
             lfd_encrypt.cipher_enc_state = CipherState::CipherCode;
@@ -271,55 +250,54 @@ impl LfdEncrypt {
                 lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_ptr() as *mut libc::c_char);
             }
         }
-        return Some(lfd_encrypt);
+        Some(lfd_encrypt)
     }
 
     fn cipher_enc_init(&mut self, iv: &[u8]) -> bool
     {
         let mut var_key: bool = false;
-        let mut cipher_type: Option<&CipherRef> = None;
-        //char tmpstr[64];
-        let mut cipher_name = "";
+        let cipher_type: Option<&CipherRef>;
+        let cipher_name: &str;
 
-        if (self.cipher == VTUN_ENC_AES256OFB) {
+        if self.cipher == VTUN_ENC_AES256OFB {
             cipher_type = Some(Cipher::aes_256_ofb());
             cipher_name = "AES-256-OFB";
-        } else if (self.cipher == VTUN_ENC_AES256CFB) {
+        } else if self.cipher == VTUN_ENC_AES256CFB {
             cipher_type = Some(Cipher::aes_256_cfb128());
             cipher_name = "AES-256-CFB";
-        } else if (self.cipher == VTUN_ENC_AES256CBC) {
+        } else if self.cipher == VTUN_ENC_AES256CBC {
             cipher_type = Some(Cipher::aes_256_cbc());
             cipher_name = "AES-256-CBC";
-        } else if (self.cipher == VTUN_ENC_AES128OFB) {
+        } else if self.cipher == VTUN_ENC_AES128OFB {
             cipher_type = Some(Cipher::aes_128_ofb());
             cipher_name = "AES-128-OFB";
-        } else if (self.cipher == VTUN_ENC_AES128CFB) {
+        } else if self.cipher == VTUN_ENC_AES128CFB {
             cipher_type = Some(Cipher::aes_128_cfb128());
             cipher_name = "AES-128-CFB";
-        } else if (self.cipher == VTUN_ENC_AES128CBC) {
+        } else if self.cipher == VTUN_ENC_AES128CBC {
             cipher_type = Some(Cipher::aes_128_cbc());
             cipher_name = "AES-128-CBC";
-        } else if (self.cipher == VTUN_ENC_BF256OFB) {
+        } else if self.cipher == VTUN_ENC_BF256OFB {
             var_key = true;
             cipher_type = Some(Cipher::bf_ofb());
             cipher_name = "Blowfish-256-OFB";
-        } else if (self.cipher == VTUN_ENC_BF256CFB) {
+        } else if self.cipher == VTUN_ENC_BF256CFB {
             var_key = true;
             cipher_type = Some(Cipher::bf_cfb64());
             cipher_name = "Blowfish-256-CFB";
-        } else if (self.cipher == VTUN_ENC_BF256CBC) {
+        } else if self.cipher == VTUN_ENC_BF256CBC {
             var_key = true;
             cipher_type = Some(Cipher::bf_cbc());
             cipher_name = "Blowfish-256-CBC";
-        } else if (self.cipher == VTUN_ENC_BF128OFB) {
+        } else if self.cipher == VTUN_ENC_BF128OFB {
             var_key = true;
             cipher_type = Some(Cipher::bf_ofb());
             cipher_name = "Blowfish-128-OFB";
-        } else if (self.cipher == VTUN_ENC_BF128CFB) {
+        } else if self.cipher == VTUN_ENC_BF128CFB {
             var_key = true;
             cipher_type = Some(Cipher::bf_cfb64());
             cipher_name = "Blowfish-128-CFB";
-        } else if (self.cipher == VTUN_ENC_BF128CBC) {
+        } else if self.cipher == VTUN_ENC_BF128CBC {
             var_key = true;
             cipher_type = Some(Cipher::bf_cbc());
             cipher_name = "Blowfish-128-CBC";
@@ -328,65 +306,68 @@ impl LfdEncrypt {
             return false;
         }
 
-        if (var_key) {
-            self.ctx_enc.set_key_length(self.keysize as usize);
+        if var_key {
+            match self.ctx_enc.set_key_length(self.keysize as usize) {
+                Ok(_) => {},
+                Err(_) => return false
+            }
         }
         self.ctx_enc.encrypt_init(cipher_type, Some(&*self.pkey), Some(iv)).unwrap();
         self.ctx_enc.set_padding(false);
-        if (self.enc_init_first_time)
+        if self.enc_init_first_time
         {
             let tmpstr = format!("{} encryption initialized", cipher_name);
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_ptr() as *mut libc::c_char); }
             self.enc_init_first_time = false;
         }
-        return true;
+        true
     }
 
     fn cipher_dec_init(&mut self, iv: &[u8]) -> bool
     {
         let mut var_key: bool = false;
-        let mut cipher_type: Option<&CipherRef> = None;
-        let mut cipher_name = "";
+        let cipher_type: Option<&CipherRef>;
+        let cipher_name: &str;
 
-        if (self.cipher == VTUN_ENC_AES256OFB) {
+        if self.cipher == VTUN_ENC_AES256OFB {
             cipher_type = Some(Cipher::aes_256_ofb());
             cipher_name = "AES-256-OFB";
-        } else if (self.cipher == VTUN_ENC_AES256CFB) {
+        } else if self.cipher == VTUN_ENC_AES256CFB {
             cipher_type = Some(Cipher::aes_256_cfb128());
             cipher_name = "AES-256-CFB";
-        } else if (self.cipher == VTUN_ENC_AES256CBC) {
+        } else if self.cipher == VTUN_ENC_AES256CBC {
             cipher_type = Some(Cipher::aes_256_cbc());
             cipher_name = "AES-256-CBC";
-        } else if (self.cipher == VTUN_ENC_AES128OFB) {
+        } else if self.cipher == VTUN_ENC_AES128OFB {
             cipher_type = Some(Cipher::aes_128_ofb());
             cipher_name = "AES-128-OFB";
-        } else if (self.cipher == VTUN_ENC_AES128CFB) {
+        } else if self.cipher == VTUN_ENC_AES128CFB {
             cipher_type = Some(Cipher::aes_128_cfb128());
             cipher_name = "AES-128-CFB";
-        } else if (self.cipher == VTUN_ENC_AES128CBC) {
+        } else if self.cipher == VTUN_ENC_AES128CBC {
             cipher_type = Some(Cipher::aes_128_cbc());
             cipher_name = "AES-128-CBC";
-        } else if (self.cipher == VTUN_ENC_BF256OFB) {
+        } else if self.cipher == VTUN_ENC_BF256OFB {
             var_key = true;
             cipher_type = Some(Cipher::bf_ofb());
             cipher_name = "Blowfish-256-OFB";
-        } else if (self.cipher == VTUN_ENC_BF256CFB) {
+        } else if self.cipher == VTUN_ENC_BF256CFB {
             var_key = true;
             cipher_type = Some(Cipher::bf_cfb64());
             cipher_name = "Blowfish-256-CFB";
-        } else if (self.cipher == VTUN_ENC_BF256CBC) {
+        } else if self.cipher == VTUN_ENC_BF256CBC {
             var_key = true;
             cipher_type = Some(Cipher::bf_cbc());
             cipher_name = "Blowfish-256-CBC";
-        } else if (self.cipher == VTUN_ENC_BF128OFB) {
+        } else if self.cipher == VTUN_ENC_BF128OFB {
             var_key = true;
             cipher_type = Some(Cipher::bf_ofb());
             cipher_name = "Blowfish-128-OFB";
-        } else if (self.cipher == VTUN_ENC_BF128CFB) {
+        } else if self.cipher == VTUN_ENC_BF128CFB {
             var_key = true;
             cipher_type = Some(Cipher::bf_cfb64());
             cipher_name = "Blowfish-128-CFB";
-        } else if (self.cipher == VTUN_ENC_BF128CBC) {
+        } else if self.cipher == VTUN_ENC_BF128CBC {
             var_key = true;
             cipher_type = Some(Cipher::bf_cbc());
             cipher_name = "Blowfish-128-CBC";
@@ -395,22 +376,25 @@ impl LfdEncrypt {
             return false;
         }
 
-        if (var_key) {
-            self.ctx_dec.set_key_length(self.keysize as usize);
+        if var_key {
+            match self.ctx_dec.set_key_length(self.keysize as usize) {
+                Ok(_) => {},
+                Err(_) => return false
+            }
         }
         self.ctx_dec.decrypt_init(cipher_type, Some(&*self.pkey), Some(iv)).unwrap();
         self.ctx_dec.set_padding(false);
-        if (self.dec_init_first_time)
+        if self.dec_init_first_time
         {
             let tmpstr = format!("{} decryption initialized", cipher_name);
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_ptr() as *mut libc::c_char); }
             self.dec_init_first_time = false;
         }
-        return true;
+        true
     }
 
     pub fn send_msg(&mut self) -> Option<Vec<u8>> {
-        if (matches!(self.cipher_enc_state, CipherState::CipherInit)) {
+        if matches!(self.cipher_enc_state, CipherState::CipherInit) {
             let mut outbuf: Vec<u8> = Vec::new();
             outbuf.reserve((self.blocksize as usize) * 3);
             outbuf.push(b'i');
@@ -426,7 +410,7 @@ impl LfdEncrypt {
                 for i in 0..self.blocksize {
                     outbuf[ivstart + (i as usize)] = iv[i as usize];
                 }
-                if (!self.cipher_enc_init(&*iv)) {
+                if !self.cipher_enc_init(&*iv) {
                     return None;
                 }
             }
@@ -447,10 +431,10 @@ impl LfdEncrypt {
                     Err(_) => return None
                 };
                 self.cipher_enc_state = CipherState::CipherSequence;
-                return Some(outbuf);
+                Some(outbuf)
             }
         } else /*default or self.cipher_enc_state == CipherState::CipherCode)*/ {
-            return None;
+            None
         }
     }
 
@@ -459,7 +443,7 @@ impl LfdEncrypt {
         let mut output: Vec<u8> = Vec::new();
         /* To simplify matters, I assume that blocksize
               will not be less than 8 bytes */
-        if (matches!(self.cipher_enc_state, CipherState::CipherSequence)) {
+        if matches!(self.cipher_enc_state, CipherState::CipherSequence) {
             output.reserve(self.blocksize as usize);
             output.push(b's');
             output.push(b'e');
@@ -469,10 +453,10 @@ impl LfdEncrypt {
             output.push(((self.sequence_num >> 16) & 0xFF) as u8);
             output.push(((self.sequence_num >> 8) & 0xFF) as u8);
             output.push((self.sequence_num & 0xFF) as u8);
-            if (output.len() < self.blocksize as usize) {
+            if output.len() < self.blocksize as usize {
                 output.resize(self.blocksize as usize, 0u8);
             }
-        } else if (matches!(self.cipher_enc_state, CipherState::CipherReqInit)) {
+        } else if matches!(self.cipher_enc_state, CipherState::CipherReqInit) {
             output.reserve(self.blocksize as usize);
             output.push(b'r');
             output.push(b's');
@@ -482,23 +466,23 @@ impl LfdEncrypt {
             output.push(((self.sequence_num >> 16) & 0xFF) as u8);
             output.push(((self.sequence_num >> 8) & 0xFF) as u8);
             output.push((self.sequence_num & 0xFF) as u8);
-            if (output.len() < self.blocksize as usize) {
+            if output.len() < self.blocksize as usize {
                 output.resize(self.blocksize as usize, 0u8);
             }
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Requesting remote encryptor re-init".as_ptr() as *mut libc::c_char); }
             self.cipher_enc_state = CipherState::CipherSequence;
             self.send_a_packet = true;
         }
-        return output;
+        output
     }
 
     fn recv_msg(&mut self, buf: &mut Vec<u8>) -> bool
     {
         let mut iv: Vec<u8> = Vec::new();
 
-        if (matches!(self.cipher_dec_state, CipherState::CipherInit))
+        if matches!(self.cipher_dec_state, CipherState::CipherInit)
         {
-            if (buf.len() < ((self.blocksize as usize) * 2)) {
+            if buf.len() < ((self.blocksize as usize) * 2) {
                 return false;
             }
             let mut outp: Vec<u8> = Vec::new();
@@ -507,19 +491,19 @@ impl LfdEncrypt {
                 Ok(rlen) => { outp.resize(rlen, 0u8); },
                 Err(_) => return false
             };
-            if (outp[0] == b'i' && outp[1] == b'v' && outp[2] == b'e' && outp[3] == b'c') {
+            if outp[0] == b'i' && outp[1] == b'v' && outp[2] == b'e' && outp[3] == b'c' {
                 iv.resize(self.blocksize as usize, 0u8);
                 for i in 0..self.blocksize {
                     iv[i as usize] = outp[i as usize + 4];
                 }
-                if (!self.cipher_dec_init(&*iv)) {
+                if !self.cipher_dec_init(&*iv) {
                     return false;
                 }
                 self.cipher_dec_state = CipherState::CipherSequence;
                 self.gibberish = 0;
                 self.gib_time_start = 0;
                 for i in 0..(buf.len() - ((self.blocksize as usize) * 2)) {
-                    buf[i as usize] = buf[i as usize + ((self.blocksize as usize) * 2)];
+                    buf[i] = buf[i + ((self.blocksize as usize) * 2)];
                 }
                 buf.resize(buf.len() - ((self.blocksize as usize) * 2), 0u8);
 
@@ -527,7 +511,7 @@ impl LfdEncrypt {
             } else {
                 self.gibberish += 1;
                 let mut gibberish_diff_time = 0;
-                if (self.gibberish == 1) {
+                if self.gibberish == 1 {
                     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
                         Ok(tm) => { self.gib_time_start = tm.as_secs() },
                         Err(_) => { self.gib_time_start = 0 },
@@ -538,7 +522,7 @@ impl LfdEncrypt {
                         Err(_) => { gibberish_diff_time = 0 }
                     }
                 }
-                if (self.gibberish == MIN_GIBBERISH)
+                if self.gibberish == MIN_GIBBERISH
                 {
                     self.cipher_enc_state = CipherState::CipherReqInit;
                     self.send_a_packet = true;
@@ -547,7 +531,7 @@ impl LfdEncrypt {
                                              "Min. gibberish threshold reached".as_ptr() as *mut libc::c_char);
                     }
                 }
-                if (self.gibberish >= MAX_GIBBERISH || gibberish_diff_time >= MAX_GIBBERISH_TIME)
+                if self.gibberish >= MAX_GIBBERISH || gibberish_diff_time >= MAX_GIBBERISH_TIME
                 {
                     self.gibberish = 0;
                     self.gib_time_start = 0;
@@ -557,10 +541,10 @@ impl LfdEncrypt {
                         lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,
                                              "Max. gibberish threshold reached".as_ptr() as *mut libc::c_char);
                     }
-                    if (matches!(self.cipher_enc_state, CipherState::CipherInit))
+                    if matches!(self.cipher_enc_state, CipherState::CipherInit)
                     {
                         self.cipher_enc_state = CipherState::CipherInit;
-                        self.ctx_enc = openssl::cipher_ctx::CipherCtx::new().unwrap();
+                        self.ctx_enc = CipherCtx::new().unwrap();
                         unsafe {
                             lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,
                                                  "Forcing local encryptor re-init".as_ptr() as *mut libc::c_char);
@@ -569,34 +553,34 @@ impl LfdEncrypt {
                 }
             }
         }
-        return true;
+        true
     }
     fn recv_ib_mesg(&mut self, buf: &mut Vec<u8>) -> bool
     {
-        if (matches!(self.cipher_dec_state, CipherState::CipherSequence))
+        if matches!(self.cipher_dec_state, CipherState::CipherSequence)
         {
-            if (buf.len() < self.blocksize as usize) {
+            if buf.len() < self.blocksize as usize {
                 return false;
             }
             /* To simplify matters, I assume that blocksize
                will not be less than 8 bytes */
-            if (buf[0] == b's' && buf[1] == b'e' && buf[2] == b'q' && buf[3] == b'#')
+            if buf[0] == b's' && buf[1] == b'e' && buf[2] == b'q' && buf[3] == b'#'
             {
             }
-            else if (buf[0] == b'r' && buf[1] == b's' && buf[2] == b'y' && buf[3] == b'n')
+            else if buf[0] == b'r' && buf[1] == b's' && buf[2] == b'y' && buf[3] == b'n'
             {
-                if (!matches!(self.cipher_enc_state, CipherState::CipherInit))
+                if !matches!(self.cipher_enc_state, CipherState::CipherInit)
                 {
                     self.cipher_enc_state = CipherState::CipherInit;
-                    self.ctx_enc = openssl::cipher_ctx::CipherCtx::new().unwrap();
+                    self.ctx_enc = CipherCtx::new().unwrap();
                 }
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Remote requests encryptor re-init".as_ptr() as *mut libc::c_char); }
             }
             else
             {
-                if (!matches!(self.cipher_dec_state, CipherState::CipherInit) &&
-                    !matches!(self.cipher_enc_state, CipherState::CipherReqInit) &&
-                    !matches!(self.cipher_enc_state, CipherState::CipherInit))
+                if !matches!(self.cipher_dec_state, CipherState::CipherInit) &&
+                   !matches!(self.cipher_enc_state, CipherState::CipherReqInit) &&
+                   !matches!(self.cipher_enc_state, CipherState::CipherInit)
                 {
                     self.ctx_dec = CipherCtx::new().unwrap();
                     self.cipher_dec_state = CipherState::CipherInit;
@@ -608,12 +592,12 @@ impl LfdEncrypt {
                 return true;
             }
             for i in 0..(buf.len() - (self.blocksize as usize)) {
-                buf[i as usize] = buf[i as usize + (self.blocksize as usize)];
+                buf[i] = buf[i + (self.blocksize as usize)];
             }
             buf.resize(buf.len() - (self.blocksize as usize), 0u8);
             return true;
         }
-        return true;
+        true
     }
 }
 
@@ -633,24 +617,24 @@ impl linkfd::LfdModFactory for LfdEncryptFactory {
     }
 
     fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
-        return match LfdEncrypt::new(host) {
+        match LfdEncrypt::new(host) {
             None => None,
             Some(e) => Some(Box::new(e))
-        };
+        }
     }
 }
 
-impl linkfd::LfdMod for LfdEncrypt {
+impl LfdMod for LfdEncrypt {
     fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
-        let mut sendbuf = self.send_msg();
+        let sendbuf = self.send_msg();
 
-        let mut ib = self.send_ib_mesg();
+        let ib = self.send_ib_mesg();
         {
             let mut expectedlen = ib.len() + buf.len();
-            let p = (expectedlen & ((self.blocksize-1) as usize));
+            let p = expectedlen & ((self.blocksize-1) as usize);
             expectedlen += (self.blocksize as usize) - p;
             expectedlen += self.blocksize as usize;
-            if (buf.capacity() < expectedlen) {
+            if buf.capacity() < expectedlen {
                 buf.reserve(expectedlen);
             }
         }
@@ -665,11 +649,11 @@ impl linkfd::LfdMod for LfdEncrypt {
             }
         }
         /* ( len % blocksize ) */
-        let p = (buf.len() & ((self.blocksize-1) as usize));
+        let p = buf.len() & ((self.blocksize-1) as usize);
         let pad = (self.blocksize as usize) - p;
 
         buf.resize(buf.len() + pad, (pad & 0xFF) as u8);
-        if (pad == (self.blocksize as usize)) {
+        if pad == (self.blocksize as usize) {
             let mut rand_bytes: Vec<u8> = Vec::new();
             rand_bytes.resize((self.blocksize - 1) as usize, 0u8);
             openssl::rand::rand_bytes(&mut rand_bytes).unwrap();
@@ -690,7 +674,7 @@ impl linkfd::LfdMod for LfdEncrypt {
         self.sequence_num += 1;
 
         match sendbuf {
-            Some(mut sendbuf) => {
+            Some(sendbuf) => {
                 let buflen = buf.len();
                 buf.resize(buflen + sendbuf.len(), 0u8);
                 for i in 0..buflen {
@@ -699,15 +683,13 @@ impl linkfd::LfdMod for LfdEncrypt {
                 for i in 0..sendbuf.len() {
                     buf[i] = sendbuf[i];
                 }
-                return true;
-            }
-            None => {
-                return true;
-            }
+                true
+            },
+            None => true
         }
     }
     fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
-        if (!self.recv_msg(buf)) {
+        if !self.recv_msg(buf) {
             return false;
         }
 
@@ -718,17 +700,17 @@ impl linkfd::LfdMod for LfdEncrypt {
             Err(_) => return false
         };
 
-        if (!self.recv_ib_mesg(buf)) {
+        if !self.recv_ib_mesg(buf) {
             return false;
         }
 
         let iblen = buf.len();
         let pad = buf[iblen - 1];
-        if (pad < 1 || (pad as u32) > self.blocksize) {
+        if pad < 1 || (pad as u32) > self.blocksize {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "decrypt_buf: bad pad length".as_ptr() as *mut libc::c_char); }
             return false;
         }
         buf.resize(iblen - pad as usize, 0u8);
-        return true;
+        true
     }
 }

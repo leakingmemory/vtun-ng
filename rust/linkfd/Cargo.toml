@@ -10,7 +10,6 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 libc = "0.2"
 openssl = "0.10"
-once_cell = "1.21.3"  # Modern OpenSSL bindings
 md5 = "0.8.0"
 blowfish = "0.9.1"
 ecb = "0.1.2"

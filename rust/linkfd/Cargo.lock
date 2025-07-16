@@ -394,7 +394,6 @@ dependencies = [
  "flate2",
  "libc",
  "md5",
- "once_cell",
  "openssl",
  "rust-lzo",
  "signal-hook",

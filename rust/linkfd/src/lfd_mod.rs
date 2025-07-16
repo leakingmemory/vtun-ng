@@ -26,7 +26,7 @@ pub struct VtunAddr {
 }
 
 #[repr(C)]
-struct LListElement {
+pub struct LListElement {
     pub next: *mut LListElement,
     pub data: *mut libc::c_void
 }

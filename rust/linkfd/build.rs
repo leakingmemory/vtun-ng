@@ -7,7 +7,7 @@ fn main() {
     let enable_nat_hack = std::env::var("ENABLE_NAT_HACK")
         .map(|v| v == "1" || v.to_lowercase() == "true")
         .unwrap_or(false);
-    if (enable_nat_hack) {
+    if enable_nat_hack {
         println!("cargo:rustc-env=ENABLE_NAT_HACK=true");
     } else {
         println!("cargo:rustc-env=ENABLE_NAT_HACK=false");

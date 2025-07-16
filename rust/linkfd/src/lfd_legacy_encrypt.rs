@@ -42,15 +42,15 @@ use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 use ecb::{Decryptor, Encryptor};
 use crate::{lfd_mod, linkfd};
 use crate::lfd_mod::VtunHost;
-use crate::linkfd::{LfdMod, LfdModFactory};
+use crate::linkfd::{LfdModFactory};
 
 pub struct LfdLegacyEncrypt {
     pub ctx_enc: Encryptor<Blowfish>,
     pub ctx_dec: Decryptor<Blowfish>,
 }
 
-type BlowfishEcbEnc = ecb::Encryptor<Blowfish>;
-type BlowfishEcbDec = ecb::Decryptor<Blowfish>;
+type BlowfishEcbEnc = Encryptor<Blowfish>;
+type BlowfishEcbDec = Decryptor<Blowfish>;
 
 impl LfdLegacyEncrypt {
     pub fn new(host: *mut VtunHost) -> Option<LfdLegacyEncrypt> {
@@ -60,14 +60,14 @@ impl LfdLegacyEncrypt {
         for i in 0..16 {
             key[i] = k[i];
         }
-        let mut lfdLegacyEncrypt = LfdLegacyEncrypt {
+        let lfd_legacy_encrypt = LfdLegacyEncrypt {
             ctx_enc: BlowfishEcbEnc::new_from_slice(&key).unwrap(),
             ctx_dec: BlowfishEcbDec::new_from_slice(&key).unwrap()
         };
 
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized\n\0".as_ptr() as *mut libc::c_char); }
 
-        return Some(lfdLegacyEncrypt);
+        Some(lfd_legacy_encrypt)
     }
 }
 
@@ -86,17 +86,16 @@ impl LfdModFactory for LfdLegacyEncryptFactory {
         "Encryptor"
     }
     fn create(&self, host: &mut VtunHost) -> Option<Box<dyn linkfd::LfdMod>> {
-        return match LfdLegacyEncrypt::new(host) {
+        match LfdLegacyEncrypt::new(host) {
             None => None,
-            Some(lfdEncryptMod) => Some(Box::new(lfdEncryptMod))
-        };
+            Some(lfd_encrypt_mod) => Some(Box::new(lfd_encrypt_mod))
+        }
     }
 }
 
 impl linkfd::LfdMod for LfdLegacyEncrypt {
     fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
-        let pad = ((!(buf.len())) & 0x07) + 1;
-        let p = 8 - pad;
+        let pad = ((!buf.len()) & 0x07) + 1;
 
         let inputlen = buf.len();
         buf.resize(buf.len() + pad, 0u8);
@@ -107,36 +106,36 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
         for i in 1..pad {
             buf[i] = 0u8;
         }
-        const blocksize: usize = 8;
-        for i in 0..buf.len()/blocksize {
-            let mut data: [u8;blocksize] = [0u8; blocksize];
-            for j in 0..blocksize {
-                data[j] = buf[i*blocksize+j];
+        const BLOCKSIZE: usize = 8;
+        for i in 0..buf.len()/ BLOCKSIZE {
+            let mut data: [u8; BLOCKSIZE] = [0u8; BLOCKSIZE];
+            for j in 0..BLOCKSIZE {
+                data[j] = buf[i* BLOCKSIZE +j];
             }
             let mut block = Block::<BlowfishEcbEnc>::from(data);
             self.ctx_enc.encrypt_block_mut(&mut block);
-            for j in 0..blocksize {
-                buf[i*blocksize+j] = block[j];
+            for j in 0..BLOCKSIZE {
+                buf[i* BLOCKSIZE +j] = block[j];
             }
         }
-        return true;
+        true
     }
 
     fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
-        const blocksize: usize = 8;
-        for i in 0..buf.len()/blocksize {
-            let mut data: [u8;blocksize] = [0u8; blocksize];
-            for j in 0..blocksize {
-                data[j] = buf[i*blocksize+j];
+        const BLOCKSIZE: usize = 8;
+        for i in 0..buf.len()/ BLOCKSIZE {
+            let mut data: [u8; BLOCKSIZE] = [0u8; BLOCKSIZE];
+            for j in 0..BLOCKSIZE {
+                data[j] = buf[i* BLOCKSIZE +j];
             }
             let mut block = Block::<BlowfishEcbDec>::from(data);
             self.ctx_dec.decrypt_block_mut(&mut block);
-            for j in 0..blocksize {
-                buf[i*blocksize+j] = block[j];
+            for j in 0..BLOCKSIZE {
+                buf[i* BLOCKSIZE +j] = block[j];
             }
         }
         let p = buf[0];
-        if (p < 1 || p > 8) {
+        if p < 1 || p > 8 {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length\n\0".as_ptr() as *mut libc::c_char); }
             return false;
         }
@@ -145,6 +144,6 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
             buf[i] = buf[i + (p as usize)];
         }
         buf.resize(buf.len() - p as usize, 0u8);
-        return true;
+        true
     }
 }

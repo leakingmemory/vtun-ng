@@ -19,27 +19,21 @@
 
 /* ZLIB compression module */
 use std::io::Write;
-use crate::{lfd_mod, linkfd};
+use crate::{lfd_mod};
 use crate::linkfd::{LfdMod, LfdModFactory};
 
 struct LfdZlib {
-    pub compressor: flate2::Compression,
     pub encoder: flate2::write::ZlibEncoder<Vec<u8>>,
-    pub decoder: flate2::write::ZlibDecoder<Vec<u8>>,
-    pub returned_comp_buf: Vec<u8>,
-    pub returned_decomp_buf: Vec<u8>
+    pub decoder: flate2::write::ZlibDecoder<Vec<u8>>
 }
 
 impl LfdZlib {
     pub fn new(host: &lfd_mod::VtunHost) -> LfdZlib {
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "ZLIB compression initialized\n\0".as_ptr() as *mut libc::c_char); }
-        return LfdZlib {
-            compressor: flate2::Compression::new(host.zlevel as u32),
+        LfdZlib {
             encoder: flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(host.zlevel as u32)),
-            decoder: flate2::write::ZlibDecoder::new(Vec::new()),
-            returned_comp_buf: Vec::new(),
-            returned_decomp_buf: Vec::new()
-        };
+            decoder: flate2::write::ZlibDecoder::new(Vec::new())
+        }
     }
 }
 
@@ -48,20 +42,20 @@ pub(crate) struct LfdZlibFactory {
 
 impl LfdZlibFactory {
     pub fn new() -> LfdZlibFactory {
-        return LfdZlibFactory {
-        };
+        LfdZlibFactory {
+        }
     }
 }
 impl LfdModFactory for LfdZlibFactory {
     fn name(&self) -> &'static str {
-        return "zlib";
+        "zlib"
     }
     fn create(&self, host: &mut lfd_mod::VtunHost) -> Option<Box<dyn LfdMod>> {
-        return Some(Box::new(LfdZlib::new(host)));
+        Some(Box::new(LfdZlib::new(host)))
     }
 }
 
-impl linkfd::LfdMod for LfdZlib {
+impl LfdMod for LfdZlib {
     fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         match self.encoder.write_all(buf) {
             Ok(_) => (),
@@ -79,7 +73,7 @@ impl linkfd::LfdMod for LfdZlib {
             buf[i] = self.encoder.get_ref()[i];
         }
         self.encoder.get_mut().clear();
-        return true;
+        true
     }
     fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
         match self.decoder.write_all(buf) {
@@ -98,6 +92,6 @@ impl linkfd::LfdMod for LfdZlib {
             buf[i] = self.decoder.get_ref()[i];       
         }
         self.decoder.get_mut().clear();
-        return true;
+        true
     }
 }

@@ -27,18 +27,14 @@ use crate::linkfd::LfdMod;
 
 struct LfdLzo {
     pub compress_ctx: LZOContext,
-    pub returned_comp_buf: Vec<u8>,
-    pub returned_decomp_buf: Vec<u8>
 }
 
 impl LfdLzo {
-    pub fn new(host: &lfd_mod::VtunHost) -> LfdLzo {
+    pub fn new(_host: &VtunHost) -> LfdLzo {
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "LZO compression initialized\n\0".as_ptr() as *mut libc::c_char); }
-        return LfdLzo {
-            compress_ctx: LZOContext::new(),
-            returned_comp_buf: Vec::new(),
-            returned_decomp_buf: Vec::new()
-        };
+        LfdLzo {
+            compress_ctx: LZOContext::new()
+        }
     }
 }
 
@@ -47,50 +43,50 @@ pub(crate) struct LfdLzoFactory {
 
 impl LfdLzoFactory {
     pub fn new() -> LfdLzoFactory {
-        return LfdLzoFactory {
-        };
+        LfdLzoFactory {
+        }
     }
 }
 
 impl linkfd::LfdModFactory for LfdLzoFactory {
     fn name(&self) -> &'static str {
-        return "LZO";
+        "LZO"
     }
 
     fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
-        return Some(Box::new(LfdLzo::new(host)));
+        Some(Box::new(LfdLzo::new(host)))
     }
 }
 
-impl linkfd::LfdMod for LfdLzo {
+impl LfdMod for LfdLzo {
     fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         let mut compressed: Vec<u8> = Vec::new();
         compressed.reserve(worst_compress(buf.len()));
         let err = self.compress_ctx.compress(buf, &mut compressed);
-        if (err == LZOError::OK) {
+        if err == LZOError::OK {
             buf.resize(compressed.len(), 0u8);
             for i in 0..compressed.len() {
                 buf[i] = compressed[i];
             }
-            return true;
+            true
         } else {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "LZO compression failed\n\0".as_ptr() as *mut libc::c_char)}
-            return false;
+            false
         }
     }
     fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
         let mut decompressed: Vec<u8> = Vec::new();
         decompressed.resize(buf.len() * 4, 0u8);
         let (result, err) = LZOContext::decompress_to_slice(&buf, &mut decompressed);
-        if (err == LZOError::OK) {
+        if err == LZOError::OK {
             buf.resize(result.len(), 0u8);
             for i in 0..result.len() {
                 buf[i] = result[i];
             }
-            return true;
+            true
         } else {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "LZO decompression failed\n\0".as_ptr() as *mut libc::c_char)}
-            return false;
+            false
         }
     }
 }

@@ -29,15 +29,13 @@ struct LfdShaper {
 }
 
 impl LfdShaper {
-    pub fn new(host: *const lfd_mod::VtunHost) -> LfdShaper {
+    pub fn new(host: *const VtunHost) -> LfdShaper {
         /* Calculate max speed bytes/sec */
         let spd_out = unsafe { (*host).spd_out } as u64;
         let mut max_speed: u64 = spd_out / 8 * 1024;
 
         /* Compensation for delays, nanosleep and so on */
         max_speed += 400;
-
-        let bytes = 0;
 
         {
             let logmsg = format!("Traffic shaping(speed {}K) initialized.\n\0", spd_out);
@@ -46,11 +44,11 @@ impl LfdShaper {
             }
         }
 
-        return LfdShaper {
+        LfdShaper {
             bytes: 0,
             max_speed,
             last_time: SystemTime::now()
-        };
+        }
     }
     pub fn count(&mut self, len: usize) {
         /* Just count incoming bytes */
@@ -68,13 +66,13 @@ impl LfdShaper {
         };
 
         let speed: u64;
-        if (elapsed > 0) {
+        if elapsed > 0 {
             speed = (self.bytes as u64) * 1000 / elapsed;
         } else {
             speed = self.max_speed;
         };
 
-        if( speed >= self.max_speed && self.max_speed > 0 ){
+        if speed >= self.max_speed && self.max_speed > 0 {
             /*
              * Sleep about 1 millisec(actual sleep might be longer).
              * This is actually the hack to reduce CPU usage.
@@ -87,12 +85,12 @@ impl LfdShaper {
         }
 
         self.last_time = curr_time;
-        if( elapsed > 0 ){
+        if elapsed > 0 {
             self.bytes = 0;
         }
 
         /* Accept input */
-        return  true;
+        true
     }
 }
 
@@ -101,8 +99,8 @@ pub(crate) struct LfdShaperFactory {
 
 impl LfdShaperFactory {
     pub fn new() -> LfdShaperFactory {
-        return LfdShaperFactory {
-        };
+        LfdShaperFactory {
+        }
     }
 }
 
@@ -112,16 +110,16 @@ impl linkfd::LfdModFactory for LfdShaperFactory {
     }
 
     fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
-        return Some(Box::new(LfdShaper::new(host)));
+        Some(Box::new(LfdShaper::new(host)))
     }
 }
 
-impl linkfd::LfdMod for LfdShaper {
+impl LfdMod for LfdShaper {
     fn avail_encode(&mut self) -> bool {
-        return self.avail();
+        self.avail()
     }
     fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         self.count(buf.len());
-        return true;
+        true
     }
 }

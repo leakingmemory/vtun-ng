@@ -120,7 +120,8 @@ impl linkfd::LfdMod for LfdShaper {
     fn avail_encode(&mut self) -> bool {
         return self.avail();
     }
-    fn encode_inplace(&mut self, buf: &mut [u8]) {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         self.count(buf.len());
+        return true;
     }
 }

@@ -63,37 +63,34 @@ impl linkfd::LfdModFactory for LfdLzoFactory {
 }
 
 impl linkfd::LfdMod for LfdLzo {
-    fn can_encode_inplace(&mut self) -> bool {
-        false
-    }
-    fn encode(&mut self, src: &[u8]) -> Option<Box<Vec<u8>>> {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         let mut compressed: Vec<u8> = Vec::new();
-        compressed.reserve(worst_compress(src.len()));
-        let err = self.compress_ctx.compress(src, &mut compressed);
+        compressed.reserve(worst_compress(buf.len()));
+        let err = self.compress_ctx.compress(buf, &mut compressed);
         if (err == LZOError::OK) {
-            return Some(Box::new(compressed));
+            buf.resize(compressed.len(), 0u8);
+            for i in 0..compressed.len() {
+                buf[i] = compressed[i];
+            }
+            return true;
         } else {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "LZO compression failed\n\0".as_ptr() as *mut libc::c_char)}
-            return None;
+            return false;
         }
     }
-    fn can_decode_inplace(&mut self) -> bool {
-        false
-    }
-    fn decode(&mut self, src: &[u8]) -> Option<Box<Vec<u8>>> {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
         let mut decompressed: Vec<u8> = Vec::new();
-        decompressed.resize(src.len() * 4, 0u8);
-        let (result, err) = LZOContext::decompress_to_slice(&src, &mut decompressed);
+        decompressed.resize(buf.len() * 4, 0u8);
+        let (result, err) = LZOContext::decompress_to_slice(&buf, &mut decompressed);
         if (err == LZOError::OK) {
-            let mut resvec: Vec<u8> = Vec::new();
-            resvec.resize(result.len(), 0u8);
+            buf.resize(result.len(), 0u8);
             for i in 0..result.len() {
-                resvec[i] = result[i];
+                buf[i] = result[i];
             }
-            return Some(Box::new(resvec));
+            return true;
         } else {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "LZO decompression failed\n\0".as_ptr() as *mut libc::c_char)}
-            return None;
+            return false;
         }
     }
 }

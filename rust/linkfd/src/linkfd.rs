@@ -70,28 +70,14 @@ pub trait LfdMod {
     fn avail_encode(&mut self) -> bool {
         true
     }
-    fn can_encode_inplace(&mut self) -> bool {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         true
-    }
-    fn encode_inplace(&mut self, buf: &mut [u8]) {
-    }
-    fn encode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
-        let mut vec : Vec<u8> = Vec::new();
-        vec.extend_from_slice(buf);
-        return Some(Box::new(vec));
     }
     fn avail_decode(&mut self) -> bool {
         true
     }
-    fn can_decode_inplace(&mut self) -> bool {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
         true
-    }
-    fn decode_inplace(&mut self, buf: &mut [u8]) {
-    }
-    fn decode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
-        let mut vec : Vec<u8> = Vec::new();
-        vec.extend_from_slice(buf);
-        return Some(Box::new(vec));
     }
 }
 
@@ -133,14 +119,6 @@ impl Linkfd {
         }
         return linkfd;
     }
-    fn can_encode_inplace(&mut self) -> bool {
-        for m in self.mods.iter_mut() {
-            if !m.can_encode_inplace() {
-                return false;
-            }
-        }
-        return true;
-    }
     fn avail_encode(&mut self) -> bool {
         for m in self.mods.iter_mut() {
             if !m.avail_encode() {
@@ -149,25 +127,13 @@ impl Linkfd {
         }
         return true;
     }
-    fn encode_inplace(&mut self, buf: &mut [u8]) {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         for m in self.mods.iter_mut() {
-            m.encode_inplace(buf);
-        }
-    }
-    fn encode(&mut self, buf: &[u8]) -> Option<Vec<u8>> {
-        let mut vec : Vec<u8> = Vec::new();
-        vec.extend_from_slice(buf);
-        for m in self.mods.iter_mut() {
-            if (m.can_encode_inplace()) {
-                m.encode_inplace(&mut vec);
-            } else {
-                vec = match m.encode(&vec) {
-                    None => return None,
-                    Some(vec) => *vec
-                };
+            if (!m.encode(buf)) {
+                return false;
             }
         }
-        return Some(vec);
+        return true;
     }
     fn avail_decode(&mut self) -> bool {
         for m in self.mods.iter_mut() {
@@ -177,33 +143,13 @@ impl Linkfd {
         }
         return true;
     }
-    fn can_decode_inplace(&mut self) -> bool {
-        for m in self.mods.iter_mut() {
-            if !m.can_decode_inplace() {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
+        for m in self.mods.iter_mut().rev() {
+            if (!m.decode(buf)) {
                 return false;
             }
         }
         return true;
-    }
-    fn decode_inplace(&mut self, buf: &mut [u8]) {
-        for m in self.mods.iter_mut().rev() {
-            m.decode_inplace(buf);
-        }
-    }
-    fn decode(&mut self, buf: &[u8]) -> Option<Vec<u8>> {
-        let mut vec : Vec<u8> = Vec::new();
-        vec.extend_from_slice(buf);
-        for m in self.mods.iter_mut().rev() {
-            if (m.can_decode_inplace()) {
-                m.decode_inplace(&mut vec);
-            } else {
-                vec = match m.decode(&vec) {
-                    None => return None,
-                    Some(vec) => *vec
-                };
-            }
-        }
-        return Some(vec);
     }
 }
 
@@ -540,27 +486,15 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
             unsafe { stat_byte_out += tmplen; }
             buf.resize(1, 0u8);
             let encoded: usize;
-            if (lfd_stack.can_encode_inplace()) {
-                lfd_stack.encode_inplace(&mut buf);
-                encoded = buf.len();
-                buf.resize(encoded + LINKFD_FRAME_RESERV + LINKFD_FRAME_APPEND, 0u8);
-                for i in 0..encoded {
-                    buf[encoded - i - 1 + LINKFD_FRAME_RESERV] = buf[encoded - i - 1];
-                }
-            } else {
-                buf = match lfd_stack.encode(&mut buf) {
-                    Some(b) => {
-                        buf.resize(b.len() + LINKFD_FRAME_RESERV, 0u8);
-                        encoded = b.len();
-                        for i in 0..encoded {
-                            buf[encoded - i - 1 + LINKFD_FRAME_RESERV] = b[encoded - i - 1];
-                        }
-                        buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
-                        buf
-                    },
-                    None => break
-                };
+            if (!lfd_stack.encode(&mut buf)) {
+                break;
             }
+            let encoded = buf.len();
+            buf.resize(encoded + LINKFD_FRAME_RESERV, 0u8);
+            for i in 0..encoded {
+                buf[encoded - i - 1 + LINKFD_FRAME_RESERV] = buf[encoded - i - 1];
+            }
+            buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
             if (encoded > 0) {
                 let retv: libc::c_int;
                 unsafe {
@@ -622,19 +556,15 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
 
             unsafe { stat_comp_in += len as u64; }
             buf.resize(len as usize, 0u8);
-            let decoded;
-            buf = match lfd_stack.decode(&mut buf) {
-                Some(b) => {
-                    buf.resize(b.len() + LINKFD_FRAME_RESERV, 0u8);
-                    decoded = b.len();
-                    for i in 0..decoded {
-                        buf[decoded - i - 1 + LINKFD_FRAME_RESERV] = b[decoded - i - 1];
-                    }
-                    buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
-                    buf
-                },
-                None => break
-            };
+            if !lfd_stack.decode(&mut buf) {
+                break;
+            }
+            let decoded = buf.len();
+            buf.resize(decoded + LINKFD_FRAME_RESERV, 0u8);
+            for i in 0..decoded {
+                buf[decoded - i - 1 + LINKFD_FRAME_RESERV] = buf[decoded - i - 1];
+            }
+            buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
             if (decoded > 0) {
                 let retv;
                 unsafe {
@@ -678,19 +608,15 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
             unsafe { stat_byte_out += len as u64; }
 
 
-            let encoded;
-            buf = match lfd_stack.encode(&mut buf) {
-                Some(b) => {
-                    buf.resize(b.len() + LINKFD_FRAME_RESERV, 0u8);
-                    encoded = b.len();
-                    for i in 0..encoded {
-                        buf[encoded - i - 1 + LINKFD_FRAME_RESERV] = b[encoded - i - 1];
-                    }
-                    buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
-                    buf
-                },
-                None => break
-            };
+            if !lfd_stack.encode(&mut buf) {
+                break;
+            }
+            let encoded = buf.len();
+            buf.resize(encoded + LINKFD_FRAME_RESERV, 0u8);
+            for i in 0..encoded {
+                buf[encoded - i - 1 + LINKFD_FRAME_RESERV] = buf[encoded - i - 1];
+            }
+            buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
             if (encoded > 0) {
                 let retv;
                 unsafe {

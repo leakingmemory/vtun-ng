@@ -94,42 +94,35 @@ impl LfdModFactory for LfdLegacyEncryptFactory {
 }
 
 impl linkfd::LfdMod for LfdLegacyEncrypt {
-    fn can_encode_inplace(&mut self) -> bool {
-        false
-    }
-    fn encode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         let pad = ((!(buf.len())) & 0x07) + 1;
         let p = 8 - pad;
 
-        let mut output: Vec<u8> = Vec::new();
-        output.reserve(buf.len() + pad);
-        output.push(pad as u8);
-        output.resize(pad, 0u8);
-        for i in 0..buf.len() {
-            output.push(buf[i]);
+        let inputlen = buf.len();
+        buf.resize(buf.len() + pad, 0u8);
+        for i in 0..inputlen {
+            buf[inputlen + pad - 1 - i] = buf[inputlen - 1 - i];
+        }
+        buf[0] = pad as u8;
+        for i in 1..pad {
+            buf[i] = 0u8;
         }
         const blocksize: usize = 8;
-        for i in 0..output.len()/blocksize {
+        for i in 0..buf.len()/blocksize {
             let mut data: [u8;blocksize] = [0u8; blocksize];
             for j in 0..blocksize {
-                data[j] = output[i*blocksize+j];
+                data[j] = buf[i*blocksize+j];
             }
             let mut block = Block::<BlowfishEcbEnc>::from(data);
             self.ctx_enc.encrypt_block_mut(&mut block);
             for j in 0..blocksize {
-                output[i*blocksize+j] = block[j];
+                buf[i*blocksize+j] = block[j];
             }
         }
-        return Some(Box::new(output));
+        return true;
     }
 
-    fn can_decode_inplace(&mut self) -> bool {
-        false
-    }
-
-    fn decode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
-        let mut output: Vec<u8> = Vec::new();
-        output.resize(buf.len(), 0u8);
+    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
         const blocksize: usize = 8;
         for i in 0..buf.len()/blocksize {
             let mut data: [u8;blocksize] = [0u8; blocksize];
@@ -139,19 +132,19 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
             let mut block = Block::<BlowfishEcbDec>::from(data);
             self.ctx_dec.decrypt_block_mut(&mut block);
             for j in 0..blocksize {
-                output[i*blocksize+j] = block[j];
+                buf[i*blocksize+j] = block[j];
             }
         }
-        let p = output[0];
+        let p = buf[0];
         if (p < 1 || p > 8) {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length\n\0".as_ptr() as *mut libc::c_char); }
-            return None;
+            return false;
         }
 
-        for i in 0..(output.len() - (p as usize)) {
-            output[i] = output[i + (p as usize)];
+        for i in 0..(buf.len() - (p as usize)) {
+            buf[i] = buf[i + (p as usize)];
         }
-        output.resize(output.len() - p as usize, 0u8);
-        return Some(Box::new(output));
+        buf.resize(buf.len() - p as usize, 0u8);
+        return true;
     }
 }

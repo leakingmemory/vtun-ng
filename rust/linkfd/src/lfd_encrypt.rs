@@ -492,33 +492,20 @@ impl LfdEncrypt {
         return output;
     }
 
-    pub fn encrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
-        let mut outbuf = match self.encode(buf) {
-            None => return None,
-            Some(b) => *b
-        };
-        let mut prefixer: Vec<u8> = Vec::new();
-        prefixer.reserve(lfd_mod::LINKFD_FRAME_RESERV + outbuf.len() + lfd_mod::LINKFD_FRAME_APPEND);
-        prefixer.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
-        prefixer.append(&mut outbuf);
-        prefixer.resize(prefixer.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-        return Some(prefixer);
-    }
-
-    fn recv_msg(&mut self, buf: &[u8]) -> Option<Vec<u8>>
+    fn recv_msg(&mut self, buf: &mut Vec<u8>) -> bool
     {
         let mut iv: Vec<u8> = Vec::new();
 
         if (matches!(self.cipher_dec_state, CipherState::CipherInit))
         {
             if (buf.len() < ((self.blocksize as usize) * 2)) {
-                return None;
+                return false;
             }
             let mut outp: Vec<u8> = Vec::new();
             outp.resize((self.blocksize as usize) * 3, 0u8);
             match self.ctx_dec_ecb.cipher_update(&buf[..(self.blocksize as usize * 2)], Some(&mut *outp)) {
                 Ok(rlen) => { outp.resize(rlen, 0u8); },
-                Err(_) => return None
+                Err(_) => return false
             };
             if (outp[0] == b'i' && outp[1] == b'v' && outp[2] == b'e' && outp[3] == b'c') {
                 iv.resize(self.blocksize as usize, 0u8);
@@ -526,17 +513,17 @@ impl LfdEncrypt {
                     iv[i as usize] = outp[i as usize + 4];
                 }
                 if (!self.cipher_dec_init(&*iv)) {
-                    return None;
+                    return false;
                 }
                 self.cipher_dec_state = CipherState::CipherSequence;
                 self.gibberish = 0;
                 self.gib_time_start = 0;
-                let mut remainingbuf: Vec<u8> = Vec::new();
-                remainingbuf.resize(buf.len() - ((self.blocksize as usize) * 2), 0u8);
                 for i in 0..(buf.len() - ((self.blocksize as usize) * 2)) {
-                    remainingbuf[i as usize] = buf[i as usize + ((self.blocksize as usize) * 2)];
+                    buf[i as usize] = buf[i as usize + ((self.blocksize as usize) * 2)];
                 }
-                return Some(remainingbuf);
+                buf.resize(buf.len() - ((self.blocksize as usize) * 2), 0u8);
+
+                return true;
             } else {
                 self.gibberish += 1;
                 let mut gibberish_diff_time = 0;
@@ -582,20 +569,14 @@ impl LfdEncrypt {
                 }
             }
         }
-        let mut outbuf = Vec::new();
-        outbuf.reserve(buf.len() + (self.blocksize as usize));
-        outbuf.resize(buf.len(), 0u8);
-        for i in 0..buf.len() {
-            outbuf[i as usize] = buf[i as usize];
-        }
-        return Some(outbuf);
+        return true;
     }
-    fn recv_ib_mesg(&mut self, buf: Vec<u8>) -> Option<Vec<u8>>
+    fn recv_ib_mesg(&mut self, buf: &mut Vec<u8>) -> bool
     {
         if (matches!(self.cipher_dec_state, CipherState::CipherSequence))
         {
             if (buf.len() < self.blocksize as usize) {
-                return None;
+                return false;
             }
             /* To simplify matters, I assume that blocksize
                will not be less than 8 bytes */
@@ -623,30 +604,16 @@ impl LfdEncrypt {
                 }
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Local decryptor out of sync".as_ptr() as *mut libc::c_char); }
 
-                let vec: Vec<u8> = Vec::new();
-                return Some(vec);
+                buf.clear();
+                return true;
             }
-            let mut outbuf: Vec<u8> = Vec::new();
-            outbuf.resize(buf.len() - (self.blocksize as usize), 0u8);
             for i in 0..(buf.len() - (self.blocksize as usize)) {
-                outbuf[i as usize] = buf[i as usize + (self.blocksize as usize)];
+                buf[i as usize] = buf[i as usize + (self.blocksize as usize)];
             }
-            return Some(outbuf);
+            buf.resize(buf.len() - (self.blocksize as usize), 0u8);
+            return true;
         }
-        return Some(buf);
-    }
-
-    pub fn decrypt(&mut self, buf: &mut[u8]) -> Option<Vec<u8>> {
-        let mut ib = match self.decode(buf) {
-            None => return None,
-            Some(b) => *b
-        };
-        let mut prefixer: Vec<u8> = Vec::new();
-        prefixer.reserve(lfd_mod::LINKFD_FRAME_RESERV + ib.len() + lfd_mod::LINKFD_FRAME_APPEND);
-        prefixer.resize(lfd_mod::LINKFD_FRAME_RESERV, 0u8);
-        prefixer.append(&mut ib);
-        prefixer.resize(prefixer.len() + lfd_mod::LINKFD_FRAME_APPEND, 0u8);
-        return Some(prefixer);
+        return true;
     }
 }
 
@@ -674,12 +641,7 @@ impl linkfd::LfdModFactory for LfdEncryptFactory {
 }
 
 impl linkfd::LfdMod for LfdEncrypt {
-    fn can_encode_inplace(&mut self) -> bool {
-        false
-    }
-    fn encode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
-        let mut outbuf: Vec<u8> = Vec::new();
-
+    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
         let mut sendbuf = self.send_msg();
 
         let mut ib = self.send_ib_mesg();
@@ -688,36 +650,40 @@ impl linkfd::LfdMod for LfdEncrypt {
             let p = (expectedlen & ((self.blocksize-1) as usize));
             expectedlen += (self.blocksize as usize) - p;
             expectedlen += self.blocksize as usize;
-            outbuf.reserve(expectedlen);
+            if (buf.capacity() < expectedlen) {
+                buf.reserve(expectedlen);
+            }
         }
-        outbuf.append(& mut ib);
         {
-            let prelen = outbuf.len();
-            outbuf.resize(prelen + buf.len(), 0u8);
-            for i in 0..buf.len() {
-                outbuf[prelen + i] = buf[i];
+            let inputlen = buf.len();
+            buf.resize(inputlen + ib.len(), 0u8);
+            for i in 0..inputlen {
+                buf[ib.len() + inputlen - i - 1] = buf[inputlen - i - 1];
+            }
+            for i in 0..ib.len() {
+                buf[i] = ib[i];
             }
         }
         /* ( len % blocksize ) */
-        let p = (outbuf.len() & ((self.blocksize-1) as usize));
+        let p = (buf.len() & ((self.blocksize-1) as usize));
         let pad = (self.blocksize as usize) - p;
 
-        outbuf.resize(outbuf.len() + pad, (pad & 0xFF) as u8);
+        buf.resize(buf.len() + pad, (pad & 0xFF) as u8);
         if (pad == (self.blocksize as usize)) {
             let mut rand_bytes: Vec<u8> = Vec::new();
             rand_bytes.resize((self.blocksize - 1) as usize, 0u8);
             openssl::rand::rand_bytes(&mut rand_bytes).unwrap();
             for i in 0..(self.blocksize - 1) {
-                let outbuflen = outbuf.len();
-                outbuf[outbuflen - (self.blocksize as usize) + (i as usize)] = rand_bytes[i as usize];
+                let outbuflen = buf.len();
+                buf[outbuflen - (self.blocksize as usize) + (i as usize)] = rand_bytes[i as usize];
             }
         }
         {
-            let outbuflen = outbuf.len();
-            outbuf.resize(outbuflen + (self.blocksize as usize), 0u8);
-            match self.ctx_enc.cipher_update_inplace(&mut *outbuf, outbuflen) {
-                Ok(rlen) => { outbuf.resize(rlen, 0u8); },
-                Err(_) => return None
+            let outbuflen = buf.len();
+            buf.resize(outbuflen + (self.blocksize as usize), 0u8);
+            match self.ctx_enc.cipher_update_inplace(&mut *buf, outbuflen) {
+                Ok(rlen) => { buf.resize(rlen, 0u8); },
+                Err(_) => return false
             }
         }
 
@@ -725,45 +691,44 @@ impl linkfd::LfdMod for LfdEncrypt {
 
         match sendbuf {
             Some(mut sendbuf) => {
-                let mut finalbuf = Vec::new();
-                finalbuf.reserve(sendbuf.len() + outbuf.len());
-                finalbuf.append(&mut sendbuf);
-                finalbuf.append(&mut outbuf);
-                return Some(Box::new(finalbuf));
+                let buflen = buf.len();
+                buf.resize(buflen + sendbuf.len(), 0u8);
+                for i in 0..buflen {
+                    buf[buflen + sendbuf.len() - i - 1] = buf[buflen - i - 1];
+                }
+                for i in 0..sendbuf.len() {
+                    buf[i] = sendbuf[i];
+                }
+                return true;
             }
             None => {
-                return Some(Box::new(outbuf));
+                return true;
             }
         }
     }
-    fn can_decode_inplace(&mut self) -> bool {
-        false
-    }
-    fn decode(&mut self, buf: &[u8]) -> Option<Box<Vec<u8>>> {
-        let mut msg = match self.recv_msg(buf) {
-            Some(msgbuf) => msgbuf,
-            None => return None
+    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
+        if (!self.recv_msg(buf)) {
+            return false;
+        }
+
+        let msglen = buf.len();
+        buf.resize(msglen + (self.blocksize as usize), 0u8);
+        match self.ctx_dec.cipher_update_inplace(buf.as_mut_slice(), msglen) {
+            Ok(outlen) => {buf.resize(outlen, 0u8)},
+            Err(_) => return false
         };
 
-        let msglen = msg.len();
-        msg.resize(msglen + (self.blocksize as usize), 0u8);
-        match self.ctx_dec.cipher_update_inplace(&mut msg, msglen) {
-            Ok(outlen) => {msg.resize(outlen, 0u8)},
-            Err(_) => return None
-        };
+        if (!self.recv_ib_mesg(buf)) {
+            return false;
+        }
 
-        let mut ib = match self.recv_ib_mesg(msg) {
-            Some(ibmsg ) => ibmsg,
-            None => return None
-        };
-
-        let iblen = ib.len();
-        let pad = ib[iblen - 1];
+        let iblen = buf.len();
+        let pad = buf[iblen - 1];
         if (pad < 1 || (pad as u32) > self.blocksize) {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "decrypt_buf: bad pad length".as_ptr() as *mut libc::c_char); }
-            return None;
+            return false;
         }
-        ib.resize(iblen - pad as usize, 0u8);
-        return Some(Box::new(ib));
+        buf.resize(iblen - pad as usize, 0u8);
+        return true;
     }
 }

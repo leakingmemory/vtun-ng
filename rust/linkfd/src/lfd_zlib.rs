@@ -62,42 +62,42 @@ impl LfdModFactory for LfdZlibFactory {
 }
 
 impl linkfd::LfdMod for LfdZlib {
-    fn can_encode_inplace(&mut self) -> bool {
-        false
-    }
-    fn encode(&mut self, src: &[u8]) -> Option<Box<Vec<u8>>> {
-        match self.encoder.write_all(src) {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
+        match self.encoder.write_all(buf) {
             Ok(_) => (),
             Err(_) => {
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB compression error\n\0".as_ptr() as *mut libc::c_char); }
-                return None
+                return false
             }
         };
         match self.encoder.flush() {
             Ok(()) => {},
-            Err(_) => return None,
+            Err(_) => return false,
         };
-        let result = self.encoder.get_mut().clone();
+        buf.resize(self.encoder.get_ref().len(), 0u8);
+        for i in 0..buf.len() {
+            buf[i] = self.encoder.get_ref()[i];
+        }
         self.encoder.get_mut().clear();
-        return Some(Box::new(result));
+        return true;
     }
-    fn can_decode_inplace(&mut self) -> bool {
-        false
-    }
-    fn decode(&mut self, src: &[u8]) -> Option<Box<Vec<u8>>> {
-        match self.decoder.write_all(src) {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
+        match self.decoder.write_all(buf) {
             Ok(_) => (),
             Err(_) => {
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB decompression error\n\0".as_ptr() as *mut libc::c_char); }
-                return None;
+                return false;
             }
         };
         match self.decoder.flush() {
             Ok(()) => {},
-            Err(_) => return None,
+            Err(_) => return false,
         };
-        let result = self.decoder.get_mut().clone();
+        buf.resize(self.decoder.get_ref().len(), 0u8);
+        for i in 0..buf.len() {
+            buf[i] = self.decoder.get_ref()[i];       
+        }
         self.decoder.get_mut().clear();
-        return Some(Box::new(result));
+        return true;
     }
 }

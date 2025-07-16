@@ -90,42 +90,21 @@ impl LfdEncrypt {
             let first_half = passwd[0..passwd.len()/2].as_bytes();
             let second_half = passwd[passwd.len()/2..passwd.len()].as_bytes();
             {
-                let hs = hash(MessageDigest::md5(), first_half);
-                match hs {
-                    Ok(hs) => {
-                        for i in 0..hs.len() {
-                            pkey[i] = hs[i];
-                        }
-                    },
-                    Err(_) => {
-                        return None;
-                    }
+                let hs = md5::compute(first_half);
+                for i in 0..hs.len() {
+                    pkey[i] = hs[i];
                 }
             }
             {
-                let hs = hash(MessageDigest::md5(), second_half);
-                match hs {
-                    Ok(hs) => {
-                        for i in 0..hs.len() {
-                            pkey[i + 16] = hs[i];
-                        }
-                    },
-                    Err(_) => {
-                        return None;
-                    }
+                let hs = md5::compute(second_half);
+                for i in 0..hs.len() {
+                    pkey[i + 16] = hs[i];
                 }
             }
         } else /*keysize == 16*/ {
-            let hs = hash(MessageDigest::md5(), passwd.as_bytes());
-            match hs {
-                Ok(hs) => {
-                    for i in 0..hs.len() {
-                        pkey[i] = hs[i];
-                    }
-                },
-                Err(_) => {
-                    return None;
-                }
+            let hs = md5::compute(passwd.as_bytes());
+            for i in 0..hs.len() {
+                pkey[i] = hs[i];
             }
         }
         return Some(pkey);

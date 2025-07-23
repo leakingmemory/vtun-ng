@@ -50,8 +50,37 @@ impl driver::NetworkDriver for TcpProto {
         {
             let mut prefix: u16;
             let mut prefixbuf: [u8; 2] = [0u8; 2];
-            let rlen = unsafe { libc::read(self.fd, &mut prefixbuf as *mut u8 as *mut libc::c_void, 2) };
-            if rlen < 2 {
+            loop {
+                let rlen = unsafe { libc::read(self.fd, &mut prefixbuf as *mut u8 as *mut libc::c_void, 2) };
+                if rlen == 2 {
+                    break;
+                }
+                if rlen == 1 {
+                    let mut tmpbuf: [u8; 1] = [0u8; 1];
+                    loop {
+                        let rlen = unsafe { libc::read(self.fd, &mut tmpbuf as *mut u8 as *mut libc::c_void, 1) };
+                        if rlen == 1 {
+                            break;
+                        }
+                        if rlen < 0 {
+                            let errno = errno::errno();
+                            if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                                continue;
+                            }
+                            return None;
+                        }
+                        return None;
+                    }
+                    prefixbuf[1] = tmpbuf[0];
+                    break;
+                }
+                if rlen < 0 {
+                    let errno = errno::errno();
+                    if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                        continue;
+                    }
+                    return None;
+                }
                 return None;
             }
             prefix = prefixbuf[0] as u16;
@@ -63,17 +92,25 @@ impl driver::NetworkDriver for TcpProto {
 
         if len > linkfd::VTUN_FRAME_SIZE + linkfd::VTUN_FRAME_OVERHEAD {
             /* Oversized frame, drop it. */
+            buf.clear();
             while len > 0 {
-                let rdlen = linkfd::VTUN_FRAME_SIZE;
+                let mut rdlen = linkfd::VTUN_FRAME_SIZE;
+                if len < rdlen {
+                    rdlen = len;
+                }
                 buf.resize(rdlen, 0u8);
                 let rlen = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, rdlen) };
                 if rlen < 0 {
+                    let errno = errno::errno();
+                    if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                        continue;
+                    }
                     break;
                 }
                 len = len - rlen as usize;
             }
             buf.clear();
-            return None;
+            return Some(0);
         }
 
         /*
@@ -92,8 +129,26 @@ impl driver::NetworkDriver for TcpProto {
 
         /* Read frame */
         buf.resize(len, 0u8);
-        let rlen = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, len) };
-        if rlen < 0 || (rlen as usize) < len {
+        let mut offset: usize = 0;
+        let mut rlen;
+        loop {
+            let reqlen = len - offset;
+            rlen = unsafe { libc::read(self.fd, buf.as_mut_ptr().add(offset) as *mut libc::c_void, reqlen) };
+            if rlen < 0 {
+                let errno = errno::errno();
+                if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                    continue;
+                }
+                break;
+            } else if rlen < reqlen as isize {
+                offset = offset + rlen as usize;
+                continue;
+            } else {
+                offset = offset + rlen as usize;
+                break;
+            }
+        }
+        if rlen < 0 || offset < len {
             buf.clear();
             return None;
         }

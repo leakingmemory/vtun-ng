@@ -49,10 +49,6 @@ impl LfdLzoFactory {
 }
 
 impl linkfd::LfdModFactory for LfdLzoFactory {
-    fn name(&self) -> &'static str {
-        "LZO"
-    }
-
     fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
         Some(Box::new(LfdLzo::new(host)))
     }

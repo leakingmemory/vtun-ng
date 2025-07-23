@@ -90,9 +90,6 @@ pub const LOG_NOTICE: libc::c_int = 5;
 pub const LOG_INFO: libc::c_int = 6;
 pub const LOG_DEBUG: libc::c_int = 7;
 
-pub const LINKFD_FRAME_RESERV: usize = 128;
-pub const LINKFD_FRAME_APPEND: usize = 128;
-
 extern "C" {
     pub fn vtun_syslog(_priority: libc::c_int, _format: *mut libc::c_char);
 }

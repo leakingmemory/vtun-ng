@@ -105,10 +105,6 @@ impl LfdShaperFactory {
 }
 
 impl linkfd::LfdModFactory for LfdShaperFactory {
-    fn name(&self) -> &'static str {
-        "Shaper"
-    }
-
     fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
         Some(Box::new(LfdShaper::new(host)))
     }

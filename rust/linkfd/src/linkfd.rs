@@ -9,7 +9,6 @@ use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
 use crate::{driver, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib};
-use crate::lfd_mod::{LINKFD_FRAME_APPEND, LINKFD_FRAME_RESERV};
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -28,6 +27,13 @@ pub const VTUN_ZLIB: libc::c_int = 0x0001;
 pub const VTUN_LZO: libc::c_int = 0x0002;
 pub const VTUN_SHAPE: libc::c_int = 0x0004;
 pub const VTUN_ENCRYPT: libc::c_int = 0x0008;
+
+pub const VTUN_CMD_WAIT: libc::c_int =	0x01;
+pub const VTUN_CMD_DELAY: libc::c_int =  0x02;
+pub const VTUN_CMD_SHELL: libc::c_int =  0x04;
+
+/* Number of seconds for delay after pppd startup*/
+pub const VTUN_DELAY_SEC: u64 =  10;
 
 pub const VTUN_SIG_TERM: i32 = 1;
 pub const VTUN_SIG_HUP: i32 =  2;
@@ -78,7 +84,6 @@ pub trait LfdMod {
 }
 
 pub trait LfdModFactory {
-    fn name(&self) -> &'static str;
     fn create(&self, host: &mut lfd_mod::VtunHost) -> Option<Box<dyn LfdMod>>;
 }
 
@@ -266,8 +271,7 @@ pub extern "C" fn is_io_cancelled() -> libc::c_int {
 }
 
 /* Link remote and local file descriptors */
-#[no_mangle]
-pub extern "C" fn linkfd(hostptr: *mut lfd_mod::VtunHost) -> libc::c_int
+pub fn linkfd(hostptr: *mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     //struct sigaction sa, sa_oldterm, sa_oldint, sa_oldhup;
     //int old_prio;
@@ -361,7 +365,7 @@ pub extern "C" fn linkfd(hostptr: *mut lfd_mod::VtunHost) -> libc::c_int
 
     io_init();
 
-    lfd_linker(&mut lfd_stack, host);
+    lfd_linker(&mut lfd_stack, host, driver, proto);
 
     if (flags & (VTUN_STAT|VTUN_KEEP_ALIVE)) != 0 {
         unsafe {
@@ -398,7 +402,7 @@ pub extern "C" fn linkfd(hostptr: *mut lfd_mod::VtunHost) -> libc::c_int
     }
 }
 
-fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_int
+fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     let fd1 = host.rmt_fd;
     let fd2 = host.loc_fd;
@@ -411,16 +415,14 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
     let mut idle: i32 = 0;
 
     let mut buf: Vec<u8> = Vec::new();
-    buf.reserve(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD + LINKFD_FRAME_RESERV + LINKFD_FRAME_APPEND);
+    buf.reserve(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD);
 
     /* Delay sending of first UDP packet over broken NAT routers
     because we will probably be disconnected.  Wait for the remote
     end to send us something first, and use that connection. */
     if !is_enabled_nat_hack(host) {
-        unsafe {
-            buf.resize(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD + LINKFD_FRAME_RESERV + LINKFD_FRAME_APPEND, 0u8);
-            driver::proto_write(fd1, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char, VTUN_ECHO_REQ);
-        }
+        buf.clear();
+        proto.write(&mut buf, VTUN_ECHO_REQ as u16);
     }
 
     let maxfd =  (if fd1 > fd2 { fd1 } else { fd2 }) + 1;
@@ -447,6 +449,7 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
         if len < 0 {
             let errno = errno();
             if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
+                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Select error\n\0".as_ptr() as *mut libc::c_char); }
                 break;
             } else {
                 continue;
@@ -464,12 +467,9 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
             idle += 1;
             if idle > 0 {
                 /* No input frames, check connection with ECHO */
-                let retv: libc::c_int;
-                buf.resize(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD + LINKFD_FRAME_RESERV + LINKFD_FRAME_APPEND, 0u8);
-                unsafe {
-                    retv = driver::proto_write(fd1, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char, VTUN_ECHO_REQ);
-                }
-                if retv < 0 {
+                buf.clear();
+                let retv = proto.write(&mut buf, VTUN_ECHO_REQ as u16);
+                if retv.is_none() {
                     unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Failed to send ECHO_REQ\n\0".as_ptr() as *mut libc::c_char); }
                     break;
                 }
@@ -484,20 +484,14 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
             unsafe { STAT_BYTE_OUT += tmplen; }
             buf.resize(1, 0u8);
             if !lfd_stack.encode(&mut buf) {
+                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure\n\0".as_ptr() as *mut libc::c_char); }
                 break;
             }
             let encoded = buf.len();
-            buf.resize(encoded + LINKFD_FRAME_RESERV, 0u8);
-            for i in 0..encoded {
-                buf[encoded - i - 1 + LINKFD_FRAME_RESERV] = buf[encoded - i - 1];
-            }
-            buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
             if encoded > 0 {
-                let retv: libc::c_int;
-                unsafe {
-                    retv = driver::proto_write(fd1, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char, encoded as libc::c_int);
-                }
-                if retv < 0 {
+                let retv = proto.write(&mut buf, 0);
+                if retv.is_none() {
+                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure\n\0".as_ptr() as *mut libc::c_char); }
                     break;
                 }
                 unsafe { STAT_COMP_OUT += encoded as u64; }
@@ -509,68 +503,56 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
         if unsafe { libc::FD_ISSET(fd1, &fdset) } && lfd_stack.avail_decode() {
             idle = 0;
             unsafe { KA_NEED_VERIFY.store(false, std::sync::atomic::Ordering::SeqCst); }
-            buf.resize(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD + LINKFD_FRAME_RESERV + LINKFD_FRAME_APPEND, 0u8);
-            let mut len = unsafe { driver::proto_read(fd1, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char) };
-            if len <= 0 {
+            buf.clear();
+            let fl = proto.read(&mut buf);
+            if fl.is_none() {
+                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Network read failure\n\0".as_ptr() as *mut libc::c_char); }
                 break;
             }
-            let fl = len & (!VTUN_FSIZE_MASK);
-            if fl != VTUN_BAD_FRAME && fl != VTUN_ECHO_REQ && fl != VTUN_ECHO_REP && fl != VTUN_CONN_CLOSE {
-                for i in 0..len as usize {
-                    buf[i] = buf[i + LINKFD_FRAME_RESERV];
-                }
-                buf.resize(len as usize, 0u8);
-            }
+            let fl = fl.unwrap();
 
             /* Handle frame flags */
-            len = len & VTUN_FSIZE_MASK;
             if fl != 0 {
-                if fl == VTUN_BAD_FRAME {
+                if fl == VTUN_BAD_FRAME as u16 {
                     unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Received bad frame\n\0".as_ptr() as *mut libc::c_char); }
                     continue;
                 }
-                if fl == VTUN_ECHO_REQ {
+                if fl == VTUN_ECHO_REQ as u16 {
                     /* Send ECHO reply */
-                    let retv;
-                    unsafe {
-                        buf.resize(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD + LINKFD_FRAME_RESERV + LINKFD_FRAME_APPEND, 0u8);
-                        retv = driver::proto_write(fd1, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char, VTUN_ECHO_REP);
-                    }
-                    if retv < 0 {
+                    buf.clear();
+                    let retv = proto.write(&mut buf, VTUN_ECHO_REP as u16);
+                    if retv.is_none() {
+                        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure\n\0".as_ptr() as *mut libc::c_char); }
                         break;
                     }
                     continue;
                 }
-                if fl == VTUN_ECHO_REP {
+                if fl == VTUN_ECHO_REP as u16 {
                     /* Just ignore ECHO reply, KA_NEED_VERIFY==0 already */
                     continue;
                 }
-                if fl == VTUN_CONN_CLOSE {
+                if fl == VTUN_CONN_CLOSE as u16 {
                     unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Connection closed by other side\n\0".as_ptr() as *mut libc::c_char); }
                     break;
                 }
             }
 
             unsafe { STAT_COMP_IN += len as u64; }
-            buf.resize(len as usize, 0u8);
             if !lfd_stack.decode(&mut buf) {
+                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Decoding failure\n\0".as_ptr() as *mut libc::c_char); }
                 break;
             }
             let decoded = buf.len();
-            buf.resize(decoded + LINKFD_FRAME_RESERV, 0u8);
-            for i in 0..decoded {
-                buf[decoded - i - 1 + LINKFD_FRAME_RESERV] = buf[decoded - i - 1];
-            }
-            buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
             if decoded > 0 {
                 let retv;
                 unsafe {
-                    retv = driver::dev_write(fd2, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char, decoded as libc::c_int);
+                    retv = driver.write(&mut buf);
                     STAT_BYTE_IN += decoded as u64;
                 }
-                if retv < 0 {
+                if retv.is_none() {
                     let errno = errno();
                     if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
+                        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Driver write failed\n\0".as_ptr() as *mut libc::c_char); }
                         break;
                     } else {
                         continue;
@@ -583,10 +565,10 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
         /* Read data from the local device(fd2), encode and pass it to
          * the network (fd1) */
         if unsafe { libc::FD_ISSET(fd2, &fdset) } && lfd_stack.avail_encode() {
-            buf.resize(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD + LINKFD_FRAME_RESERV + LINKFD_FRAME_APPEND, 0u8);
-            let len = unsafe { driver::dev_read(fd2, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char, VTUN_FRAME_SIZE as libc::c_int) };
+            buf.clear();
+            let success = driver.read(&mut buf, VTUN_FRAME_SIZE);
 
-            if len < 0 {
+            if !success {
                 let errno = errno();
                 if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
                     break;
@@ -594,13 +576,11 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
                     continue;
                 }
             }
-            if len == 0 {
+            if buf.len() == 0 {
                 break;
             }
-            for i in 0..len as usize {
-                buf[i] = buf[i + LINKFD_FRAME_RESERV];
-            }
-            buf.resize(len as usize, 0u8);
+
+            let len = buf.len();
 
             unsafe { STAT_BYTE_OUT += len as u64; }
 
@@ -609,18 +589,13 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
                 break;
             }
             let encoded = buf.len();
-            buf.resize(encoded + LINKFD_FRAME_RESERV, 0u8);
-            for i in 0..encoded {
-                buf[encoded - i - 1 + LINKFD_FRAME_RESERV] = buf[encoded - i - 1];
-            }
-            buf.resize(buf.len() + LINKFD_FRAME_APPEND, 0u8);
             if encoded > 0 {
                 let retv;
                 unsafe {
-                    retv = driver::proto_write(fd1, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char, encoded as libc::c_int);
+                    retv = proto.write(&mut buf, 0);
                     STAT_COMP_OUT += encoded as u64;
                 }
-                if retv < 0 {
+                if retv.is_none() {
                     break;
                 }
             }
@@ -637,8 +612,8 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost) -> libc::c_i
     }
 
     /* Notify other end about our close */
-    buf.resize(VTUN_FRAME_SIZE + VTUN_FRAME_OVERHEAD + LINKFD_FRAME_RESERV + LINKFD_FRAME_APPEND, 0u8);
-    unsafe { driver::proto_write(fd1, buf.as_ptr().add(LINKFD_FRAME_RESERV) as *mut libc::c_char, VTUN_CONN_CLOSE); }
+    buf.clear();
+    proto.write(&mut buf, VTUN_CONN_CLOSE as u16);
 
     0
 }

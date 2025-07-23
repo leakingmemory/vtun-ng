@@ -47,9 +47,6 @@ impl LfdZlibFactory {
     }
 }
 impl LfdModFactory for LfdZlibFactory {
-    fn name(&self) -> &'static str {
-        "zlib"
-    }
     fn create(&self, host: &mut lfd_mod::VtunHost) -> Option<Box<dyn LfdMod>> {
         Some(Box::new(LfdZlib::new(host)))
     }

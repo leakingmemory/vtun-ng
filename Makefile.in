@@ -51,9 +51,7 @@ DEFS = -DVTUN_CONFIG_FILE=\"$(CFG_FILE)\" -DVTUN_PID_FILE=\"$(PID_FILE)\" \
        -DVTUN_STAT_DIR=\"$(STAT_DIR)\" -DVTUN_LOCK_DIR=\"$(LOCK_DIR)\"
 
 OBJS = main.o cfg_file.tab.o cfg_file.lex.o server.o client.o lib.o \
-       llist.o auth.o tunnel.o lock.o netlib.o  \
-       tun_dev.o tap_dev.o pty_dev.o pipe_dev.o \
-       tcp_proto.o udp_proto.o
+       llist.o auth.o lock.o netlib.o
 
 RUSTLIBDIR = -Lrust/linkfd/target/release
 RUSTLIBLNK = -lvtun_linkfd

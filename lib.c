@@ -107,6 +107,10 @@ void set_title(const char *fmt, ...)
 }
 #endif  /* HAVE_SETPROC_TITLE */
 
+void set_title_str(const char *str) {
+    set_title("%s", str);
+}
+
 /* 
  * Print padded messages.
  * Used by 'auth' function to force all messages 

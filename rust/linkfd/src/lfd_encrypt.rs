@@ -612,10 +612,6 @@ impl LfdEncryptFactory {
 }
 
 impl linkfd::LfdModFactory for LfdEncryptFactory {
-    fn name(&self) -> &'static str {
-        "Encryptor"
-    }
-
     fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
         match LfdEncrypt::new(host) {
             None => None,

@@ -25,6 +25,44 @@ pub(crate) struct PtyDev{
 }
 
 impl PtyDev {
+    #[cfg(not(target_os = "linux"))]
+    pub fn new() -> Option<Self> {
+        let mut ptyname: [u8;10] = [0u8; 10];
+        {
+            let const_ptyname = "/dev/ptyXY".as_bytes();
+            for i in 0..const_ptyname.len() {
+                ptyname[i] = const_ptyname[i];
+            }
+        }
+        let ch = "pqrstuvwxyz".as_bytes();
+        let digit = "0123456789abcdefghijklmnopqrstuv".as_bytes();
+
+        /* This algorithm should work for almost all standard Unices */
+        for l in 0..ch.len() {
+            for m in 0..digit.len() {
+                ptyname[8 as usize] = ch[l];
+                ptyname[9 as usize] = digit[m];
+                /* Open the master */
+                let mr_fd= unsafe { libc::open(ptyname.as_ptr() as *const i8, libc::O_RDWR) };
+                if mr_fd < 0 {
+                    continue;
+                }
+                /* Check the slave */
+                ptyname[5 as usize] = 't' as u8;
+                if unsafe { libc::access(ptyname.as_ptr() as *const i8, libc::R_OK | libc::W_OK) } < 0 {
+                    unsafe { libc::close(mr_fd); }
+                    ptyname[5 as usize] = 'p' as u8;
+                    continue;
+                }
+                return Some(Self {
+                    fd: mr_fd,
+                    ptyname: Box::new(str::from_utf8(&ptyname).unwrap().to_string())
+                });
+            }
+        }
+        None
+    }
+    #[cfg(target_os = "linux")]
     pub fn new() -> Option<Self> {
         /*
          * At first it appears that getpt is available on if not all,

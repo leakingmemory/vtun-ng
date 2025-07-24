@@ -101,6 +101,11 @@ impl TunDev {
     pub fn new_from_fd(fd: i32, dev: &str) -> TunDev {
         TunDev { name: Some(Box::new(dev.to_string())), fd: Some(fd) }
     }
+
+    #[cfg(not(target_os = "linux"))]
+    fn linux_prep(&mut self, _name: Option<&str>, _dev_type: TunDevType) -> bool {
+        false
+    }
     #[cfg(target_os = "linux")]
     fn linux_prep(&mut self, name: Option<&str>, dev_type: TunDevType) -> bool {
         let mut ifr_flags: libc::c_short;

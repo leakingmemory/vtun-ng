@@ -24,6 +24,28 @@ pub(crate) struct UdpProto {
     pub is_rmt_fd_connected: bool
 }
 
+impl UdpProto {
+    #[cfg(not(target_os = "linux"))] /* freebsd */
+    fn create_sockaddr_in() -> libc::sockaddr_in {
+        libc::sockaddr_in {
+            sin_family: 0,
+            sin_port: 0,
+            sin_addr: libc::in_addr { s_addr: 0 },
+            sin_zero: [0i8; 8],
+            sin_len: 0
+        }
+    }
+    #[cfg(target_os = "linux")] /* linux */
+    fn create_sockaddr_in() -> libc::sockaddr_in {
+        libc::sockaddr_in {
+            sin_family: 0,
+            sin_port: 0,
+            sin_addr: libc::in_addr { s_addr: 0 },
+            sin_zero: [0u8; 8],
+        }
+    }
+}
+
 impl driver::NetworkDriver for UdpProto {
     fn write(&self, buf: &mut Vec<u8>, flags: u16) -> Option<usize> {
         let payloadlen = buf.len();
@@ -56,18 +78,14 @@ impl driver::NetworkDriver for UdpProto {
             return Some(wlen as usize);
         }
     }
+
     fn read(&mut self, buf: &mut Vec<u8>) -> Option<u16> {
         //unsigned short hdr, flen;
         let mut hdrbuf: [u8; 2] = [0u8; 2];
         let mut iv: [libc::iovec; 2] = [libc::iovec { iov_base: null_mut(), iov_len: 0 }; 2];
         //register int rlen;
         //struct sockaddr_in from;
-        let mut from: libc::sockaddr_in = libc::sockaddr_in {
-            sin_family: 0,
-            sin_port: 0,
-            sin_addr: libc::in_addr { s_addr: 0 },
-            sin_zero: [0u8; 8],
-        };
+        let mut from: libc::sockaddr_in = UdpProto::create_sockaddr_in();
         let mut fromlen: libc::socklen_t = size_of::<libc::sockaddr_in>() as libc::socklen_t;
 
         /* Late connect (NAT hack enabled) */

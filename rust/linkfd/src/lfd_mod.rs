@@ -61,25 +61,27 @@ pub struct VtunHost {
     pub sopt: VtunSopt,
 }
 
-pub static VTUN_ENC_BF128ECB: libc::c_int = 1;
-pub static VTUN_ENC_BF128CBC: libc::c_int = 2;
-pub static VTUN_ENC_BF128CFB: libc::c_int = 3;
-pub static VTUN_ENC_BF128OFB: libc::c_int = 4;
-pub static VTUN_ENC_BF256ECB: libc::c_int = 5;
-pub static VTUN_ENC_BF256CBC: libc::c_int = 6;
-pub static VTUN_ENC_BF256CFB: libc::c_int = 7;
-pub static VTUN_ENC_BF256OFB: libc::c_int = 8;
+pub const VTUN_ENC_BF128ECB: libc::c_int = 1;
+pub const VTUN_ENC_BF128CBC: libc::c_int = 2;
+pub const VTUN_ENC_BF128CFB: libc::c_int = 3;
+pub const VTUN_ENC_BF128OFB: libc::c_int = 4;
+pub const VTUN_ENC_BF256ECB: libc::c_int = 5;
+pub const VTUN_ENC_BF256CBC: libc::c_int = 6;
+pub const VTUN_ENC_BF256CFB: libc::c_int = 7;
+pub const VTUN_ENC_BF256OFB: libc::c_int = 8;
 
-pub static VTUN_ENC_AES128ECB: libc::c_int = 9;
-pub static VTUN_ENC_AES128CBC: libc::c_int = 10;
-pub static VTUN_ENC_AES128CFB: libc::c_int = 11;
-pub static VTUN_ENC_AES128OFB: libc::c_int = 12;
-pub static VTUN_ENC_AES256ECB: libc::c_int = 13;
-pub static VTUN_ENC_AES256CBC: libc::c_int = 14;
-pub static VTUN_ENC_AES256CFB: libc::c_int = 15;
-pub static VTUN_ENC_AES256OFB: libc::c_int = 16;
+pub const VTUN_ENC_AES128ECB: libc::c_int = 9;
+pub const VTUN_ENC_AES128CBC: libc::c_int = 10;
+pub const VTUN_ENC_AES128CFB: libc::c_int = 11;
+pub const VTUN_ENC_AES128OFB: libc::c_int = 12;
+pub const VTUN_ENC_AES256ECB: libc::c_int = 13;
+pub const VTUN_ENC_AES256CBC: libc::c_int = 14;
+pub const VTUN_ENC_AES256CFB: libc::c_int = 15;
+pub const VTUN_ENC_AES256OFB: libc::c_int = 16;
 
-pub static VTUN_LEGACY_ENCRYPT: libc::c_int = 999;
+pub const VTUN_LEGACY_ENCRYPT: libc::c_int = 999;
+
+pub const  VTUN_PERSIST_KEEPIF: libc::c_int =     2;
 
 pub const LOG_EMERG: libc::c_int = 0;
 pub const LOG_ALERT: libc::c_int = 1;

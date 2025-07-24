@@ -114,30 +114,6 @@ if test "x$STRIP" = "x"; then
     AC_MSG_ERROR([Requires strip to install binaries])
 fi
 
-AC_CHECK_FUNCS([getpt grantpt unlockpt ptsname])
-
-OS_REL=`uname -r | tr -d '[A-Za-z\-\_\.]'`
-case $host_os in
-	*linux*)
-	     OS_DIR="linux"
-	     AC_CHECK_HEADERS(linux/if_tun.h)
-	     ;;
-	*solaris*)
-	     OS_DIR="svr4"
-	     ;;
-	*freebsd*)
-	     if test "$OS_REL" -ge "40"; then 
-	        OS_DIR="freebsd"
-	     fi
-	     ;;
-	*openbsd*)
-	     if test "$OS_REL" -ge "25"; then 
-	        OS_DIR="openbsd"
-	     fi
-	     ;;
-esac	     
-AC_LINK_DRV(`cat vtun.drivers`, $OS_DIR)
-
 AC_MSG_RESULT()
 
 dnl Build release name

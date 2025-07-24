@@ -391,22 +391,9 @@ fn tunnel_lfd(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, pro
     llist_trav(&mut host.down, run_cmd_rs, &mut host.sopt as *mut lfd_mod::VtunSopt as *mut libc::c_void);
 
     // TODO - Not to close with 'keep'. (closing is automatic by destructors)
-    /*if(! ( host.persist == VTUN_PERSIST_KEEPIF ) ) {
-        set_title("%s closing", host.host);
-    
-        /* Gracefully destroy interface */
-        switch( host.flags & VTUN_TYPE_MASK ){
-            case VTUN_TUN:
-                tun_close(fd[0], dev);
-                break;
-        
-            case VTUN_ETHER:
-                tap_close(fd[0], dev);
-                break;
-        }
-    
-        close(host.loc_fd);
-    }*/
+    if host.persist == lfd_mod::VTUN_PERSIST_KEEPIF {
+        driver.detach();
+    }
 
     /* Close all other fds */
     unsafe { libc::close(host.rmt_fd); }
@@ -468,11 +455,10 @@ pub extern "C" fn tunnel(host: *mut lfd_mod::VtunHost) -> libc::c_int
     let mut dev: &str = "";
     let mut interface_already_open: bool = false;
 
-    // TODO - "keep" needs reimplementation
-    /*if host.persist == VTUN_PERSIST_KEEPIF &&
+    if host.persist == lfd_mod::VTUN_PERSIST_KEEPIF &&
         host.loc_fd >= 0 {
         interface_already_open = true;
-    }*/
+    }
 
     /* Initialize device. */
     if !host.dev.is_null() {
@@ -561,7 +547,40 @@ pub extern "C" fn tunnel(host: *mut lfd_mod::VtunHost) -> libc::c_int
             -1
         }
     } else {
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "'keep' is not implemented yet.\n\0".as_ptr() as *mut libc::c_char); }
-        -1
+        let typeflag = host.flags & linkfd::VTUN_TYPE_MASK;
+        if typeflag == linkfd::VTUN_TTY {
+            let dev: String;
+            if !host.sopt.dev.is_null() {
+                dev = unsafe { CStr::from_ptr(host.sopt.dev) }.to_str().unwrap().to_string();
+            } else {
+                dev = "".to_string();
+            }
+            let mut driver = pty_dev::PtyDev::new_from_fd(host.loc_fd, dev.as_str());
+            tunnel_setup_proto(host, &mut driver, dev.as_str(), interface_already_open)
+        } else if typeflag == linkfd::VTUN_PIPE {
+            let mut driver = pipe_dev::PipeDev::new_from_fd(host.loc_fd);
+            tunnel_setup_proto(host, &mut driver, "", interface_already_open)
+        } else if typeflag == linkfd::VTUN_ETHER {
+            let dev: String;
+            if !host.sopt.dev.is_null() {
+                dev = unsafe { CStr::from_ptr(host.sopt.dev) }.to_str().unwrap().to_string();
+            } else {
+                dev = "".to_string();
+            }
+            let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
+            tunnel_setup_proto(host, &mut driver, dev.as_str(), interface_already_open)
+        } else if typeflag == linkfd::VTUN_TUN {
+            let dev: String;
+            if !host.sopt.dev.is_null() {
+                dev = unsafe { CStr::from_ptr(host.sopt.dev) }.to_str().unwrap().to_string();
+            } else {
+                dev = "".to_string();
+            }
+            let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
+            tunnel_setup_proto(host, &mut driver, dev.as_str(), interface_already_open)
+        }  else {
+            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.\n\0".as_ptr() as *mut libc::c_char); }
+            -1
+        }
     }
 }

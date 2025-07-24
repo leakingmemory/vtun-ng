@@ -33,6 +33,9 @@ impl PipeDev {
             None
         }
     }
+    pub fn new_from_fd(fd: i32) -> Self {
+        PipeDev { fd1: -1, fd2: fd }
+    }
     pub fn close(&mut self) {
         if self.fd1 >= 0 {
             unsafe {
@@ -76,6 +79,11 @@ impl driver::Driver for PipeDev {
     }
     fn io_fd(&self) -> i32 {
         self.fd2
+    }
+    fn detach(&mut self) -> i32 {
+        let fd = self.fd2;
+        self.fd2 = -1;
+        fd
     }
     fn close_first_pipe_fd(&mut self) {
         if self.fd1 >= 0 {

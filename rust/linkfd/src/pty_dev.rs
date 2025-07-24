@@ -55,6 +55,11 @@ impl PtyDev {
             fd, ptyname: Box::new(ptyname.to_string())
         })
     }
+    pub fn new_from_fd(fd: i32, ptyname: &str) -> Self {
+        PtyDev {
+            fd, ptyname: Box::new(ptyname.to_string())
+        }
+    }
     pub fn close(&mut self) {
         if self.fd >= 0 {
             unsafe {
@@ -94,6 +99,11 @@ impl driver::Driver for PtyDev {
     }
     fn io_fd(&self) -> i32 {
         self.fd
+    }
+    fn detach(&mut self) -> i32 {
+        let fd = self.fd;
+        self.fd = -1;
+        fd
     }
     fn close_first_pipe_fd(&mut self) {
         self.close();

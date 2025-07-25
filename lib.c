@@ -131,22 +131,6 @@ int print_p(int fd,const char *fmt, ...)
 	return write_n(fd, buf, sizeof(buf));
 }
 
-/* Read N bytes with timeout */
-int readn_t(int fd, void *buf, size_t count, time_t timeout) 
-{
-	fd_set fdset;
-	struct timeval tv;
-
-	tv.tv_usec=0; tv.tv_sec=timeout;
-
-	FD_ZERO(&fdset);
-	FD_SET(fd,&fdset);
-	if( select(fd+1,&fdset,NULL,NULL,&tv) <= 0)
-	   return -1;
-
-	return read_n(fd, buf, count);
-}
-
 /* 
  * Substitutes opt in place off '%X'. 
  * Returns new string.

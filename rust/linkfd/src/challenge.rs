@@ -4,23 +4,15 @@ use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 
 pub const VTUN_CHAL_SIZE: usize = 16;
 
-#[no_mangle]
-pub extern "C" fn gen_chal(buf: *mut u8) {
-    let slice = unsafe {
-        std::slice::from_raw_parts_mut(buf, VTUN_CHAL_SIZE)
-    };
-
-    openssl::rand::rand_bytes(slice).expect("");
+pub fn gen_chal(buf: &mut [u8]) {
+    openssl::rand::rand_bytes(buf).expect("");
 }
 
 type BlowfishEcbEnc = ecb::Encryptor<Blowfish>;
 type BlowfishEcbDec = ecb::Decryptor<Blowfish>;
-#[no_mangle]
-pub extern "C" fn encrypt_chal(in_chal: *mut u8, in_pwd: *mut libc::c_char)
+
+pub fn encrypt_chal(slice: &mut [u8], in_pwd: *mut libc::c_char)
 {
-    let slice = unsafe {
-        std::slice::from_raw_parts_mut(in_chal, VTUN_CHAL_SIZE)
-    };
     let pwd = unsafe {CStr::from_ptr(in_pwd).to_bytes()};
     let key = md5::compute(pwd);
 
@@ -31,12 +23,8 @@ pub extern "C" fn encrypt_chal(in_chal: *mut u8, in_pwd: *mut libc::c_char)
     }
 }
 
-#[no_mangle]
-pub extern "C" fn decrypt_chal(in_chal: *mut u8, in_pwd: *mut libc::c_char)
+pub fn decrypt_chal(slice: &mut [u8], in_pwd: *mut libc::c_char)
 {
-    let slice = unsafe {
-        std::slice::from_raw_parts_mut(in_chal, VTUN_CHAL_SIZE)
-    };
     let pwd = unsafe {CStr::from_ptr(in_pwd).to_bytes()};
     let key = md5::compute(pwd);
 

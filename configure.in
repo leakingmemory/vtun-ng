@@ -82,7 +82,11 @@ AC_FUNC_FORK
 
 if test "$NATHACK" = "yes"; then
    AC_DEFINE(ENABLE_NAT_HACK, [1], [Define to 1 if you want to enable Nat Hack code])
+   NATHACK_ENABLED=true
+else
+   NATHACK_ENABLED=false
 fi
+AC_SUBST([NATHACK_ENABLED])
 
 if test "$SOCKS" = "yes"; then
    AC_MSG_RESULT()

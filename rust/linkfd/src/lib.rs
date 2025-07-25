@@ -16,3 +16,7 @@ mod tun_dev;
 mod tcp_proto;
 mod udp_proto;
 mod tunnel;
+mod auth;
+mod libfuncs;
+mod cfg_file;
+mod lock;

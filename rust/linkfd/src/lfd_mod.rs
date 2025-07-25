@@ -61,6 +61,28 @@ pub struct VtunHost {
     pub sopt: VtunSopt,
 }
 
+#[repr(C)]
+pub struct VtunOpts {
+    pub timeout: libc::c_int,
+    pub persist: libc::c_int,
+
+    pub cfg_file: *mut libc::c_char,
+
+    pub shell: *mut libc::c_char, /* Shell */
+    pub ppp: *mut libc::c_char, /* Command to configure ppp devices */
+    pub ifcfg: *mut libc::c_char, /* Command to configure net devices */
+    pub route: *mut libc::c_char, /* Command to configure routing */
+    pub fwall: *mut libc::c_char, /* Command to configure FireWall */
+    pub iproute: *mut libc::c_char, /* iproute command */
+
+    pub svr_name: *mut libc::c_char, /* Server's host name */
+    pub svr_addr: *mut libc::c_char, /* Server's address (string) */
+    pub bind_addr: VtunAddr, /* Server should listen on this address */
+    pub svr_type: libc::c_int, /* Server mode */
+    pub syslog: libc::c_int, /* Facility to log messages to syslog under */
+    pub quiet: libc::c_int, /* Be quiet about common errors */
+}
+
 pub const VTUN_ENC_BF128ECB: libc::c_int = 1;
 pub const VTUN_ENC_BF128CBC: libc::c_int = 2;
 pub const VTUN_ENC_BF128CFB: libc::c_int = 3;
@@ -83,6 +105,13 @@ pub const VTUN_LEGACY_ENCRYPT: libc::c_int = 999;
 
 pub const  VTUN_PERSIST_KEEPIF: libc::c_int =     2;
 
+/* Support for multiple connections */
+pub const VTUN_MULTI_DENY: libc::c_int =	0;  /* no */
+pub const VTUN_MULTI_ALLOW: libc::c_int =	1;  /* yes */
+pub const VTUN_MULTI_KILL: libc::c_int =	2;
+
+pub const VTUN_VER: &str = "3.X 07/24/2025";
+
 pub const LOG_EMERG: libc::c_int = 0;
 pub const LOG_ALERT: libc::c_int = 1;
 pub const LOG_CRIT: libc::c_int = 2;
@@ -93,5 +122,6 @@ pub const LOG_INFO: libc::c_int = 6;
 pub const LOG_DEBUG: libc::c_int = 7;
 
 extern "C" {
+    pub static mut vtun: VtunOpts;
     pub fn vtun_syslog(_priority: libc::c_int, _format: *mut libc::c_char);
 }

@@ -41,7 +41,7 @@ fn llist_trav(l: &mut lfd_mod::LList, f: extern "C" fn(*mut libc::c_void, *mut l
     std::ptr::null_mut()
 }
 
-fn set_title(title: &str) {
+pub(crate) fn set_title(title: &str) {
     let str = format!("{}\0", title);
     unsafe { set_title_str(str.as_ptr() as *const libc::c_char); }
 }

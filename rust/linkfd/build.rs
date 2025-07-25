@@ -12,4 +12,7 @@ fn main() {
     } else {
         println!("cargo:rustc-env=ENABLE_NAT_HACK=false");
     }
+    let vtun_lock_dir = std::env::var("VTUN_LOCK_DIR")
+        .unwrap_or_else(|_| "/var/run/vtun".to_string());
+    println!("cargo:rustc-env=VTUN_LOCK_DIR={}", vtun_lock_dir);
 }

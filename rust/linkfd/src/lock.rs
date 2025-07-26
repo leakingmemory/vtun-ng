@@ -22,7 +22,7 @@ use crate::lfd_mod::VTUN_MULTI_DENY;
 
 const VTUN_LOCK_DIR: &str = env!("VTUN_LOCK_DIR");
 
-fn create_lock_rs(file: &str) -> bool  {
+fn create_lock(file: &str) -> bool  {
     let pid = unsafe { libc::getpid() };
     let mut success = true;
 
@@ -57,7 +57,7 @@ fn create_lock_rs(file: &str) -> bool  {
     success
 }
 
-pub fn read_lock_rs(file: &str) -> libc::pid_t {
+pub fn read_lock(file: &str) -> libc::pid_t {
     /* Read PID from existing lock */
     let fd;
     {
@@ -108,7 +108,7 @@ pub fn lock_host_rs(host: &lfd_mod::VtunHost) -> bool {
     let lock_file = format!("{}/{}", VTUN_LOCK_DIR, unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
 
     /* Check if lock already exists. */
-    let pid = read_lock_rs(&lock_file);
+    let pid = read_lock(&lock_file);
     if pid > 0 {
         /* Old process is alive */
         if host.multi == lfd_mod::VTUN_MULTI_KILL {
@@ -147,29 +147,19 @@ pub fn lock_host_rs(host: &lfd_mod::VtunHost) -> bool {
             return false;
         }
     }
-    create_lock_rs(lock_file.as_str())
+    create_lock(lock_file.as_str())
 }
 
-#[no_mangle]
-pub extern "C" fn read_lock(host: *const libc::c_char) -> libc::pid_t {
-    let host = unsafe { CStr::from_ptr(host) }.to_str().unwrap();
-    read_lock_rs(host)
-}
-#[no_mangle]
-pub extern "C" fn create_lock(host: *const libc::c_char) -> libc::c_int {
-    let host = unsafe { CStr::from_ptr(host) }.to_str().unwrap();
-    if create_lock_rs(host) {
-        0
-    } else {
-        -1
+pub fn unlock_host(host: &lfd_mod::VtunHost)
+{
+    if host.multi == lfd_mod::VTUN_MULTI_ALLOW {
+        return;
     }
-}
-#[no_mangle]
-pub extern "C" fn lock_host(host: *mut lfd_mod::VtunHost) -> libc::c_int {
-    let host = unsafe { &mut *host };
-    if lock_host_rs(host) {
-        0
-    } else {
-        -1
+
+    let lock_file = format!("{}/{}\0", VTUN_LOCK_DIR, unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
+
+    if unsafe { libc::unlink(lock_file.as_ptr() as *const libc::c_char) } < 0  {
+        let msg = format!("Unable to remove lock {}\n\0", lock_file);
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
     }
 }

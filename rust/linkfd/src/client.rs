@@ -21,9 +21,7 @@
  * $Id: client.c,v 1.11.2.4 2016/10/01 21:27:51 mtbishop Exp $
  */
 use std::{mem, ptr, thread};
-use std::cell::{RefCell, UnsafeCell};
 use std::ffi::CStr;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
@@ -67,7 +65,7 @@ pub fn client_rs(host: &mut lfd_mod::VtunHost)
         libc::sigaction(libc::SIGCHLD, &sa, ptr::null_mut());
     }
     let sigterm_restore = {
-        let mut client_ctx = Arc::clone(&client_ctx);
+        let client_ctx = Arc::clone(&client_ctx);
         match unsafe { low_level::register(libc::SIGTERM, move || {
             client_ctx.sig_term()
         }) } {
@@ -76,7 +74,7 @@ pub fn client_rs(host: &mut lfd_mod::VtunHost)
         }
     };
     let sigint_restore = {
-        let mut client_ctx = Arc::clone(&client_ctx);
+        let client_ctx = Arc::clone(&client_ctx);
         match unsafe { low_level::register(libc::SIGINT, move || {
             client_ctx.sig_term()
         }) } {
@@ -157,7 +155,7 @@ pub fn client_rs(host: &mut lfd_mod::VtunHost)
             let msg = format!("{} connecting to {}", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(lfd_mod::vtun.svr_name) }.to_str().unwrap());
             tunnel::set_title(msg.as_str());
         }
-        if (unsafe { &lfd_mod::vtun }.quiet == 0) {
+        if unsafe { &lfd_mod::vtun }.quiet == 0 {
             let msg = format!("Connecting to {}\n\0", unsafe { CStr::from_ptr(lfd_mod::vtun.svr_name) }.to_str().unwrap());
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
         }
@@ -169,7 +167,7 @@ pub fn client_rs(host: &mut lfd_mod::VtunHost)
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
             }
         } else {
-            if( auth::auth_client_rs(s, host) ){
+            if auth::auth_client_rs(s, host) {
                 let msg = format!("Session {}[{}] opened\n\0", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(lfd_mod::vtun.svr_name) }.to_str().unwrap());
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,msg.as_ptr() as *mut libc::c_char); }
 

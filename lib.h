@@ -58,34 +58,10 @@
 int readn_t(int fd, void *buf, size_t count, time_t timeout);
 int print_p(int f, const char *ftm, ...);
 
-#ifdef HAVE_WORKING_FORK
-int  run_cmd(void *d, void *opt);
-#endif
-
 /* signal safe syslog function */
 void vtun_syslog (int priority, char *format, ...);
 
-void io_init(void);
 int is_io_cancelled(void);
-
-/* Read exactly len bytes (Signal safe)*/
-static inline int read_n(int fd, char *buf, int len)
-{
-	register int t=0, w;
-
-	while (!is_io_cancelled() && len > 0) {
-	  if( (w = read(fd, buf, len)) < 0 ){
-	     if( errno == EINTR || errno == EAGAIN )
- 	        continue;
-	     return -1;
-	  }
-	  if( !w )
-	     return 0;
-	  len -= w; buf += w; t += w;
-	}
-
-	return t;
-}   
 
 /* Write exactly len bytes (Signal safe)*/
 static inline int write_n(int fd, char *buf, int len)

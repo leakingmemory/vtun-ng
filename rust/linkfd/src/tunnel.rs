@@ -447,10 +447,8 @@ fn tunnel_setup_proto(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Dri
     0
 }
 
-#[no_mangle]
-pub extern "C" fn tunnel(host: *mut lfd_mod::VtunHost) -> libc::c_int
+pub fn tunnel(host: &mut lfd_mod::VtunHost) -> libc::c_int
 {
-    let host = unsafe {&mut *host};
     let mut dev_specified: bool = false;
     let mut dev: &str = "";
     let mut interface_already_open: bool = false;

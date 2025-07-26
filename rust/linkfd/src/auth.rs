@@ -248,8 +248,7 @@ fn get_tokenize_length(slice: &mut [u8]) -> usize {
     len
 }
 /* Authentication (Server side) */
-#[no_mangle]
-pub extern "C" fn auth_server(fd: i32) -> *mut lfd_mod::VtunHost {
+pub fn auth_server(fd: i32) -> Option<lfd_mod::VtunHost> {
     tunnel::set_title("authentication");
 
     let fmt = format!("VTUN server ver {}\n", lfd_mod::VTUN_VER);
@@ -392,10 +391,10 @@ pub extern "C" fn auth_server(fd: i32) -> *mut lfd_mod::VtunHost {
     }
 
     match h {
-        Some(ref mut h) => *h as *mut lfd_mod::VtunHost,
+        Some(ref mut h) => Some((*h).clone()),
         None => {
             print_p(fd, "ERR\n".as_bytes());
-            std::ptr::null_mut()
+            None
         }
     }
 }

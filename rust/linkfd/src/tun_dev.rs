@@ -293,10 +293,7 @@ impl driver::Driver for TunDev {
         }
     }
     fn detach(&mut self) -> i32 {
-        let fd = match self.fd {
-            Some(fd) => fd,
-            None => -1
-        };
+        let fd = self.fd.unwrap_or_else(|| -1);
         self.fd = None;
         fd
     }

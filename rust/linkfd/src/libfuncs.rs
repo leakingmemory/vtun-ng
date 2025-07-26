@@ -18,7 +18,6 @@
  */
 
 /* Read N bytes with timeout */
-use std::ptr;
 use std::ptr::null_mut;
 use crate::{auth, lfd_mod, linkfd};
 /* Read exactly len bytes (Signal safe)*/
@@ -35,7 +34,7 @@ pub fn read_n(fd: libc::c_int, buf: &[u8]) -> Option<usize>
             }
             return None;
         }
-        if (w == 0) {
+        if w == 0 {
             return Some(off);
         }
         off = off + w as usize;
@@ -56,7 +55,7 @@ pub(crate) extern "C" fn readn_t(fd: libc::c_int, buf: *mut u8, count: libc::siz
     };
 
     unsafe {
-        if( libc::select(fd+1,&mut fdset, null_mut(), null_mut(), &mut tv) <= 0) {
+        if libc::select(fd+1,&mut fdset, null_mut(), null_mut(), &mut tv) <= 0 {
             return -1;
         }
     }
@@ -71,7 +70,7 @@ pub(crate) extern "C" fn readn_t(fd: libc::c_int, buf: *mut u8, count: libc::siz
 pub fn print_p(fd: libc::c_int, buf: &[u8]) -> bool {
     let mut padded = [0u8; auth::VTUN_MESG_SIZE];
     for i in 0..buf.len() {
-        if (i >= auth::VTUN_MESG_SIZE) {
+        if i >= auth::VTUN_MESG_SIZE {
             break;
         }
         padded[i] = buf[i];

@@ -50,8 +50,8 @@ LOCK_DIR = ${VAR_DIR}/lock/vtunngd
 DEFS = -DVTUN_CONFIG_FILE=\"$(CFG_FILE)\" -DVTUN_PID_FILE=\"$(PID_FILE)\" \
        -DVTUN_STAT_DIR=\"$(STAT_DIR)\" -DVTUN_LOCK_DIR=\"$(LOCK_DIR)\"
 
-OBJS = main.o cfg_file.tab.o cfg_file.lex.o server.o lib.o \
-       llist.o lock.o netlib.o
+OBJS = main.o cfg_file.tab.o cfg_file.lex.o lib.o \
+       llist.o netlib.o
 
 RUSTLIBDIR = -Lrust/linkfd/target/release
 RUSTLIBLNK = -lvtun_linkfd

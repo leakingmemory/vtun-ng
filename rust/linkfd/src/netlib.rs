@@ -28,7 +28,7 @@ pub fn connect_t(s: i32, svr: *const libc::sockaddr, timeout: libc::time_t) -> b
     let mut tv: timeval = timeval { tv_sec: timeout, tv_usec: 0 };
 
     let sock_flags= unsafe { libc::fcntl(s,libc::F_GETFL) };
-    if( unsafe { libc::fcntl(s,libc::F_SETFL,libc::O_NONBLOCK) } < 0 ) {
+    if unsafe { libc::fcntl(s,libc::F_SETFL,libc::O_NONBLOCK) } < 0 {
         return false;
     }
 
@@ -43,7 +43,7 @@ pub fn connect_t(s: i32, svr: *const libc::sockaddr, timeout: libc::time_t) -> b
         libc::FD_SET(s, &mut fdset);
     }
     let mut errno: libc::c_int;
-    if( unsafe { libc::select(s+1,ptr::null_mut(),&mut fdset,ptr::null_mut(),if timeout > 0 { &mut tv } else { ptr::null_mut() }) } > 0 ){
+    if unsafe { libc::select(s+1,ptr::null_mut(),&mut fdset,ptr::null_mut(),if timeout > 0 { &mut tv } else { ptr::null_mut() }) } > 0 {
         let mut l: libc::socklen_t = size_of::<libc::c_int>() as libc::socklen_t;
         errno=0;
         unsafe { libc::getsockopt(s,libc::SOL_SOCKET,libc::SO_ERROR,&mut errno as *mut libc::c_int as *mut libc::c_void,&mut l); }
@@ -74,7 +74,7 @@ fn getifaddr(ifname: &str) -> Option<u32>
         ifr.ifr_name[i] = if ifname[i] < 128 { ifname[i] as libc::c_char } else { (ifname[i] - 128u8) as libc::c_char - (127 as libc::c_char)};
     }
 
-    if( unsafe { libc::ioctl(s, libc::SIOCGIFADDR, &ifr) } < 0 ){
+    if unsafe { libc::ioctl(s, libc::SIOCGIFADDR, &ifr) } < 0 {
         unsafe { libc::close(s); }
         return None;
     }
@@ -93,7 +93,7 @@ pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut lfd_mod::VtunHost,
     if con {
         /* Use address of the already connected socket. */
         let mut opt: libc::socklen_t = size_of::<libc::sockaddr_in>() as libc::socklen_t;
-        if (unsafe { libc::getsockname(host.rmt_fd, (addr as *mut libc::sockaddr_in).cast(), &mut opt) } < 0) {
+        if unsafe { libc::getsockname(host.rmt_fd, (addr as *mut libc::sockaddr_in).cast(), &mut opt) } < 0 {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't get local socket address\n\0".as_ptr() as *mut libc::c_char); }
             return false;
         }
@@ -145,7 +145,7 @@ pub fn server_addr(addr: &mut libc::sockaddr_in, host: &mut lfd_mod::VtunHost) -
     }
     straddr.push_str("\0");
 
-    if (host.sopt.raddr != std::ptr::null_mut()) {
+    if host.sopt.raddr != ptr::null_mut() {
         unsafe { libc::free(host.sopt.raddr as *mut libc::c_void) };
     }
     host.sopt.raddr = unsafe { libc::strdup(straddr.as_ptr() as *const libc::c_char) };
@@ -179,9 +179,9 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &lfd_mod::VtunAddr) 
     } else if vaddr.type_ == VTUN_ADDR_NAME {
         let hostname = unsafe { CStr::from_ptr(vaddr.name) }.to_str().unwrap().to_string();
         let hent = dns_lookup::lookup_host(hostname.as_str()).unwrap_or(Vec::new());
-        if (hent.is_empty()) {
+        if hent.is_empty() {
             let msg = format!("Can't resolv local address {}\n\0", hostname);
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, hostname.as_ptr() as *mut libc::c_char); }
+            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
             return false;
         }
         let hent = hent[0];
@@ -192,7 +192,7 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &lfd_mod::VtunAddr) 
         addr.sin_addr.s_addr = libc::INADDR_ANY;
     }
 
-    if (vaddr.port != 0) {
+    if vaddr.port != 0 {
         addr.sin_port = (vaddr.port as u16).to_be();
     }
 
@@ -201,8 +201,8 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &lfd_mod::VtunAddr) 
 
 #[no_mangle]
 pub extern "C" fn local_addr(addr: *mut libc::sockaddr_in, host: *mut lfd_mod::VtunHost, con: libc::c_int) -> libc::c_int {
-    let mut host_ = unsafe { &mut *host };
-    let mut addr_ = unsafe { &mut *addr };
+    let host_ = unsafe { &mut *host };
+    let addr_ = unsafe { &mut *addr };
     if local_addr_rs(addr_, host_, con != 0) {
         0
     } else {
@@ -211,9 +211,9 @@ pub extern "C" fn local_addr(addr: *mut libc::sockaddr_in, host: *mut lfd_mod::V
 }
 
 #[no_mangle]
-pub extern "C" fn generic_addr(addr: *mut libc::sockaddr_in, vaddr: *mut lfd_mod::VtunAddr) -> libc::c_int {
-    let mut addr_ = unsafe { &mut *addr };
-    let mut vaddr_ = unsafe { &mut *vaddr };
+pub extern "C" fn generic_addr(addr: *mut libc::sockaddr_in, vaddr: *const lfd_mod::VtunAddr) -> libc::c_int {
+    let addr_ = unsafe { &mut *addr };
+    let vaddr_ = unsafe { &*vaddr };
     if generic_addr_rs(addr_, vaddr_) {
         0
     } else {

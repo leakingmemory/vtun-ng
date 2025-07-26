@@ -18,6 +18,7 @@
  */
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct VtunSopt {
     pub dev: *mut libc::c_char,
     pub laddr: *mut libc::c_char,
@@ -28,6 +29,7 @@ pub struct VtunSopt {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct VtunStat {
     pub byte_in: u64,
     pub byte_out: u64,
@@ -37,6 +39,7 @@ pub struct VtunStat {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct VtunAddr {
     pub name: *mut libc::c_char,
     pub ip: *mut libc::c_char,
@@ -51,12 +54,14 @@ pub struct LListElement {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct LList {
     pub head: *mut LListElement,
     pub tail: *mut LListElement
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct VtunHost {
     pub host: *mut libc::c_char,
     pub passwd: *mut libc::c_char,
@@ -134,6 +139,9 @@ pub const VTUN_MULTI_KILL: libc::c_int =	2;
 
 pub const VTUN_ADDR_IFACE: libc::c_int =	0x01;
 pub const VTUN_ADDR_NAME: libc::c_int =  0x02;
+
+pub const VTUN_STAND_ALONE: libc::c_int =	0;
+pub const VTUN_INETD: libc::c_int =		1;
 
 pub const VTUN_VER: &str = "3.X 07/24/2025";
 

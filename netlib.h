@@ -35,6 +35,5 @@
 int udp_session(struct vtun_host *host);
 
 int local_addr(struct sockaddr_in *addr, struct vtun_host *host, int con);
-int generic_addr(struct sockaddr_in *addr, struct vtun_addr *vaddr);
 
 #endif /* _VTUN_NETDEV_H */

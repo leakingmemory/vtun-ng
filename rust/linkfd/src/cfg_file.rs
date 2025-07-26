@@ -26,6 +26,8 @@ extern "C" {
 
 pub fn find_host_rs(host: &str) -> Option<&mut lfd_mod::VtunHost> {
     unsafe {
+        let mut host = host.to_string();
+        host.push_str("\0");
         let host = find_host(host.as_ptr() as *const libc::c_char);
         if host.is_null() {
             return None;

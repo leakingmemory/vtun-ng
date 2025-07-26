@@ -316,7 +316,7 @@ impl LfdEncrypt {
         self.ctx_enc.set_padding(false);
         if self.enc_init_first_time
         {
-            let tmpstr = format!("{} encryption initialized", cipher_name);
+            let tmpstr = format!("{} encryption initialized\n\0", cipher_name);
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_ptr() as *mut libc::c_char); }
             self.enc_init_first_time = false;
         }
@@ -386,7 +386,7 @@ impl LfdEncrypt {
         self.ctx_dec.set_padding(false);
         if self.dec_init_first_time
         {
-            let tmpstr = format!("{} decryption initialized", cipher_name);
+            let tmpstr = format!("{} decryption initialized\n\0", cipher_name);
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_ptr() as *mut libc::c_char); }
             self.dec_init_first_time = false;
         }

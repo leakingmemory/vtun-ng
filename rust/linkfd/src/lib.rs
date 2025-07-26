@@ -20,3 +20,5 @@ mod auth;
 mod libfuncs;
 mod cfg_file;
 mod lock;
+mod client;
+mod netlib;

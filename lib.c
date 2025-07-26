@@ -317,24 +317,6 @@ int run_cmd(void *d, void *opt)
 }
 #endif
 
-void free_sopt( struct vtun_sopt *opt )
-{
-     if( opt->dev ){
-	free(opt->dev);
-        opt->dev = NULL;
-     }
-
-     if( opt->laddr ){
-	free(opt->laddr);
-        opt->laddr = NULL;
-     }
-
-     if( opt->raddr ){
-	free(opt->raddr);
-        opt->raddr = NULL;
-     }
-}
-
 void vtun_syslog (int priority, char *format, ...)
 {
    static volatile sig_atomic_t in_syslog= 0;

@@ -18,8 +18,9 @@
  */
 
 /* Read N bytes with timeout */
+use std::ptr;
 use std::ptr::null_mut;
-use crate::{auth, linkfd};
+use crate::{auth, lfd_mod, linkfd};
 /* Read exactly len bytes (Signal safe)*/
 pub fn read_n(fd: libc::c_int, buf: &[u8]) -> Option<usize>
 {
@@ -55,7 +56,6 @@ pub(crate) extern "C" fn readn_t(fd: libc::c_int, buf: *mut u8, count: libc::siz
     };
 
     unsafe {
-        libc::FD_SET(fd,&mut fdset);
         if( libc::select(fd+1,&mut fdset, null_mut(), null_mut(), &mut tv) <= 0) {
             return -1;
         }
@@ -78,4 +78,22 @@ pub fn print_p(fd: libc::c_int, buf: &[u8]) -> bool {
     }
     let res = unsafe { libc::write(fd, padded.as_ptr() as *const libc::c_void, auth::VTUN_MESG_SIZE) };
     res == auth::VTUN_MESG_SIZE as libc::ssize_t
+}
+
+pub fn free_sopt( opt: &mut lfd_mod::VtunSopt )
+{
+    if opt.dev != null_mut() {
+        unsafe { libc::free(opt.dev as *mut libc::c_void); }
+        opt.dev = null_mut();
+    }
+
+    if opt.laddr != null_mut() {
+        unsafe { libc::free(opt.laddr as *mut libc::c_void); }
+        opt.laddr = null_mut();
+    }
+
+    if opt.raddr != null_mut() {
+        unsafe { libc::free(opt.raddr as *mut libc::c_void); }
+        opt.raddr = null_mut();
+    }
 }

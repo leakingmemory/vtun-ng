@@ -401,7 +401,7 @@ pub extern "C" fn auth_server(fd: i32) -> *mut lfd_mod::VtunHost {
 }
 
 /* Authentication (Client side) */
-fn auth_client_rs(fd: libc::c_int, host: &mut lfd_mod::VtunHost) -> bool {
+pub(crate) fn auth_client_rs(fd: libc::c_int, host: &mut lfd_mod::VtunHost) -> bool {
     let mut success = false;
     let mut stage = ST_INIT;
 

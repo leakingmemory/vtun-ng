@@ -61,7 +61,6 @@ int print_p(int f, const char *ftm, ...);
 #ifdef HAVE_WORKING_FORK
 int  run_cmd(void *d, void *opt);
 #endif
-void free_sopt(struct vtun_sopt *opt);
 
 /* signal safe syslog function */
 void vtun_syslog (int priority, char *format, ...);

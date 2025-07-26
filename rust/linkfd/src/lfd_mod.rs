@@ -1,3 +1,22 @@
+/*
+    VTun - Virtual Tunnel over TCP/IP network.
+
+    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 2025 Jan-Espen Oversand <sigsegv@radiotube.org>
+
+    VTun has been derived from VPPP package by Maxim Krasnyansky.
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ */
+
 #[repr(C)]
 pub struct VtunSopt {
     pub dev: *mut libc::c_char,
@@ -103,12 +122,18 @@ pub const VTUN_ENC_AES256OFB: libc::c_int = 16;
 
 pub const VTUN_LEGACY_ENCRYPT: libc::c_int = 999;
 
+/* Mask to drop the flags which will be supplied by the server */
+pub const VTUN_CLNT_MASK: libc::c_int =  0xf000;
+
 pub const  VTUN_PERSIST_KEEPIF: libc::c_int =     2;
 
 /* Support for multiple connections */
 pub const VTUN_MULTI_DENY: libc::c_int =	0;  /* no */
 pub const VTUN_MULTI_ALLOW: libc::c_int =	1;  /* yes */
 pub const VTUN_MULTI_KILL: libc::c_int =	2;
+
+pub const VTUN_ADDR_IFACE: libc::c_int =	0x01;
+pub const VTUN_ADDR_NAME: libc::c_int =  0x02;
 
 pub const VTUN_VER: &str = "3.X 07/24/2025";
 

@@ -1130,16 +1130,30 @@ impl ParsingContext for BindaddrConfigParsingContext {
 struct AddrConfigParsingContext {
     parent: Weak<Mutex<dyn ParsingContext>>,
     pub ipv4: Option<u32>,
+    pub hostname: Option<String>
 }
 
 impl AddrConfigParsingContext {
     pub fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
         Self {
             parent: Rc::downgrade(&parent),
-            ipv4: None
+            ipv4: None,
+            hostname: None
         }
     }
     pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
+        match self.hostname {
+            Some(ref hostname) => {
+                let hostname = format!("{}\0", hostname);
+                if bindaddr.name != null_mut() {
+                    unsafe { libc::free(bindaddr.name as *mut libc::c_void); }
+                }
+                bindaddr.name = unsafe { libc::strdup(hostname.as_ptr() as *mut libc::c_char) };
+                bindaddr.type_ = lfd_mod::VTUN_ADDR_NAME;
+                return;
+            }
+            None => {}
+        }
         match self.ipv4 {
             Some(ipv4) => {
                 let ipv4 = format!("{}\0", std::net::Ipv4Addr::from(ipv4).to_string());
@@ -1150,6 +1164,13 @@ impl AddrConfigParsingContext {
             },
             None => {}
         }
+    }
+    fn hostname(&mut self, hostname: String) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if self.hostname.is_some() || self.ipv4.is_some() {
+            return self.UnexpectedToken();
+        }
+        self.hostname = Some(hostname);
+        None
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         let msg = format!("Unexpected token after addr\n\0");
@@ -1171,14 +1192,16 @@ impl ParsingContext for AddrConfigParsingContext {
     fn Token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::IPv4(ipv4) => {
-                if self.ipv4.is_some() {
+                if self.hostname.is_some() || self.ipv4.is_some() {
                     return self.UnexpectedToken();
                 }
                 self.ipv4 = Some(ipv4);
                 None
             },
+            Token::Ident(hostname) => self.hostname(hostname),
+            Token::Quoted(hostname) => self.hostname(hostname),
             Token::Semicolon => {
-                if self.ipv4.is_none() {
+                if self.hostname.is_none() && self.ipv4.is_none() {
                     return self.UnexpectedToken();
                 }
                 self.parent.upgrade()

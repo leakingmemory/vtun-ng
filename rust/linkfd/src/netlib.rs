@@ -185,9 +185,10 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
             return false;
         }
-        let hent = hent[0];
-        if let std::net::IpAddr::V4(ipv4) = hent {
-            addr.sin_addr.s_addr = u32::from_ne_bytes(ipv4.octets());
+        for hent in hent {
+            if let std::net::IpAddr::V4(ipv4) = hent {
+                addr.sin_addr.s_addr = u32::from_ne_bytes(ipv4.octets());
+            }
         }
     } else if vaddr.ip != null_mut() {
         let ip = unsafe { CStr::from_ptr(vaddr.ip) }.to_str().unwrap().to_string();

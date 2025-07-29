@@ -18,7 +18,7 @@
  */
 
 use std::ptr;
-use crate::{lfd_mod, llist};
+use crate::{lfd_mod, linkfd, llist};
 
 fn free_non_null(ptr: *mut libc::c_char) {
     if !ptr.is_null() {
@@ -171,18 +171,18 @@ impl VtunHost {
             dev: ptr::null_mut(),
             up: llist::LList::new(),
             down: llist::LList::new(),
-            flags: 0,
-            timeout: 0,
+            flags: linkfd::VTUN_TTY | linkfd::VTUN_TCP,
+            timeout: lfd_mod::VTUN_CONNECT_TIMEOUT,
             spd_in: 0,
             spd_out: 0,
             zlevel: 0,
             cipher: 0,
-            rmt_fd: 0,
-            loc_fd: 0,
+            rmt_fd: -1,
+            loc_fd: -1,
             persist: 0,
-            multi: 0,
-            ka_interval: 0,
-            ka_maxfail: 0,
+            multi: lfd_mod::VTUN_MULTI_ALLOW,
+            ka_interval: 30,
+            ka_maxfail: 4,
             src_addr: VtunAddr::new(),
             stat: VtunStat::new(),
             sopt: VtunSopt::new(),

@@ -60,7 +60,7 @@ fn connection(sock: i32) {
         }
     }
 
-    let ip = std::net::Ipv4Addr::from(cl_addr.sin_addr.s_addr).to_string();
+    let ip = std::net::Ipv4Addr::from(u32::from_be(cl_addr.sin_addr.s_addr)).to_string();
 
     linkfd::io_init();
 

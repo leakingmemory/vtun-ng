@@ -442,9 +442,37 @@ impl ParsingContext for CompressConfigParsingContext {
                 self.compress_type = 0;
                 None
             },
-            Token::Semicolon => {
-                if self.compress_type == -1 || (self.separator && self.compress_level != -1) {
+            Token::Ident(ident) => {
+                if (self.compress_type != -1) {
                     return self.UnexpectedToken();
+                }
+                self.compress_type = match ident.as_str() {
+                    "zlib" => linkfd::VTUN_ZLIB,
+                    "lzo" => linkfd::VTUN_LZO,
+                    _ => return self.UnexpectedToken()
+                };
+                None
+            }
+            Token::Colon => {
+                if self.compress_type == -1 || self.separator {
+                    return self.UnexpectedToken();
+                }
+                self.separator = true;
+                None
+            }
+            Token::Number(num) => {
+                if (self.compress_type == -1 || !self.separator || self.compress_level != -1) {
+                    return self.UnexpectedToken();
+                }
+                self.compress_level = num as i32;
+                None
+            }
+            Token::Semicolon => {
+                if self.compress_type == -1 || (self.separator && self.compress_level == -1) {
+                    return self.UnexpectedToken();
+                }
+                if self.compress_level == -1 {
+                    self.compress_level = 1;
                 }
                 self.parent.upgrade()
             }
@@ -1038,7 +1066,7 @@ impl ParsingContext for KwUpDownParsingContext {
 struct UpDownParsingContext {
     parent: Weak<Mutex<dyn ParsingContext>>,
     ident: &'static str,
-    pub cmds: Vec<Rc<Mutex<StringOptionParsingContext>>>
+    pub cmds: Vec<Rc<Mutex<CommandConfigParsingContext>>>
 }
 
 impl UpDownParsingContext {
@@ -1053,6 +1081,7 @@ impl UpDownParsingContext {
         for cmdmtx in self.cmds.iter() {
             let mut nullterm_cmd;
             let nullterm_args;
+            let mut flags: libc::c_int = 0;
             let vtun = unsafe { &lfd_mod::vtun };
             {
                 let cmd = cmdmtx.lock().unwrap();
@@ -1062,10 +1091,27 @@ impl UpDownParsingContext {
                     Token::KwIfconfig => unsafe { CStr::from_ptr(vtun.ifcfg) }.to_str().unwrap().to_string(),
                     Token::KwPpp => unsafe { CStr::from_ptr(vtun.ppp) }.to_str().unwrap().to_string(),
                     Token::KwRoute => unsafe { CStr::from_ptr(vtun.route) }.to_str().unwrap().to_string(),
+                    Token::KwProgram => match &cmd.path {
+                        None => "".to_string(),
+                        Some(path) => path.to_string()
+                    },
                     _ => continue
                 };
                 nullterm_cmd.push_str("\0");
-                nullterm_args = format!("{}\0", cmd.value);
+                nullterm_args = match cmd.args {
+                    Some(ref args) => format!("{}\0", args),
+                    None => "\0".to_string()
+                };
+                if (cmd.wait) {
+                    flags = flags | linkfd::VTUN_CMD_WAIT;
+                }
+                if (cmd.delay) {
+                    flags = flags | linkfd::VTUN_CMD_DELAY;
+                }
+                // Not in use in the old code
+                /*if (cmd.use_shell) {
+                    flags = flags | linkfd::VTUN_CMD_SHELL;
+                }*/
             }
             let cmdobj = {
                 let cmdobj;
@@ -1074,6 +1120,7 @@ impl UpDownParsingContext {
                     libc::memset(cmdobj as *mut libc::c_void, 0, size_of::<tunnel::VtunCmd>());
                     (*cmdobj).prog = libc::strdup(nullterm_cmd.as_ptr() as *mut libc::c_char);
                     (*cmdobj).args = libc::strdup(nullterm_args.as_ptr() as *mut libc::c_char);
+                    (*cmdobj).flags = flags;
                 }
                 cmdobj
             };
@@ -1109,28 +1156,33 @@ impl ParsingContext for UpDownParsingContext {
     }
     fn Token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
+            Token::KwProgram => {
+                let program_ctx = Rc::new(Mutex::new(CommandConfigParsingContext::new(Rc::clone(&ctx), "program", token)));
+                self.cmds.push(program_ctx.clone());
+                Some(program_ctx)
+            },
             Token::KwIfconfig => {
-                let ifconfig_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "ifconfig", token)));
+                let ifconfig_ctx = Rc::new(Mutex::new(CommandConfigParsingContext::new(Rc::clone(&ctx), "ifconfig", token)));
                 self.cmds.push(ifconfig_ctx.clone());
                 Some(ifconfig_ctx)
             },
             Token::KwRoute => {
-                let route_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "route", token)));
+                let route_ctx = Rc::new(Mutex::new(CommandConfigParsingContext::new(Rc::clone(&ctx), "route", token)));
                 self.cmds.push(route_ctx.clone());
                 Some(route_ctx)
             },
             Token::KwFirewall => {
-                let firewall_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "firewall", token)));
+                let firewall_ctx = Rc::new(Mutex::new(CommandConfigParsingContext::new(Rc::clone(&ctx), "firewall", token)));
                 self.cmds.push(firewall_ctx.clone());
                 Some(firewall_ctx)
             },
             Token::KwIp => {
-                let ip_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "ip", token)));
+                let ip_ctx = Rc::new(Mutex::new(CommandConfigParsingContext::new(Rc::clone(&ctx), "ip", token)));
                 self.cmds.push(ip_ctx.clone());
                 Some(ip_ctx)
             },
             Token::KwPpp => {
-                let ppp_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "ppp", token)));
+                let ppp_ctx = Rc::new(Mutex::new(CommandConfigParsingContext::new(Rc::clone(&ctx), "ppp", token)));
                 self.cmds.push(ppp_ctx.clone());
                 Some(ppp_ctx)
             },
@@ -1143,6 +1195,107 @@ impl ParsingContext for UpDownParsingContext {
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
                 self.SetFailed();
                 None
+            }
+        }
+    }
+}
+
+struct CommandConfigParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    pub token: Token,
+    pub token_name: &'static str,
+    pub path: Option<String>,
+    pub args: Option<String>,
+    pub wait: bool,
+    pub delay: bool,
+    // Not in use in the old code
+    //pub use_shell: bool
+}
+
+impl CommandConfigParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>, token_name: &'static str, token: Token) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            token,
+            token_name,
+            path: None,
+            args: None,
+            wait: false,
+            delay: false,
+            // Not in use in the old code
+            //use_shell: false
+        }
+    }
+    fn HandleString(&mut self, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if matches!(self.token, Token::KwProgram) && self.path.is_none() {
+            self.path = Some(str.to_string());
+            return None;
+        }
+        match &self.args {
+            Some(_) => match str {
+                "wait" => {
+                    if (self.wait) {
+                        return self.UnexpectedToken();
+                    }
+                    self.wait = true;
+                    None
+                },
+                "delay" => {
+                    if (self.delay) {
+                        return self.UnexpectedToken();
+                    }
+                    self.delay = true;
+                    None
+                },
+                // Not in use in the old code
+                /*"shell" => {
+                    if self.use_shell {
+                        return self.UnexpectedToken();
+                    }
+                    self.use_shell = true;
+                    None
+                },*/
+                _ => self.UnexpectedToken()
+            },
+            None => {
+                self.args = Some(str.to_string());
+                None
+            }
+        }
+    }
+    fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        let msg = format!("Unexpected token after {}\n\0", self.token_name);
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        self.SetFailed();
+        None
+    }
+}
+
+impl ParsingContext for CommandConfigParsingContext {
+    fn SetFailed(&mut self) {
+        let msg = format!("Parse error in {}\n\0", self.token_name);
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().SetFailed(),
+            None => {}
+        }
+    }
+
+    fn Token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::Ident(ident) => self.HandleString(ident.as_str()),
+            Token::Quoted(quoted) => self.HandleString(quoted.as_str()),
+            Token::Semicolon => {
+                if matches!(self.token, Token::KwProgram) && self.path.is_none() {
+                    return self.UnexpectedToken();
+                }
+                match &self.args {
+                    None => self.UnexpectedToken(),
+                    Some(_) => self.parent.upgrade()
+                }
+            }
+            _ => {
+                self.UnexpectedToken()
             }
         }
     }

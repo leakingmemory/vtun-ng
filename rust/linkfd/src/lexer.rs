@@ -63,6 +63,7 @@ pub enum Token {
     #[token("proto")]     KwProto,
     #[token("multi")]     KwMulti,
     #[token("backup")]    KwBackup,
+    #[token("program")]   KwProgram,
     #[token("route")]     KwRoute,
     #[token("ifconfig")]  KwIfconfig,
     #[token("ip")]        KwIp,
@@ -80,7 +81,7 @@ pub enum Token {
     #[regex(r"[0-9]+", priority = 2, callback = |lex| parse_number(lex.slice()))]
     Number(u64),
 
-    #[regex(r"[A-Za-z0-9:./_-]+", priority = 1, callback = |lex| lex.slice().to_owned())]
+    #[regex(r"([A-Za-z]:)?[A-Za-z0-9.\\/_-]+", priority = 1, callback = |lex| lex.slice().to_owned())]
     Ident(String),
 
     #[regex(r#""([^"\\]|\\.)*""#, |lex| unescape_dblq_string(lex.slice()))]

@@ -197,7 +197,7 @@ fn split_args(str: & String) -> Vec<String> {
 pub(crate) struct VtunCmd {
     pub(crate) prog: *mut libc::c_char,
     pub(crate) args: *mut libc::c_char,
-    flags: libc::c_int,
+    pub(crate) flags: libc::c_int,
 }
 extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::c_int {
     let prog: Option<String>;

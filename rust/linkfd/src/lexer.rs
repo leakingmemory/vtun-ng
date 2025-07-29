@@ -38,6 +38,8 @@ pub enum Token {
     #[token("default")]   KwDefault,
     #[token("options")]   KwOptions,
     #[token("port")]      KwPort,
+    #[token("bindaddr")]  KwBindaddr,
+    #[token("addr")]      KwAddr,
     #[token("vtun")]      KwVtun,
     #[token("tcp")]       KwTcp,
     #[token("udp")]       KwUdp,
@@ -78,6 +80,9 @@ pub enum Token {
     // ----------------------------------------------------------------
     // Literals
     // ----------------------------------------------------------------
+    #[regex(r"((25[0-5])|(2[0-4][0-9])|([01]?[0-9][0-9]?)\.){3}((25[0-5])|(2[0-4][0-9])|([01]?[0-9][0-9]?))", priority = 3, callback = |lex| parse_ipv4(lex.slice()))]
+    IPv4(u32),
+
     #[regex(r"[0-9]+", priority = 2, callback = |lex| parse_number(lex.slice()))]
     Number(u64),
 
@@ -114,4 +119,15 @@ fn unescape_dblq_string(str: &str) -> String {
         escape = false;
     }
     output
+}
+
+fn parse_ipv4(str: &str) -> u32 {
+    let mut parts = str.split('.');
+    let mut ip = 0;
+    for part in parts {
+        ip = ip << 8;
+        let part: u8 = part.parse().unwrap();
+        ip = ip + part as u32;
+    }
+    ip
 }

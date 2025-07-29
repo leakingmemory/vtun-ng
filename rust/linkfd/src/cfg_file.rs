@@ -14,6 +14,7 @@
 
 use std::{fs, ptr};
 use std::ffi::CStr;
+use std::ptr::null_mut;
 use std::rc::{Rc, Weak};
 use std::sync::Mutex;
 use logos::Logos;
@@ -874,7 +875,8 @@ struct OptionsConfigParsingContext {
     ifconfig_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     route_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     firewall_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
-    ip_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>
+    ip_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
+    bindaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>
 }
 
 impl OptionsConfigParsingContext {
@@ -887,7 +889,8 @@ impl OptionsConfigParsingContext {
             ifconfig_ctx: None,
             route_ctx: None,
             firewall_ctx: None,
-            ip_ctx: None
+            ip_ctx: None,
+            bindaddr_ctx: None
         }
     }
     fn free_non_null(str: *mut libc::c_char) {
@@ -948,6 +951,13 @@ impl OptionsConfigParsingContext {
                 opts.iproute = Self::strdup(&ip_ctx.value);
             }
         }
+        match self.bindaddr_ctx {
+            None => {},
+            Some(ref bindaddr_ctx) => {
+                let bindaddr_ctx = bindaddr_ctx.lock().unwrap();
+                bindaddr_ctx.apply(&mut opts.bind_addr);
+            }
+        }
     }
 }
 
@@ -997,6 +1007,11 @@ impl ParsingContext for OptionsConfigParsingContext {
                 self.ip_ctx = Some(ip_ctx.clone());
                 Some(ip_ctx)
             },
+            Token::KwBindaddr => {
+                let bindaddr_ctx = Rc::new(Mutex::new(KwBindaddrConfigParsingContext::new(Rc::clone(&ctx))));
+                self.bindaddr_ctx = Some(bindaddr_ctx.clone());
+                Some(bindaddr_ctx)
+            },
             Token::Semicolon => None,
             Token::RBrace => {
                 self.parent.upgrade()
@@ -1007,6 +1022,168 @@ impl ParsingContext for OptionsConfigParsingContext {
                 self.SetFailed();
                 None
             }
+        }
+    }
+}
+
+struct KwBindaddrConfigParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    bindaddr_ctx: Option<Rc<Mutex<BindaddrConfigParsingContext>>>
+}
+
+impl KwBindaddrConfigParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            bindaddr_ctx: None
+        }
+    }
+    pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
+        match self.bindaddr_ctx {
+            None => {},
+            Some(ref bindaddr_ctx) => bindaddr_ctx.lock().unwrap().apply(bindaddr)
+        }
+    }
+}
+
+impl ParsingContext for KwBindaddrConfigParsingContext {
+    fn SetFailed(&mut self) {
+        let msg = format!("Parse error in bindaddr\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().SetFailed(),
+            None => {}
+        }
+    }
+    fn Token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::LBrace => {
+                let parent = match self.parent.upgrade() {
+                    Some(parent) => parent,
+                    None => Rc::clone(ctx)
+                };
+                let bindaddr_ctx = Rc::new(Mutex::new(BindaddrConfigParsingContext::new(parent)));
+                self.bindaddr_ctx = Some(bindaddr_ctx.clone());
+                Some(bindaddr_ctx)
+            },
+            _ => {
+                let msg = format!("Expected {{ afer bindaddr\n\0");
+                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                self.SetFailed();
+                None
+            }
+        }
+    }
+}
+
+struct BindaddrConfigParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    addr_ctx: Option<Rc<Mutex<AddrConfigParsingContext>>>
+}
+
+impl BindaddrConfigParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            addr_ctx: None
+        }
+    }
+    pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
+        match self.addr_ctx {
+            None => {},
+            Some(ref addr_ctx) => {
+                let addr_ctx = addr_ctx.lock().unwrap();
+                addr_ctx.apply(bindaddr)
+            }
+        }
+    }
+    fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        let msg = format!("Unexpected token afer bindaddr\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        self.SetFailed();
+        None
+    }
+}
+
+impl ParsingContext for BindaddrConfigParsingContext {
+    fn SetFailed(&mut self) {
+        let msg = format!("Parse error in bindaddr\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().SetFailed(),
+            None => {}
+        }
+    }
+    fn Token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::KwAddr => {
+                let addr_ctx = Rc::new(Mutex::new(AddrConfigParsingContext::new(Rc::clone(&ctx))));
+                self.addr_ctx = Some(addr_ctx.clone());
+                Some(addr_ctx)
+            },
+            Token::RBrace => self.parent.upgrade(),
+            _ => self.UnexpectedToken()
+        }
+    }
+}
+
+struct AddrConfigParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    pub ipv4: Option<u32>,
+}
+
+impl AddrConfigParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            ipv4: None
+        }
+    }
+    pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
+        match self.ipv4 {
+            Some(ipv4) => {
+                let ipv4 = format!("{}\0", std::net::Ipv4Addr::from(ipv4).to_string());
+                if bindaddr.ip != null_mut() {
+                    unsafe { libc::free(bindaddr.ip as *mut libc::c_void); }
+                }
+                bindaddr.ip = unsafe { libc::strdup(ipv4.as_ptr() as *mut libc::c_char) };
+            },
+            None => {}
+        }
+    }
+    fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        let msg = format!("Unexpected token after addr\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        self.SetFailed();
+        None
+    }
+}
+
+impl ParsingContext for AddrConfigParsingContext {
+    fn SetFailed(&mut self) {
+        let msg = format!("Parse error after addr\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().SetFailed(),
+            None => {}
+        }
+    }
+    fn Token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::IPv4(ipv4) => {
+                if self.ipv4.is_some() {
+                    return self.UnexpectedToken();
+                }
+                self.ipv4 = Some(ipv4);
+                None
+            },
+            Token::Semicolon => {
+                if self.ipv4.is_none() {
+                    return self.UnexpectedToken();
+                }
+                self.parent.upgrade()
+            },
+            _ => self.UnexpectedToken()
         }
     }
 }

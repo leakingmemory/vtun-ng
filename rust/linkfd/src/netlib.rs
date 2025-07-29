@@ -19,6 +19,7 @@
 
 use std::ffi::CStr;
 use std::ptr;
+use std::ptr::null_mut;
 use libc::timeval;
 use crate::{lfd_mod, vtun_host};
 use crate::lfd_mod::VTUN_ADDR_NAME;
@@ -188,6 +189,19 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
         if let std::net::IpAddr::V4(ipv4) = hent {
             addr.sin_addr.s_addr = u32::from_ne_bytes(ipv4.octets());
         }
+    } else if vaddr.ip != null_mut() {
+        let ip = unsafe { CStr::from_ptr(vaddr.ip) }.to_str().unwrap().to_string();
+        let parts = ip.split('.').collect::<Vec<&str>>();
+        if parts.len() != 4 {
+            let msg = format!("Can't decode address {}\n\0", ip);
+            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+            return false;
+        }
+        let mut ip_addr: u32 = 0;
+        for i in 0..4 {
+            ip_addr = ip_addr << 8 | parts[i].parse::<u32>().unwrap();
+        }
+        addr.sin_addr.s_addr = ip_addr.to_be();
     } else {
         addr.sin_addr.s_addr = libc::INADDR_ANY;
     }

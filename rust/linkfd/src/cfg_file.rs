@@ -1078,17 +1078,35 @@ impl ParsingContext for KwBindaddrConfigParsingContext {
 
 struct BindaddrConfigParsingContext {
     parent: Weak<Mutex<dyn ParsingContext>>,
-    addr_ctx: Option<Rc<Mutex<AddrConfigParsingContext>>>
+    addr_ctx: Option<Rc<Mutex<AddrConfigParsingContext>>>,
+    iface_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>
 }
 
 impl BindaddrConfigParsingContext {
     pub fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
         Self {
             parent: Rc::downgrade(&parent),
-            addr_ctx: None
+            addr_ctx: None,
+            iface_ctx: None
         }
     }
     pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
+        match self.iface_ctx {
+            None => {},
+            Some(ref iface_ctx) => {
+                if self.addr_ctx.is_some() {
+                    let msg = format!("Bindaddr iface overrides addr\n\0");
+                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                }
+                let ifname = format!("{}\0", iface_ctx.lock().unwrap().value);
+                if bindaddr.name != null_mut() {
+                    unsafe { libc::free(bindaddr.name as *mut libc::c_void); }
+                }
+                bindaddr.name = unsafe { libc::strdup(ifname.as_ptr() as *mut libc::c_char) };
+                bindaddr.type_ = lfd_mod::VTUN_ADDR_IFACE;
+                return;
+            }
+        }
         match self.addr_ctx {
             None => {},
             Some(ref addr_ctx) => {
@@ -1120,6 +1138,11 @@ impl ParsingContext for BindaddrConfigParsingContext {
                 let addr_ctx = Rc::new(Mutex::new(AddrConfigParsingContext::new(Rc::clone(&ctx))));
                 self.addr_ctx = Some(addr_ctx.clone());
                 Some(addr_ctx)
+            },
+            Token::KwIface => {
+                let iface_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "iface", token)));
+                self.iface_ctx = Some(iface_ctx.clone());
+                Some(iface_ctx)
             },
             Token::RBrace => self.parent.upgrade(),
             _ => self.UnexpectedToken()

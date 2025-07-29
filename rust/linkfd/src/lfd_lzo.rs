@@ -21,8 +21,7 @@
 /* LZO compression module */
 
 use rust_lzo::{worst_compress, LZOContext, LZOError};
-use crate::{lfd_mod, linkfd};
-use crate::lfd_mod::VtunHost;
+use crate::{lfd_mod, linkfd, vtun_host};
 use crate::linkfd::LfdMod;
 
 struct LfdLzo {
@@ -30,7 +29,7 @@ struct LfdLzo {
 }
 
 impl LfdLzo {
-    pub fn new(_host: &VtunHost) -> LfdLzo {
+    pub fn new(_host: &vtun_host::VtunHost) -> LfdLzo {
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "LZO compression initialized\n\0".as_ptr() as *mut libc::c_char); }
         LfdLzo {
             compress_ctx: LZOContext::new()
@@ -49,7 +48,7 @@ impl LfdLzoFactory {
 }
 
 impl linkfd::LfdModFactory for LfdLzoFactory {
-    fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>> {
         Some(Box::new(LfdLzo::new(host)))
     }
 }

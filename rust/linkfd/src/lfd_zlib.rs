@@ -19,7 +19,7 @@
 
 /* ZLIB compression module */
 use std::io::Write;
-use crate::{lfd_mod};
+use crate::{lfd_mod, vtun_host};
 use crate::linkfd::{LfdMod, LfdModFactory};
 
 struct LfdZlib {
@@ -28,7 +28,7 @@ struct LfdZlib {
 }
 
 impl LfdZlib {
-    pub fn new(host: &lfd_mod::VtunHost) -> LfdZlib {
+    pub fn new(host: &vtun_host::VtunHost) -> LfdZlib {
         unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "ZLIB compression initialized\n\0".as_ptr() as *mut libc::c_char); }
         LfdZlib {
             encoder: flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(host.zlevel as u32)),
@@ -47,7 +47,7 @@ impl LfdZlibFactory {
     }
 }
 impl LfdModFactory for LfdZlibFactory {
-    fn create(&self, host: &mut lfd_mod::VtunHost) -> Option<Box<dyn LfdMod>> {
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>> {
         Some(Box::new(LfdZlib::new(host)))
     }
 }

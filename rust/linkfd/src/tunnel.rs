@@ -17,19 +17,19 @@
     GNU General Public License for more details.
  */
 use std::ffi::CStr;
-use crate::{driver, lfd_mod, linkfd, pipe_dev, pty_dev, tcp_proto, tun_dev, udp_proto};
+use crate::{driver, lfd_mod, linkfd, llist, pipe_dev, pty_dev, tcp_proto, tun_dev, udp_proto, vtun_host};
 
 extern "C" {
     #[no_mangle]
     fn set_title_str(title: *const libc::c_char);
     #[no_mangle]
-    fn udp_session(host: *mut lfd_mod::VtunHost) -> libc::c_int;
+    fn udp_session(host: *mut vtun_host::VtunHost) -> libc::c_int;
     #[no_mangle]
     static mut is_rmt_fd_connected: libc::c_int;
 }
 
 /* Travel list from head to tail */
-fn llist_trav(l: &mut lfd_mod::LList, f: extern "C" fn(*mut libc::c_void, *mut libc::c_void) -> libc::c_int, u: *mut libc::c_void) -> *mut libc::c_void {
+fn llist_trav(l: &mut llist::LList, f: extern "C" fn(*mut libc::c_void, *mut libc::c_void) -> libc::c_int, u: *mut libc::c_void) -> *mut libc::c_void {
     let mut i = l.head;
 
     while !i.is_null() {
@@ -48,7 +48,7 @@ pub(crate) fn set_title(title: &str) {
 
 /// Substitutes opt in place off '%X'. 
 /// Returns new string.
-fn subst_opt(str: &str, sopt: Option<&lfd_mod::VtunSopt>) -> Option<String> {
+fn subst_opt(str: &str, sopt: Option<&vtun_host::VtunSopt>) -> Option<String> {
     if str.is_empty() {
         return None;
     }
@@ -194,9 +194,9 @@ fn split_args(str: & String) -> Vec<String> {
 }
 
 #[repr(C)]
-struct VtunCmd {
-    prog: *mut libc::c_char,
-    args: *mut libc::c_char,
+pub(crate) struct VtunCmd {
+    pub(crate) prog: *mut libc::c_char,
+    pub(crate) args: *mut libc::c_char,
     flags: libc::c_int,
 }
 extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::c_int {
@@ -248,7 +248,7 @@ extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::
 
     let sopt;
     if !opt.is_null() {
-        sopt = Some(unsafe {&*(opt as *const lfd_mod::VtunSopt)});
+        sopt = Some(unsafe {&*(opt as *const vtun_host::VtunSopt)});
     } else {
         sopt = None;
     }
@@ -290,7 +290,7 @@ extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::
     }
 }
 
-fn tunnel_lfd(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver, dev: &str, interface_already_open: bool) -> libc::c_int {
+fn tunnel_lfd(host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver, dev: &str, interface_already_open: bool) -> libc::c_int {
     /* TODO - Which platforms do not have fork? */
     unsafe {
         libc::signal(libc::SIGCHLD, libc::SIG_DFL);
@@ -345,7 +345,7 @@ fn tunnel_lfd(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, pro
         let msg = format!("{} running up commands", unsafe {CStr::from_ptr(host.host)}.to_str().unwrap());
         set_title(msg.as_str());
         unsafe {
-            llist_trav(&mut (host.up), run_cmd_rs, &mut host.sopt as *mut lfd_mod::VtunSopt as *mut libc::c_void);
+            llist_trav(&mut (host.up), run_cmd_rs, &mut host.sopt as *mut vtun_host::VtunSopt as *mut libc::c_void);
 
             libc::exit(0);
         }
@@ -382,13 +382,13 @@ fn tunnel_lfd(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, pro
         set_title(ttle.as_str());
     }
     host.loc_fd = driver.io_fd();
-    let linkfd_result = linkfd::linkfd(host as *mut lfd_mod::VtunHost, driver, proto);
+    let linkfd_result = linkfd::linkfd(host as *mut vtun_host::VtunHost, driver, proto);
 
     {
         let ttle = format!("{} running down commands\0", unsafe {CStr::from_ptr(host.host)}.to_str().unwrap());
         set_title(ttle.as_str());
     }
-    llist_trav(&mut host.down, run_cmd_rs, &mut host.sopt as *mut lfd_mod::VtunSopt as *mut libc::c_void);
+    llist_trav(&mut host.down, run_cmd_rs, &mut host.sopt as *mut vtun_host::VtunSopt as *mut libc::c_void);
 
     // TODO - Not to close with 'keep'. (closing is automatic by destructors)
     if host.persist == lfd_mod::VTUN_PERSIST_KEEPIF {
@@ -401,7 +401,7 @@ fn tunnel_lfd(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, pro
     linkfd_result
 }
 
-fn tunnel_setup_proto(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, dev: &str, interface_already_open: bool) -> libc::c_int {
+fn tunnel_setup_proto(host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, dev: &str, interface_already_open: bool) -> libc::c_int {
     if !host.sopt.host.is_null() {
         unsafe { libc::free(host.sopt.host as *mut libc::c_void); }
     }
@@ -431,7 +431,7 @@ fn tunnel_setup_proto(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Dri
         };
         return tunnel_lfd(host, driver, &mut proto, dev, interface_already_open)
     } else if protflags == linkfd::VTUN_UDP {
-        let opt = unsafe { udp_session(host as *mut lfd_mod::VtunHost) };
+        let opt = unsafe { udp_session(host as *mut vtun_host::VtunHost) };
         if opt == -1 {
             unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't establish UDP session\n\0".as_ptr() as *mut libc::c_char); }
             return 0;
@@ -447,7 +447,7 @@ fn tunnel_setup_proto(host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Dri
     0
 }
 
-pub fn tunnel(host: &mut lfd_mod::VtunHost) -> libc::c_int
+pub fn tunnel(host: &mut vtun_host::VtunHost) -> libc::c_int
 {
     let mut dev_specified: bool = false;
     let mut dev: &str = "";

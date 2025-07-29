@@ -40,8 +40,7 @@
 use blowfish::Blowfish;
 use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 use ecb::{Decryptor, Encryptor};
-use crate::{lfd_mod, linkfd};
-use crate::lfd_mod::VtunHost;
+use crate::{lfd_mod, linkfd, vtun_host};
 use crate::linkfd::{LfdModFactory};
 
 pub struct LfdLegacyEncrypt {
@@ -53,7 +52,7 @@ type BlowfishEcbEnc = Encryptor<Blowfish>;
 type BlowfishEcbDec = Decryptor<Blowfish>;
 
 impl LfdLegacyEncrypt {
-    pub fn new(host: *mut VtunHost) -> Option<LfdLegacyEncrypt> {
+    pub fn new(host: *mut vtun_host::VtunHost) -> Option<LfdLegacyEncrypt> {
         let passwd = unsafe { std::ffi::CStr::from_ptr((*host).passwd).to_str().unwrap() };
         let k = md5::compute(passwd.as_bytes());
         let mut key: [u8; 16] = [0u8; 16];
@@ -82,7 +81,7 @@ impl LfdLegacyEncryptFactory {
 }
 
 impl LfdModFactory for LfdLegacyEncryptFactory {
-    fn create(&self, host: &mut VtunHost) -> Option<Box<dyn linkfd::LfdMod>> {
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn linkfd::LfdMod>> {
         match LfdLegacyEncrypt::new(host) {
             None => None,
             Some(lfd_encrypt_mod) => Some(Box::new(lfd_encrypt_mod))

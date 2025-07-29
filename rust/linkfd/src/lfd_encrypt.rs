@@ -43,8 +43,8 @@ use std::ptr::null_mut;
 use std::time::SystemTime;
 use openssl::cipher::{Cipher, CipherRef};
 use openssl::cipher_ctx::CipherCtx;
-use crate::{lfd_mod, linkfd};
-use lfd_mod::{VtunHost, VTUN_ENC_AES128CBC, VTUN_ENC_AES128CFB, VTUN_ENC_AES128OFB, VTUN_ENC_AES256CBC, VTUN_ENC_AES256CFB, VTUN_ENC_AES256OFB, VTUN_ENC_BF128CBC, VTUN_ENC_BF128CFB, VTUN_ENC_BF128OFB, VTUN_ENC_BF256CBC, VTUN_ENC_BF256CFB, VTUN_ENC_BF256OFB};
+use crate::{lfd_mod, linkfd, vtun_host};
+use lfd_mod::{VTUN_ENC_AES128CBC, VTUN_ENC_AES128CFB, VTUN_ENC_AES128OFB, VTUN_ENC_AES256CBC, VTUN_ENC_AES256CFB, VTUN_ENC_AES256OFB, VTUN_ENC_BF128CBC, VTUN_ENC_BF128CFB, VTUN_ENC_BF128OFB, VTUN_ENC_BF256CBC, VTUN_ENC_BF256CFB, VTUN_ENC_BF256OFB};
 use crate::linkfd::LfdMod;
 
 const MAX_GIBBERISH: i32	= 10;
@@ -59,7 +59,7 @@ pub struct LfdEncrypt {
     pub sequence_num: u32,
     pub gibberish: i32,
     pub gib_time_start: u64,
-    pub p_host: *mut VtunHost,
+    pub p_host: *mut vtun_host::VtunHost,
     pub cipher: libc::c_int,
     pub blocksize: u32,
     pub keysize: u32,
@@ -76,7 +76,7 @@ pub struct LfdEncrypt {
 }
 
 impl LfdEncrypt {
-    pub fn prep_key(keysize: usize, host: *mut VtunHost) -> Option<Vec<u8>> {
+    pub fn prep_key(keysize: usize, host: *mut vtun_host::VtunHost) -> Option<Vec<u8>> {
         if keysize != 32 && keysize != 16 {
             return None;
         }
@@ -106,7 +106,7 @@ impl LfdEncrypt {
         }
         Some(pkey)
     }
-    pub fn new(host: *mut VtunHost) -> Option<LfdEncrypt> {
+    pub fn new(host: *mut vtun_host::VtunHost) -> Option<LfdEncrypt> {
         let mut lfd_encrypt: LfdEncrypt = LfdEncrypt {
             sequence_num: 0,
             gibberish: 0,
@@ -612,7 +612,7 @@ impl LfdEncryptFactory {
 }
 
 impl linkfd::LfdModFactory for LfdEncryptFactory {
-    fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>> {
         match LfdEncrypt::new(host) {
             None => None,
             Some(e) => Some(Box::new(e))

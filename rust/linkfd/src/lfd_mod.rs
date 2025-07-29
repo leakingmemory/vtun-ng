@@ -16,74 +16,9 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-
-#[repr(C)]
-#[derive(Clone)]
-pub struct VtunSopt {
-    pub dev: *mut libc::c_char,
-    pub laddr: *mut libc::c_char,
-    pub lport: libc::c_int,
-    pub raddr: *mut libc::c_char,
-    pub rport: libc::c_int,
-    pub host: *mut libc::c_char,
-}
-
-#[repr(C)]
-#[derive(Clone)]
-pub struct VtunStat {
-    pub byte_in: u64,
-    pub byte_out: u64,
-    pub comp_in: u64,
-    pub comp_out: u64,
-    pub file: *mut libc::c_void,
-}
-
-#[repr(C)]
-#[derive(Clone)]
-pub struct VtunAddr {
-    pub name: *mut libc::c_char,
-    pub ip: *mut libc::c_char,
-    pub port: libc::c_int,
-    pub type_: libc::c_int,
-}
-
-#[repr(C)]
-pub struct LListElement {
-    pub next: *mut LListElement,
-    pub data: *mut libc::c_void
-}
-
-#[repr(C)]
-#[derive(Clone)]
-pub struct LList {
-    pub head: *mut LListElement,
-    pub tail: *mut LListElement
-}
-
-#[repr(C)]
-#[derive(Clone)]
-pub struct VtunHost {
-    pub host: *mut libc::c_char,
-    pub passwd: *mut libc::c_char,
-    pub dev: *mut libc::c_char,
-    pub up: LList,
-    pub down: LList,
-    pub flags: libc::c_int,
-    pub timeout: libc::c_int,
-    pub spd_in: libc::c_int,
-    pub spd_out: libc::c_int,
-    pub zlevel: libc::c_int,
-    pub cipher: libc::c_int,
-    pub rmt_fd: libc::c_int,
-    pub loc_fd: libc::c_int,
-    pub persist: libc::c_int,
-    pub multi: libc::c_int,
-    pub ka_interval: libc::c_int,
-    pub ka_maxfail: libc::c_int,
-    pub src_addr: VtunAddr,
-    pub stat: VtunStat,
-    pub sopt: VtunSopt,
-}
+use std::ptr;
+use libc::LOG_DAEMON;
+use crate::vtun_host;
 
 #[repr(C)]
 pub struct VtunOpts {
@@ -101,10 +36,33 @@ pub struct VtunOpts {
 
     pub svr_name: *mut libc::c_char, /* Server's host name */
     pub svr_addr: *mut libc::c_char, /* Server's address (string) */
-    pub bind_addr: VtunAddr, /* Server should listen on this address */
+    pub bind_addr: vtun_host::VtunAddr, /* Server should listen on this address */
     pub svr_type: libc::c_int, /* Server mode */
     pub syslog: libc::c_int, /* Facility to log messages to syslog under */
     pub quiet: libc::c_int, /* Be quiet about common errors */
+}
+
+impl VtunOpts {
+    fn new() -> Self {
+        Self {
+            timeout: -1,
+            persist: -1,
+            cfg_file: ptr::null_mut(),
+            shell: ptr::null_mut(),
+            ppp: ptr::null_mut(),
+            ifcfg: ptr::null_mut(),
+            route: ptr::null_mut(),
+            fwall: ptr::null_mut(),
+            iproute: ptr::null_mut(),
+
+            svr_name: ptr::null_mut(),
+            svr_addr: ptr::null_mut(),
+            bind_addr: vtun_host::VtunAddr::new(),
+            svr_type: -1,
+            syslog: LOG_DAEMON,
+            quiet: 0,
+        }
+    }
 }
 
 pub const VTUN_ENC_BF128ECB: libc::c_int = 1;
@@ -142,6 +100,10 @@ pub const VTUN_ADDR_NAME: libc::c_int =  0x02;
 
 pub const VTUN_STAND_ALONE: libc::c_int =	0;
 pub const VTUN_INETD: libc::c_int =		1;
+
+pub const VTUN_NAT_HACK_CLIENT: libc::c_int =	0x4000;
+pub const VTUN_NAT_HACK_SERVER: libc::c_int =	0x8000;
+pub const VTUN_NAT_HACK_MASK: libc::c_int =	(VTUN_NAT_HACK_CLIENT | VTUN_NAT_HACK_SERVER);
 
 pub const VTUN_VER: &str = "3.X 07/24/2025";
 

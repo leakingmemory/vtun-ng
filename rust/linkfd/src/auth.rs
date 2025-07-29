@@ -24,7 +24,7 @@
  */
 use std::ffi::CStr;
 use crate::challenge::VTUN_CHAL_SIZE;
-use crate::{cfg_file, challenge, lfd_mod, libfuncs, linkfd, lock, tunnel};
+use crate::{cfg_file, challenge, lfd_mod, libfuncs, linkfd, lock, tunnel, vtun_host};
 use crate::libfuncs::print_p;
 
 const ST_INIT: i32 =  0;
@@ -34,7 +34,7 @@ const ST_CHAL: i32 =  2;
 /* Authentication message size */
 pub(crate) const VTUN_MESG_SIZE: usize =	50;
 
-fn bf2cf(host: &lfd_mod::VtunHost) -> Vec<u8>
+fn bf2cf(host: &vtun_host::VtunHost) -> Vec<u8>
 {
     let mut str: Vec<u8> = Vec::new();
     str.reserve(20);
@@ -106,7 +106,7 @@ fn length_of_number(str: &[u8]) -> usize {
     str.len()
 }
 
-fn cf2bf(str: &[u8], host: &mut lfd_mod::VtunHost) -> bool
+fn cf2bf(str: &[u8], host: &mut vtun_host::VtunHost) -> bool
 {
     let mut off: usize = 0;
 
@@ -248,7 +248,7 @@ fn get_tokenize_length(slice: &mut [u8]) -> usize {
     len
 }
 /* Authentication (Server side) */
-pub fn auth_server(fd: i32) -> Option<lfd_mod::VtunHost> {
+pub fn auth_server(fd: i32) -> Option<vtun_host::VtunHost> {
     tunnel::set_title("authentication");
 
     let fmt = format!("VTUN server ver {}\n", lfd_mod::VTUN_VER);
@@ -256,7 +256,7 @@ pub fn auth_server(fd: i32) -> Option<lfd_mod::VtunHost> {
 
     let mut stage = ST_HOST;
     let mut host = String::new();
-    let mut h: Option<&mut lfd_mod::VtunHost> = None;
+    let mut h: Option<&mut vtun_host::VtunHost> = None;
     let mut chal_req: [u8; VTUN_CHAL_SIZE] = [0u8; VTUN_CHAL_SIZE];
 
     let mut buf = [0u8; VTUN_MESG_SIZE];
@@ -400,7 +400,7 @@ pub fn auth_server(fd: i32) -> Option<lfd_mod::VtunHost> {
 }
 
 /* Authentication (Client side) */
-pub(crate) fn auth_client_rs(fd: libc::c_int, host: &mut lfd_mod::VtunHost) -> bool {
+pub(crate) fn auth_client_rs(fd: libc::c_int, host: &mut vtun_host::VtunHost) -> bool {
     let mut success = false;
     let mut stage = ST_INIT;
 
@@ -458,7 +458,7 @@ pub(crate) fn auth_client_rs(fd: libc::c_int, host: &mut lfd_mod::VtunHost) -> b
 }
 
 #[no_mangle]
-pub extern "C" fn auth_client(fd: libc::c_int, host: *mut lfd_mod::VtunHost) -> libc::c_int {
+pub extern "C" fn auth_client(fd: libc::c_int, host: *mut vtun_host::VtunHost) -> libc::c_int {
     let success = auth_client_rs(fd, unsafe { &mut *host });
     if success {
         1

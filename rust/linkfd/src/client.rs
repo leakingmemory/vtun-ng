@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 use signal_hook::low_level;
-use crate::{auth, lfd_mod, libfuncs, linkfd, netlib, tunnel};
+use crate::{auth, lfd_mod, libfuncs, linkfd, netlib, tunnel, vtun_host};
 
 struct ClientCtx {
     client_term: Arc<AtomicI32>
@@ -47,7 +47,7 @@ impl ClientCtx {
     }
 }
 
-pub fn client_rs(host: &mut lfd_mod::VtunHost)
+pub fn client_rs(host: &mut vtun_host::VtunHost)
 {
     {
         let msg = format!("VTun client ver {} started\n\0", lfd_mod::VTUN_VER);
@@ -201,6 +201,6 @@ pub fn client_rs(host: &mut lfd_mod::VtunHost)
 }
 
 #[no_mangle]
-pub extern "C" fn client(host: *mut lfd_mod::VtunHost) {
+pub extern "C" fn client(host: *mut vtun_host::VtunHost) {
     client_rs(unsafe { &mut *host });
 }

@@ -17,7 +17,7 @@
     GNU General Public License for more details.
  */
 use std::cmp::PartialEq;
-use crate::driver;
+use crate::{driver, lfd_mod};
 
 pub(crate) enum TunDevType {
     Tun, Tap
@@ -62,11 +62,13 @@ impl TunDev {
                 if cfg!(target_os = "linux") {
                     if dev.open("/dev/net/tun", dev_type.clone()) {
                         if dev.linux_prep(Some(name), dev_type) {
+                            dev.log_open();
                             return Some(dev);
                         }
                     }
                 }
                 if dev.open(name, dev_type) {
+                    dev.log_open();
                     return Some(dev);
                 }
                 None
@@ -79,6 +81,7 @@ impl TunDev {
                 if cfg!(target_os = "linux") {
                     if dev.open("/dev/net/tun", dev_type) {
                         if dev.linux_prep(None, dev_type) {
+                            dev.log_open();
                             return Some(dev);
                         }
                     }
@@ -91,6 +94,7 @@ impl TunDev {
                         name = format!("/dev/tap{}", i);
                     }
                     if dev.open(&name, dev_type) {
+                        dev.log_open();
                         return Some(dev);
                     }
                 }
@@ -99,7 +103,17 @@ impl TunDev {
         }
     }
     pub fn new_from_fd(fd: i32, dev: &str) -> TunDev {
-        TunDev { name: Some(Box::new(dev.to_string())), fd: Some(fd) }
+        let tun = TunDev { name: Some(Box::new(dev.to_string())), fd: Some(fd) };
+        tun.log_open();
+        tun
+    }
+    pub fn log_open(&self) {
+        let name = match &self.name {
+            None => "none".to_string(),
+            Some(ref name) => name.to_string()
+        };
+        let msg = format!("Opened device endpoint {}\n\0", name);
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
     }
 
     #[cfg(not(target_os = "linux"))]

@@ -17,7 +17,7 @@
     GNU General Public License for more details.
  */
 use std::ffi::CStr;
-use crate::lfd_mod;
+use crate::{lfd_mod, vtun_host};
 use crate::lfd_mod::VTUN_MULTI_DENY;
 
 const VTUN_LOCK_DIR: &str = env!("VTUN_LOCK_DIR");
@@ -100,7 +100,7 @@ pub fn read_lock(file: &str) -> libc::pid_t {
     pid as libc::pid_t
 }
 
-pub fn lock_host_rs(host: &lfd_mod::VtunHost) -> bool {
+pub fn lock_host_rs(host: &vtun_host::VtunHost) -> bool {
     if host.multi == lfd_mod::VTUN_MULTI_ALLOW {
         return true;
     }
@@ -150,7 +150,7 @@ pub fn lock_host_rs(host: &lfd_mod::VtunHost) -> bool {
     create_lock(lock_file.as_str())
 }
 
-pub fn unlock_host(host: &lfd_mod::VtunHost)
+pub fn unlock_host(host: &vtun_host::VtunHost)
 {
     if host.multi == lfd_mod::VTUN_MULTI_ALLOW {
         return;

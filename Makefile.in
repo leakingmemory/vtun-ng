@@ -23,11 +23,6 @@ LDFLAGS = @LDFLAGS@ @LIBS@
 
 CARGO = @CARGO@
 STRIP = @STRIP@
-BISON = @BISON@
-BISONFLAGS = -d
-
-LEX = @LEX@
-LEXFLAGS = -t 
 
 INSTALL = @INSTALL@
 INSTALL_OWNER = -o root -g 0
@@ -50,7 +45,7 @@ LOCK_DIR = ${VAR_DIR}/lock/vtunngd
 DEFS = -DVTUN_CONFIG_FILE=\"$(CFG_FILE)\" -DVTUN_PID_FILE=\"$(PID_FILE)\" \
        -DVTUN_STAT_DIR=\"$(STAT_DIR)\" -DVTUN_LOCK_DIR=\"$(LOCK_DIR)\"
 
-OBJS = main.o cfg_file.tab.o cfg_file.lex.o lib.o \
+OBJS = main.o lib.o \
        llist.o netlib.o
 
 RUSTLIBDIR = -Lrust/linkfd/target/release
@@ -71,14 +66,6 @@ $(RUSTLIB):
 	ENABLE_NAT_HACK="@NATHACK_ENABLED@" \
 	VTUN_LOCK_DIR="$(LOCK_DIR)" \
 	$(CARGO) build --release
-
-cfg_file.tab.h:
-	$(BISON) $(BISONFLAGS) -b cfg_file cfg_file.y
-
-cfg_file.tab.c: cfg_file.y cfg_kwords.h config.h cfg_file.tab.h
-
-cfg_file.lex.c: cfg_file.l cfg_kwords.h config.h cfg_file.tab.h
-	$(LEX) $(LEXFLAGS) cfg_file.l > cfg_file.lex.c 
 
 depend:
 	makedepend -- $(CFLAGS) -- *.c

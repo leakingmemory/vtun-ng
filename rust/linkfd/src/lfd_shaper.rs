@@ -18,8 +18,7 @@
  */
 use std::{thread, time};
 use std::time::SystemTime;
-use crate::{lfd_mod, linkfd};
-use crate::lfd_mod::VtunHost;
+use crate::{lfd_mod, linkfd, vtun_host};
 use crate::linkfd::LfdMod;
 
 struct LfdShaper {
@@ -29,7 +28,7 @@ struct LfdShaper {
 }
 
 impl LfdShaper {
-    pub fn new(host: *const VtunHost) -> LfdShaper {
+    pub fn new(host: *const vtun_host::VtunHost) -> LfdShaper {
         /* Calculate max speed bytes/sec */
         let spd_out = unsafe { (*host).spd_out } as u64;
         let mut max_speed: u64 = spd_out / 8 * 1024;
@@ -105,7 +104,7 @@ impl LfdShaperFactory {
 }
 
 impl linkfd::LfdModFactory for LfdShaperFactory {
-    fn create(&self, host: &mut VtunHost) -> Option<Box<dyn LfdMod>> {
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>> {
         Some(Box::new(LfdShaper::new(host)))
     }
 }

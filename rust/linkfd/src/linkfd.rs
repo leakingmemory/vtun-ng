@@ -8,7 +8,7 @@ use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib};
+use crate::{driver, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, vtun_host};
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -59,7 +59,7 @@ pub const VTUN_BAD_FRAME: libc::c_int =  0x8000;
 const VTUN_STAT_DIR: &str = env!("VTUN_STAT_DIR");
 const ENABLE_NAT_HACK: &str = env!("ENABLE_NAT_HACK");
 
-pub fn is_enabled_nat_hack(host: &mut lfd_mod::VtunHost) -> bool {
+pub fn is_enabled_nat_hack(host: &mut vtun_host::VtunHost) -> bool {
     if ENABLE_NAT_HACK == "true"
     {
         return (host.flags & VTUN_NAT_HACK_MASK) != 0;
@@ -84,7 +84,7 @@ pub trait LfdMod {
 }
 
 pub trait LfdModFactory {
-    fn create(&self, host: &mut lfd_mod::VtunHost) -> Option<Box<dyn LfdMod>>;
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>>;
 }
 
 pub struct LinkfdFactory {
@@ -107,7 +107,7 @@ pub struct Linkfd {
 }
 
 impl Linkfd {
-    pub fn new(factory: &LinkfdFactory, host: &mut lfd_mod::VtunHost) -> Linkfd {
+    pub fn new(factory: &LinkfdFactory, host: &mut vtun_host::VtunHost) -> Linkfd {
         let mut linkfd = Linkfd {
             mods: Vec::new()
         };
@@ -271,11 +271,11 @@ pub extern "C" fn is_io_cancelled() -> libc::c_int {
 }
 
 /* Link remote and local file descriptors */
-pub fn linkfd(hostptr: *mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+pub fn linkfd(hostptr: *mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     //struct sigaction sa, sa_oldterm, sa_oldint, sa_oldhup;
     //int old_prio;
-    let host: &mut lfd_mod::VtunHost = unsafe { &mut *hostptr };
+    let host: &mut vtun_host::VtunHost = unsafe { &mut *hostptr };
 
     //lfd_host = host;
 
@@ -402,7 +402,7 @@ pub fn linkfd(hostptr: *mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, 
     }
 }
 
-fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     let fd1 = host.rmt_fd;
     let fd2 = host.loc_fd;
@@ -552,7 +552,8 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut lfd_mod::VtunHost, driver: &mut
                 if retv.is_none() {
                     let errno = errno();
                     if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
-                        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Driver write failed\n\0".as_ptr() as *mut libc::c_char); }
+                        let msg = format!("Driver write failed: {}\n\0", errno.to_string());
+                        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
                         break;
                     } else {
                         continue;

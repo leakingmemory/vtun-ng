@@ -20,7 +20,7 @@
 use std::ffi::CStr;
 use std::ptr;
 use libc::timeval;
-use crate::lfd_mod;
+use crate::{lfd_mod, vtun_host};
 use crate::lfd_mod::VTUN_ADDR_NAME;
 
 /* Connect with timeout */
@@ -88,7 +88,7 @@ fn getifaddr(ifname: &str) -> Option<u32>
 }
 
 /* Set local address */
-pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut lfd_mod::VtunHost, con: bool) -> bool
+pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost, con: bool) -> bool
 {
     if con {
         /* Use address of the already connected socket. */
@@ -111,7 +111,7 @@ pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut lfd_mod::VtunHost,
     true
 }
 
-pub fn server_addr(addr: &mut libc::sockaddr_in, host: &mut lfd_mod::VtunHost) -> bool
+pub fn server_addr(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost) -> bool
 {
     {
         let z: libc::sockaddr_in = unsafe { std::mem::zeroed() };
@@ -155,7 +155,7 @@ pub fn server_addr(addr: &mut libc::sockaddr_in, host: &mut lfd_mod::VtunHost) -
 }
 
 /* Set address by interface name, ip address or hostname */
-pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &lfd_mod::VtunAddr) -> bool {
+pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr) -> bool {
     {
         let z: libc::sockaddr_in = unsafe { std::mem::zeroed() };
         *addr = z;
@@ -200,7 +200,7 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &lfd_mod::VtunAddr) 
 }
 
 #[no_mangle]
-pub extern "C" fn local_addr(addr: *mut libc::sockaddr_in, host: *mut lfd_mod::VtunHost, con: libc::c_int) -> libc::c_int {
+pub extern "C" fn local_addr(addr: *mut libc::sockaddr_in, host: *mut vtun_host::VtunHost, con: libc::c_int) -> libc::c_int {
     let host_ = unsafe { &mut *host };
     let addr_ = unsafe { &mut *addr };
     if local_addr_rs(addr_, host_, con != 0) {
@@ -211,7 +211,7 @@ pub extern "C" fn local_addr(addr: *mut libc::sockaddr_in, host: *mut lfd_mod::V
 }
 
 #[no_mangle]
-pub extern "C" fn generic_addr(addr: *mut libc::sockaddr_in, vaddr: *const lfd_mod::VtunAddr) -> libc::c_int {
+pub extern "C" fn generic_addr(addr: *mut libc::sockaddr_in, vaddr: *const vtun_host::VtunAddr) -> libc::c_int {
     let addr_ = unsafe { &mut *addr };
     let vaddr_ = unsafe { &*vaddr };
     if generic_addr_rs(addr_, vaddr_) {

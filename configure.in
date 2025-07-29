@@ -34,13 +34,8 @@ AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
 
 dnl Check for programs.
-AC_PROG_LEX
 AC_PROG_CC
 AC_PROG_INSTALL
-
-AC_ARG_VAR([BISON], [bison command for yacc parsing])
-AC_CHECK_PROG([BISON], [bison -y], [bison -y], [no])
-AS_IF([test "x$BISON" = "xno"], [AC_MSG_ERROR([bison not found])])
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST

@@ -1069,7 +1069,8 @@ struct OptionsConfigParsingContext {
     firewall_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     ip_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     bindaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>,
-    persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>
+    persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
+    syslog_ctx: Option<Rc<Mutex<SyslogOptionParsingContext>>>
 }
 
 impl OptionsConfigParsingContext {
@@ -1084,7 +1085,8 @@ impl OptionsConfigParsingContext {
             firewall_ctx: None,
             ip_ctx: None,
             bindaddr_ctx: None,
-            persist_ctx: None
+            persist_ctx: None,
+            syslog_ctx: None
         }
     }
     fn free_non_null(str: *mut libc::c_char) {
@@ -1156,6 +1158,12 @@ impl OptionsConfigParsingContext {
             None => {},
             Some(ref persist_ctx) => opts.persist = if persist_ctx.lock().unwrap().value { 1 } else { 0 }
         }
+        match self.syslog_ctx {
+            None => {},
+            Some(ref syslog_ctx) => {
+                opts.syslog = syslog_ctx.lock().unwrap().value;
+            }
+        }
     }
 }
 
@@ -1214,6 +1222,11 @@ impl ParsingContext for OptionsConfigParsingContext {
                 let persist_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "persist", token)));
                 self.persist_ctx = Some(persist_ctx.clone());
                 Some(persist_ctx)
+            },
+            Token::KwSyslog => {
+                let syslog_ctx = Rc::new(Mutex::new(SyslogOptionParsingContext::new(Rc::clone(&ctx))));
+                self.syslog_ctx = Some(syslog_ctx.clone());
+                Some(syslog_ctx)
             },
             Token::Semicolon => None,
             Token::RBrace => {
@@ -1439,6 +1452,91 @@ impl ParsingContext for AddrConfigParsingContext {
                 self.parent.upgrade()
             },
             _ => self.UnexpectedToken()
+        }
+    }
+}
+
+struct SyslogOptionParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    pub value: libc::c_int,
+    is_set: bool
+}
+
+impl SyslogOptionParsingContext {
+    fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            value: 0,
+            is_set: false
+        }
+    }
+    fn from_token(&mut self, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if (self.is_set) {
+            return self.UnexpectedToken();
+        }
+        self.value = match token {
+            Token::KwSyslog => libc::LOG_SYSLOG,
+            _ => return self.UnexpectedToken()
+        };
+        self.is_set = true;
+        None
+    }
+    fn str(&mut self, s: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if (self.is_set) {
+            return self.UnexpectedToken();
+        }
+        self.value = match s {
+            "auth" => libc::LOG_AUTH,
+            "cron" => libc::LOG_CRON,
+            "daemon" => libc::LOG_DAEMON,
+            "kern" => libc::LOG_KERN,
+            "lpr" => libc::LOG_LPR,
+            "mail" => libc::LOG_MAIL,
+            "news" => libc::LOG_NEWS,
+            "syslog" => libc::LOG_SYSLOG,
+            "user" => libc::LOG_USER,
+            "uucp" => libc::LOG_UUCP,
+            "local0" => libc::LOG_LOCAL0,
+            "local1" => libc::LOG_LOCAL1,
+            "local2" => libc::LOG_LOCAL2,
+            "local3" => libc::LOG_LOCAL3,
+            "local4" => libc::LOG_LOCAL4,
+            "local5" => libc::LOG_LOCAL5,
+            "local6" => libc::LOG_LOCAL6,
+            "local7" => libc::LOG_LOCAL7,
+            _ => return self.UnexpectedToken()
+        };
+        self.is_set = true;
+        None
+    }
+    fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        let msg = format!("Unexpected token after syslog\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        self.SetFailed();
+        None
+    }
+}
+
+impl ParsingContext for SyslogOptionParsingContext {
+    fn SetFailed(&mut self) {
+        let msg = format!("Parse error after syslog\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().SetFailed(),
+            None => {}
+        }
+    }
+    fn Token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::Ident(ident) => self.str(ident.as_str()),
+            Token::Quoted(quoted) => self.str(quoted.as_str()),
+            Token::Semicolon => {
+                if !self.is_set {
+                    return self.UnexpectedToken();
+                }
+                self.parent.upgrade()
+            },
+            _ => self.from_token(token)
         }
     }
 }

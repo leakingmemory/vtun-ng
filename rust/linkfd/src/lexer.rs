@@ -50,7 +50,6 @@ pub enum Token {
     #[token("yes")]       KwYes,
     #[token("no")]        KwNo,
     #[token("server")]    KwServer,
-    #[token("daemon")]    KwDaemon,
     #[token("syslog")]    KwSyslog,
     #[token("ppp")]       KwPpp,
     #[token("tun")]       KwTun,
@@ -76,12 +75,7 @@ pub enum Token {
     #[token("ifconfig")]  KwIfconfig,
     #[token("ip")]        KwIp,
     #[token("firewall")]  KwFirewall,
-    #[token("community")] KwCommunity,
-    #[token("stat_user")] KwStatUser,
-    #[token("stat_file")] KwStatFile,
     #[token("shaper")]    KwShaper,
-    #[token("fd_pass")]   KwFdPass,
-    #[token("queue")]     KwQueue,
 
     // ----------------------------------------------------------------
     // Literals

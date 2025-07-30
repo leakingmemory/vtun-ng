@@ -236,7 +236,12 @@ struct HostConfigParsingContext {
     pub keepalive_ctx: Option<Rc<Mutex<KeepaliveConfigParsingContext>>>,
     pub up_ctx: Option<Rc<Mutex<KwUpDownParsingContext>>>,
     pub down_ctx: Option<Rc<Mutex<KwUpDownParsingContext>>>,
-    pub srcaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>
+    pub srcaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>,
+    pub device_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
+    pub nathack_ctx: Option<Rc<Mutex<NatHackConfigParsingContext>>>,
+    pub persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
+    pub keep_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
+    pub stat_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>
 }
 
 impl HostConfigParsingContext {
@@ -252,7 +257,17 @@ impl HostConfigParsingContext {
             keepalive_ctx: None,
             up_ctx: None,
             down_ctx: None,
-            srcaddr_ctx: None
+            srcaddr_ctx: None,
+            device_ctx: None,
+            nathack_ctx: None,
+            persist_ctx: None,
+            keep_ctx: None,
+            stat_ctx: None
+        }
+    }
+    pub fn free_nonnull(s: *mut libc::c_char) {
+        if !s.is_null() {
+            unsafe { libc::free(s as *mut libc::c_void) };
         }
     }
     pub fn strdup(s: &str) -> *mut libc::c_char {
@@ -275,6 +290,7 @@ impl HostConfigParsingContext {
             None => {},
             Some(ref passwd_ctx) => {
                 let passwd_ctx = passwd_ctx.lock().unwrap();
+                Self::free_nonnull(host.passwd);
                 host.passwd = Self::strdup(passwd_ctx.value.as_str());
             }
         }
@@ -317,6 +333,50 @@ impl HostConfigParsingContext {
         match self.srcaddr_ctx {
             None => {},
             Some(ref srcaddr_ctx) => srcaddr_ctx.lock().unwrap().apply(&mut host.src_addr)
+        }
+        match self.device_ctx {
+            None => {},
+            Some(ref device_ctx) => {
+                let device_ctx = device_ctx.lock().unwrap();
+                Self::free_nonnull(host.dev);
+                host.dev = Self::strdup(device_ctx.value.as_str());
+            }
+        }
+        match self.nathack_ctx {
+            None => {},
+            Some(ref nathack_ctx) => {
+                let nathack_ctx = nathack_ctx.lock().unwrap();
+                nathack_ctx.apply(host);
+            }
+        }
+        match self.persist_ctx {
+            None => {},
+            Some(ref persist_ctx) => {
+                let persist_ctx = persist_ctx.lock().unwrap();
+                host.persist = if persist_ctx.value { 1 } else { 0 };
+            }
+        }
+        match self.keep_ctx {
+            None => {},
+            Some(ref keep_ctx) => {
+                let keep_ctx = keep_ctx.lock().unwrap();
+                if keep_ctx.value {
+                    host.flags = host.flags | lfd_mod::VTUN_PERSIST_KEEPIF;
+                } else {
+                    host.flags = host.flags & !(lfd_mod::VTUN_PERSIST_KEEPIF);
+                }
+            }
+        }
+        match self.stat_ctx {
+            None => {},
+            Some(ref stat_ctx) => {
+                let stat_ctx = stat_ctx.lock().unwrap();
+                if stat_ctx.value {
+                    host.flags = host.flags | linkfd::VTUN_STAT;
+                } else {
+                    host.flags = host.flags & !(linkfd::VTUN_STAT);
+                }
+            }
         }
     }
 }
@@ -371,6 +431,31 @@ impl ParsingContext for HostConfigParsingContext {
                 let srcaddr_ctx = Rc::new(Mutex::new(KwBindaddrConfigParsingContext::new(Rc::clone(&ctx), Token::KwSrcaddr, "srcaddr")));
                 self.srcaddr_ctx = Some(srcaddr_ctx.clone());
                 Some(srcaddr_ctx)
+            },
+            Token::KwDevice => {
+                let device_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "device", token)));
+                self.device_ctx = Some(device_ctx.clone());
+                Some(device_ctx)
+            },
+            Token::KwNatHack => {
+                let nathack_ctx = Rc::new(Mutex::new(NatHackConfigParsingContext::new(Rc::clone(&ctx))));
+                self.nathack_ctx = Some(nathack_ctx.clone());
+                Some(nathack_ctx)
+            },
+            Token::KwPersist => {
+                let persist_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "persist", token)));
+                self.persist_ctx = Some(persist_ctx.clone());
+                Some(persist_ctx)
+            },
+            Token::KwKeep => {
+                let keep_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "keep", token)));
+                self.keep_ctx = Some(keep_ctx.clone());
+                Some(keep_ctx)
+            },
+            Token::KwStat => {
+                let stat_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "stat", token)));
+                self.stat_ctx = Some(stat_ctx.clone());
+                Some(stat_ctx)
             },
             Token::Ident(ident) => {
                 match ident.as_str() {
@@ -828,6 +913,102 @@ impl ParsingContext for KeepaliveConfigParsingContext {
     }
 }
 
+struct NatHackConfigParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    pub nat_hack_disabled: bool,
+    pub nat_hack_server: bool,
+    pub nat_hack_client: bool
+}
+
+impl NatHackConfigParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            nat_hack_disabled: false,
+            nat_hack_server: false,
+            nat_hack_client: false
+        }
+    }
+    fn apply(&self, host: &mut vtun_host::VtunHost) {
+        host.flags = host.flags & !(lfd_mod::VTUN_NAT_HACK_CLIENT | lfd_mod::VTUN_NAT_HACK_SERVER);
+        if self.nat_hack_client {
+            host.flags = host.flags | lfd_mod::VTUN_NAT_HACK_CLIENT;
+        }
+        if self.nat_hack_server {
+            host.flags = host.flags | lfd_mod::VTUN_NAT_HACK_SERVER;
+        }
+    }
+    fn server(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if self.nat_hack_disabled || self.nat_hack_server || self.nat_hack_client {
+            return self.UnexpectedToken();
+        }
+        self.nat_hack_server = true;
+        None
+    }
+    fn client(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if self.nat_hack_disabled || self.nat_hack_server || self.nat_hack_client {
+            return self.UnexpectedToken();
+        }
+        self.nat_hack_client = true;
+        None
+    }
+    fn Str(&mut self, s: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match s {
+            "server" => self.server(),
+            "client" => self.client(),
+            "no" => {
+                if self.nat_hack_disabled || self.nat_hack_server || self.nat_hack_client {
+                    return self.UnexpectedToken();
+                }
+                self.nat_hack_disabled = true;
+                None
+            },
+            _ => self.UnexpectedToken()
+        }
+    }
+    fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        let msg = format!("Unexpected token after nat_hack\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        self.SetFailed();
+        None
+    }
+}
+
+impl ParsingContext for NatHackConfigParsingContext {
+    fn SetFailed(&mut self) {
+        let msg = format!("Parse error in nat_hack\n\0");
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().SetFailed(),
+            None => {}
+        }
+    }
+
+    fn Token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::KwNo => {
+                if self.nat_hack_disabled || self.nat_hack_server || self.nat_hack_client {
+                    return self.UnexpectedToken();
+                }
+                self.nat_hack_disabled = true;
+                None
+            },
+            Token::KwServer => self.server(),
+            Token::Ident(ident) => self.Str(ident.as_str()),
+            Token::Quoted(ident) => self.Str(ident.as_str()),
+            Token::Semicolon => {
+                if !self.nat_hack_disabled && !self.nat_hack_server && !self.nat_hack_client {
+                    return self.UnexpectedToken();
+                }
+                self.parent.upgrade()
+            }
+            _ => {
+                self.UnexpectedToken()
+            }
+        }
+    }
+}
+
 struct KwOptionsParsingContext {
     parent: Weak<Mutex<dyn ParsingContext>>,
     options_ctx: Option<Rc<Mutex<OptionsConfigParsingContext>>>
@@ -887,7 +1068,8 @@ struct OptionsConfigParsingContext {
     route_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     firewall_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     ip_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
-    bindaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>
+    bindaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>,
+    persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>
 }
 
 impl OptionsConfigParsingContext {
@@ -901,7 +1083,8 @@ impl OptionsConfigParsingContext {
             route_ctx: None,
             firewall_ctx: None,
             ip_ctx: None,
-            bindaddr_ctx: None
+            bindaddr_ctx: None,
+            persist_ctx: None
         }
     }
     fn free_non_null(str: *mut libc::c_char) {
@@ -969,6 +1152,10 @@ impl OptionsConfigParsingContext {
                 bindaddr_ctx.apply(&mut opts.bind_addr);
             }
         }
+        match self.persist_ctx {
+            None => {},
+            Some(ref persist_ctx) => opts.persist = if persist_ctx.lock().unwrap().value { 1 } else { 0 }
+        }
     }
 }
 
@@ -1022,6 +1209,11 @@ impl ParsingContext for OptionsConfigParsingContext {
                 let bindaddr_ctx = Rc::new(Mutex::new(KwBindaddrConfigParsingContext::new(Rc::clone(&ctx), Token::KwBindaddr, "bindaddr")));
                 self.bindaddr_ctx = Some(bindaddr_ctx.clone());
                 Some(bindaddr_ctx)
+            },
+            Token::KwPersist => {
+                let persist_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "persist", token)));
+                self.persist_ctx = Some(persist_ctx.clone());
+                Some(persist_ctx)
             },
             Token::Semicolon => None,
             Token::RBrace => {
@@ -1653,6 +1845,76 @@ impl ParsingContext for StringOptionParsingContext {
                 self.value = value;
                 self.is_set = true;
                 None
+            },
+            Token::Semicolon => {
+                if !self.is_set {
+                    return self.UnexpectedToken();
+                }
+                self.parent.upgrade()
+            }
+            _ => {
+                self.UnexpectedToken()
+            }
+        }
+    }
+}
+
+struct BoolOptionParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    token_name: &'static str,
+    token: Token,
+    value: bool,
+    is_set: bool
+}
+
+impl BoolOptionParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>, token_name: &'static str, token: Token) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            token_name,
+            token,
+            value: false,
+            is_set: false
+        }
+    }
+    fn yes(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        self.value = true;
+        self.is_set = true;
+        None
+    }
+    fn no(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        self.value = false;
+        self.is_set = true;
+        None
+    }
+    fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        let msg = format!("Unexpected token after {}\n\0", self.token_name);
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        self.SetFailed();
+        None
+    }
+}
+
+impl ParsingContext for BoolOptionParsingContext {
+    fn SetFailed(&mut self) {
+        let msg = format!("Parse error in {}\n\0", self.token_name);
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().SetFailed(),
+            None => {}
+        }
+    }
+
+    fn Token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::KwYes => self.yes(),
+            Token::KwNo => self.no(),
+            Token::Quoted(value) => {
+                match value.as_str() {
+                    "yes" => self.yes(),
+                    "no" => self.no(),
+                    _ => self.UnexpectedToken()
+                }
             },
             Token::Semicolon => {
                 if !self.is_set {

@@ -352,7 +352,7 @@ pub fn linkfd(hostptr: *mut vtun_host::VtunHost, driver: &mut dyn driver::Driver
             .open(file.clone()) {
             Ok(f) => unsafe { STAT_FILE = Some(f) },
             Err(_) => {
-                let msg = format!("Can't open stats file {}", file);
+                let msg = format!("Can't open stats file {}\n\0", file);
                 unsafe {
                     lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char);
                     STAT_FILE = None;

@@ -39,6 +39,7 @@ pub enum Token {
     #[token("options")]   KwOptions,
     #[token("port")]      KwPort,
     #[token("bindaddr")]  KwBindaddr,
+    #[token("srcaddr")]   KwSrcaddr,
     #[token("addr")]      KwAddr,
     #[token("iface")]     KwIface,
     #[token("vtun")]      KwVtun,

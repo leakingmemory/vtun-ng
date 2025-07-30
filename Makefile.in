@@ -65,6 +65,7 @@ $(RUSTLIB):
 	ENABLE_NAT_HACK="@NATHACK_ENABLED@" \
 	VTUN_LOCK_DIR="$(LOCK_DIR)" \
 	VTUN_CONFIG_FILE="$(CFG_FILE)" \
+	VTUN_PID_FILE="$(PID_FILE)" \
 	$(CARGO) build --release
 
 depend:

@@ -20,8 +20,8 @@
 use std::ffi::CStr;
 use std::ptr;
 use std::ptr::null_mut;
-use libc::timeval;
-use crate::{lfd_mod, vtun_host};
+use libc::{in_port_t, timeval};
+use crate::{lfd_mod, libfuncs, mainvtun, vtun_host};
 use crate::lfd_mod::VTUN_ADDR_NAME;
 
 /* Connect with timeout */
@@ -112,20 +112,20 @@ pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHos
     true
 }
 
-pub fn server_addr(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost) -> bool
+pub fn server_addr(ctx: &mainvtun::VtunContext, addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost) -> bool
 {
     {
         let z: libc::sockaddr_in = unsafe { std::mem::zeroed() };
         *addr = z;
     }
     addr.sin_family = libc::AF_INET as libc::sa_family_t;
-    addr.sin_port = libc::htons(unsafe { &lfd_mod::vtun }.bind_addr.port as u16);
+    addr.sin_port = libc::htons(ctx.vtun.bind_addr.port as u16);
 
     /* Lookup server's IP address.
      * We do it on every reconnect because server's IP
      * address can be dynamic.
      */
-    let hostname = unsafe { CStr::from_ptr(lfd_mod::vtun.svr_name) }.to_str().unwrap();
+    let hostname = unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap();
     let hent = dns_lookup::lookup_host(hostname).unwrap_or(Vec::new());
 
     if hent.is_empty() {
@@ -150,7 +150,7 @@ pub fn server_addr(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost)
         unsafe { libc::free(host.sopt.raddr as *mut libc::c_void) };
     }
     host.sopt.raddr = unsafe { libc::strdup(straddr.as_ptr() as *const libc::c_char) };
-    host.sopt.rport = unsafe { &lfd_mod::vtun }.bind_addr.port;
+    host.sopt.rport = ctx.vtun.bind_addr.port;
 
     true
 }
@@ -211,6 +211,90 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
         addr.sin_port = (vaddr.port as u16).to_be();
     }
 
+    true
+}
+
+/*
+ * Establish UDP session with host connected to fd(socket).
+ * Returns connected UDP socket or -1 on error.
+ */
+pub fn udp_session(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -> bool
+{
+    let mut saddr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+
+    let s = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+    if s == -1 {
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't create socket\n\0".as_ptr() as *mut libc::c_char); }
+        return false;
+    }
+
+    let opt: libc::socklen_t = 1;
+    unsafe { libc::setsockopt(s, libc::SOL_SOCKET, libc::SO_REUSEADDR, &opt as *const libc::socklen_t as *const libc::c_void, size_of::<libc::socklen_t>() as libc::socklen_t); }
+
+    /* Set local address and port */
+    local_addr_rs(&mut saddr, host, true);
+    if unsafe { libc::bind(s,(&mut saddr as *mut libc::sockaddr_in).cast(),size_of::<libc::sockaddr_in>() as libc::socklen_t) } != 0 {
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't bind to the socket\n\0".as_ptr() as *mut libc::c_char); }
+        return false;
+    }
+
+    let mut opt = size_of::<libc::sockaddr_in>() as libc::socklen_t;
+    if unsafe { libc::getsockname(s,(&mut saddr as *mut libc::sockaddr_in).cast(),&mut opt as *mut libc::socklen_t) } != 0 {
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't get socket name\n\0".as_ptr() as *mut libc::c_char); }
+        return false;
+    }
+
+    /* Write port of the new UDP socket */
+    let mut port: libc::c_short = saddr.sin_port as libc::c_short;
+    {
+        let buf = u16::from_be(port as libc::in_port_t).to_be_bytes();
+        if libfuncs::write_n(host.rmt_fd, &buf).is_none() {
+            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't write port number\n\0".as_ptr() as *mut libc::c_char); }
+            return false;
+        }
+    }
+    host.sopt.lport = u16::from_be(port as libc::in_port_t) as libc::c_int;
+
+    /* Read port of the other's end UDP socket */
+    let mut port = [0u8; 2];
+    if libfuncs::readn_t(host.rmt_fd,&mut port,host.timeout as libc::time_t) < 0 {
+        let msg = format!("Can't read port number {}\n\0", errno::errno().to_string());
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,msg.as_ptr() as *mut libc::c_char); }
+        return false;
+    }
+
+    let mut opt = size_of::<libc::sockaddr_in>() as libc::socklen_t;
+    if unsafe { libc::getpeername(host.rmt_fd,(&mut saddr as *mut libc::sockaddr_in).cast(),&mut opt as *mut libc::socklen_t) } != 0 {
+        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't get peer name\n\0".as_ptr() as *mut libc::c_char); }
+        return false;
+    }
+
+    let port = u16::from_be_bytes(port).to_be();
+
+    saddr.sin_port = port;
+
+    /* if the config says to delay the UDP connection, we wait for an
+    incoming packet and then force a connection back.  We need to
+    put this here because we need to keep that incoming triggering
+    packet and pass it back up the chain. */
+
+    if (host.flags & lfd_mod::VTUN_NAT_HACK_MASK) != 0 {
+        ctx.is_rmt_fd_connected = false;
+    } else {
+        if unsafe { libc::connect(s,(&mut saddr as *mut libc::sockaddr_in).cast(),size_of::<libc::sockaddr_in>() as libc::socklen_t) } != 0 {
+            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't connect socket\n\0".as_ptr() as *mut libc::c_char); }
+            return false;
+        }
+        ctx.is_rmt_fd_connected = true;
+    }
+
+    host.sopt.rport = u16::from_be(port as u16) as libc::c_int;
+
+    /* Close TCP socket and replace with UDP socket */
+    unsafe { libc::close(host.rmt_fd) };
+    host.rmt_fd = s;
+
+    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,"UDP connection initialized\n\0".as_ptr() as *mut libc::c_char); }
     true
 }
 

@@ -16,7 +16,7 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-use crate::{driver, linkfd};
+use crate::{driver, linkfd, mainvtun};
 
 pub(crate) struct TcpProto {
     pub fd: i32
@@ -42,7 +42,7 @@ impl driver::NetworkDriver for TcpProto {
         }
         Some(wres as usize)
     }
-    fn read(&mut self, buf: &mut Vec<u8>) -> Option<u16> {
+    fn read(&mut self, _ctx: &mut mainvtun::VtunContext, buf: &mut Vec<u8>) -> Option<u16> {
         let mut len: usize;
         let flags: u16;
 

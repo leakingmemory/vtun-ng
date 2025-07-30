@@ -43,7 +43,7 @@ pub struct VtunOpts {
 }
 
 impl VtunOpts {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             timeout: -1,
             persist: -1,
@@ -119,6 +119,5 @@ pub const LOG_INFO: libc::c_int = 6;
 pub const LOG_DEBUG: libc::c_int = 7;
 
 extern "C" {
-    pub static mut vtun: VtunOpts;
     pub fn vtun_syslog(_priority: libc::c_int, _format: *mut libc::c_char);
 }

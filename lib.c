@@ -111,6 +111,10 @@ void set_title_str(const char *str) {
     set_title("%s", str);
 }
 
+void init_title_from_rs(int argc,char *argv[],char *env[], char *name) {
+    init_title(argc, argv, env, name);
+}
+
 /* 
  * Print padded messages.
  * Used by 'auth' function to force all messages 

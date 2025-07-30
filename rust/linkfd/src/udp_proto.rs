@@ -17,11 +17,10 @@
     GNU General Public License for more details.
  */
 use std::ptr::null_mut;
-use crate::{driver, lfd_mod, linkfd};
+use crate::{driver, lfd_mod, linkfd, mainvtun};
 
 pub(crate) struct UdpProto {
-    pub fd: i32,
-    pub is_rmt_fd_connected: bool
+    pub fd: i32
 }
 
 impl UdpProto {
@@ -79,7 +78,7 @@ impl driver::NetworkDriver for UdpProto {
         }
     }
 
-    fn read(&mut self, buf: &mut Vec<u8>) -> Option<u16> {
+    fn read(&mut self, ctx: &mut mainvtun::VtunContext, buf: &mut Vec<u8>) -> Option<u16> {
         //unsigned short hdr, flen;
         let mut hdrbuf: [u8; 2] = [0u8; 2];
         let mut iv: [libc::iovec; 2] = [libc::iovec { iov_base: null_mut(), iov_len: 0 }; 2];
@@ -89,7 +88,7 @@ impl driver::NetworkDriver for UdpProto {
         let mut fromlen: libc::socklen_t = size_of::<libc::sockaddr_in>() as libc::socklen_t;
 
         /* Late connect (NAT hack enabled) */
-        if !self.is_rmt_fd_connected {
+        if !ctx.is_rmt_fd_connected {
             loop {
                 let rlen = unsafe { libc::recvfrom(self.fd, buf.as_mut_ptr() as *mut libc::c_void, 2, libc::MSG_PEEK, &mut from as *mut libc::sockaddr_in as *mut libc::sockaddr, &mut fromlen) };
                 if rlen < 0 {
@@ -103,7 +102,7 @@ impl driver::NetworkDriver for UdpProto {
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't connect socket\n\0".as_ptr() as *mut libc::c_char); }
                 return None;
             }
-            self.is_rmt_fd_connected = true;
+            ctx.is_rmt_fd_connected = true;
         }
 
         /* Read frame */

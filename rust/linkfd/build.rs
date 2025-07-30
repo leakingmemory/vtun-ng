@@ -15,4 +15,10 @@ fn main() {
     let vtun_lock_dir = std::env::var("VTUN_LOCK_DIR")
         .unwrap_or_else(|_| "/var/run/vtun".to_string());
     println!("cargo:rustc-env=VTUN_LOCK_DIR={}", vtun_lock_dir);
+    let vtun_config_file = std::env::var("VTUN_CONFIG_FILE")
+        .unwrap_or_else(|_| "/etc/vtunngd.conf".to_string());
+    println!("cargo:rustc-env=VTUN_CONFIG_FILE={}", vtun_config_file);
+    let vtun_pid_file = std::env::var("VTUN_PID_FILE")
+        .unwrap_or_else(|_| "/var/run/vtunngd.pid".to_string());
+    println!("cargo:rustc-env=VTUN_PID_FILE={}", vtun_pid_file);
 }

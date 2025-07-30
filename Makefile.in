@@ -45,8 +45,7 @@ LOCK_DIR = ${VAR_DIR}/lock/vtunngd
 DEFS = -DVTUN_CONFIG_FILE=\"$(CFG_FILE)\" -DVTUN_PID_FILE=\"$(PID_FILE)\" \
        -DVTUN_STAT_DIR=\"$(STAT_DIR)\" -DVTUN_LOCK_DIR=\"$(LOCK_DIR)\"
 
-OBJS = main.o lib.o \
-       llist.o netlib.o
+OBJS = main.o lib.o
 
 RUSTLIBDIR = -Lrust/linkfd/target/release
 RUSTLIBLNK = -lvtun_linkfd
@@ -65,6 +64,7 @@ $(RUSTLIB):
 	cd rust/linkfd && env VTUN_STAT_DIR="$(STAT_DIR)" \
 	ENABLE_NAT_HACK="@NATHACK_ENABLED@" \
 	VTUN_LOCK_DIR="$(LOCK_DIR)" \
+	VTUN_CONFIG_FILE="$(CFG_FILE)" \
 	$(CARGO) build --release
 
 depend:

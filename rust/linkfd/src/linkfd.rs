@@ -8,7 +8,7 @@ use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, vtun_host};
+use crate::{driver, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, vtun_host};
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -271,7 +271,7 @@ pub extern "C" fn is_io_cancelled() -> libc::c_int {
 }
 
 /* Link remote and local file descriptors */
-pub fn linkfd(hostptr: *mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+pub fn linkfd(ctx: &mut mainvtun::VtunContext, hostptr: *mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     //struct sigaction sa, sa_oldterm, sa_oldint, sa_oldhup;
     //int old_prio;
@@ -365,7 +365,7 @@ pub fn linkfd(hostptr: *mut vtun_host::VtunHost, driver: &mut dyn driver::Driver
 
     io_init();
 
-    lfd_linker(&mut lfd_stack, host, driver, proto);
+    lfd_linker(ctx, &mut lfd_stack, host, driver, proto);
 
     if (flags & (VTUN_STAT|VTUN_KEEP_ALIVE)) != 0 {
         unsafe {
@@ -402,13 +402,11 @@ pub fn linkfd(hostptr: *mut vtun_host::VtunHost, driver: &mut dyn driver::Driver
     }
 }
 
-fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     let fd1 = host.rmt_fd;
     let fd2 = host.loc_fd;
-    //register int len, fl;
     let mut tv: libc::timeval;
-    //char *buf, *out;
     let fdset = mem::MaybeUninit::<libc::fd_set>::uninit();
     unsafe { libc::FD_ZERO(&mut (fdset.assume_init())); }
     let mut fdset = unsafe { fdset.assume_init() };
@@ -504,7 +502,7 @@ fn lfd_linker(lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &m
             idle = 0;
             unsafe { KA_NEED_VERIFY.store(false, std::sync::atomic::Ordering::SeqCst); }
             buf.clear();
-            let fl = proto.read(&mut buf);
+            let fl = proto.read(ctx, &mut buf);
             if fl.is_none() {
                 unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Network read failure\n\0".as_ptr() as *mut libc::c_char); }
                 break;

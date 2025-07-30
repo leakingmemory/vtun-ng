@@ -23,8 +23,6 @@
 #ifndef _VTUN_H
 #define _VTUN_H
 
-#include "llist.h"
-
 /* Default VTUN port */
 #define VTUN_PORT 5000
 
@@ -81,44 +79,6 @@ struct vtun_addr {
 /* Address types */
 #define VTUN_ADDR_IFACE	0x01 
 #define VTUN_ADDR_NAME  0x02
-
-struct vtun_host {
-   char *host;
-   char *passwd;
-   char *dev;
-
-   llist up;
-   llist down;
-
-   int  flags;
-   int  timeout;
-   int  spd_in;
-   int  spd_out;
-   int  zlevel;
-   int  cipher;
-
-   int  rmt_fd;
-   int  loc_fd;
-
-   /* Persist mode */
-   int  persist;
-
-   /* Multiple connections */
-   int  multi;
-
-   /* Keep Alive */
-   int ka_interval;
-   int ka_maxfail;
-
-   /* Source address */
-   struct vtun_addr src_addr;
-
-   struct vtun_stat stat;
-
-   struct vtun_sopt sopt;
-};
-
-extern llist host_list;
 
 /* Flags definitions */
 #define VTUN_TTY        0x0100

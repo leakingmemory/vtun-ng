@@ -18,7 +18,7 @@ use std::ptr::null_mut;
 use std::rc::{Rc, Weak};
 use std::sync::Mutex;
 use logos::Logos;
-use crate::{lexer, lfd_mod, linkfd, llist, tunnel, vtun_host};
+use crate::{lexer, lfd_mod, linkfd, llist, mainvtun, tunnel, vtun_host};
 use crate::lexer::Token;
 use crate::vtun_host::VtunHost;
 
@@ -72,7 +72,7 @@ impl RootParsingContext {
         let nullterm = format!("{}\0", s);
         unsafe { libc::strdup(nullterm.as_ptr() as *const libc::c_char) }
     }
-    fn get_hosts(&self) -> Vec<vtun_host::VtunHost> {
+    fn get_hosts(&self, ctx: &mainvtun::VtunContext) -> Vec<vtun_host::VtunHost> {
         let mut vec: Vec<vtun_host::VtunHost> = Vec::new();
         vec.reserve(self.ident_ctx.len());
         for ident_ctx in &self.ident_ctx {
@@ -90,9 +90,9 @@ impl RootParsingContext {
                     Some(ref host_ctx) => host_ctx.lock().unwrap(),
                     None => continue
                 };
-                host_ctx.apply(&mut host);
+                host_ctx.apply(ctx, &mut host);
             }
-            host_ctx.apply(&mut host);
+            host_ctx.apply(ctx, &mut host);
             vec.push(host);
         }
         vec
@@ -274,7 +274,7 @@ impl HostConfigParsingContext {
         let nullterm = format!("{}\0", s);
         unsafe { libc::strdup(nullterm.as_ptr() as *const libc::c_char) }
     }
-    pub fn apply(&self, host: &mut vtun_host::VtunHost) {
+    pub fn apply(&self, ctx: &mainvtun::VtunContext, host: &mut vtun_host::VtunHost) {
         match self.compress_ctx {
             None => {},
             Some(ref compress_ctx) => compress_ctx.lock().unwrap().apply(host)
@@ -324,11 +324,11 @@ impl HostConfigParsingContext {
         }
         match self.up_ctx {
             None => {},
-            Some(ref up_ctx) => up_ctx.lock().unwrap().apply(&mut host.up)
+            Some(ref up_ctx) => up_ctx.lock().unwrap().apply(ctx, &mut host.up)
         }
         match self.down_ctx {
             None => {},
-            Some(ref down_ctx) => down_ctx.lock().unwrap().apply(&mut host.down)
+            Some(ref down_ctx) => down_ctx.lock().unwrap().apply(ctx, &mut host.down)
         }
         match self.srcaddr_ctx {
             None => {},
@@ -1555,10 +1555,10 @@ impl KwUpDownParsingContext {
             updown_ctx: None
         }
     }
-    pub fn apply(&self, list: &mut llist::LList) {
+    pub fn apply(&self, vtun_ctx: &mainvtun::VtunContext, list: &mut llist::LList) {
         match self.updown_ctx {
             None => {},
-            Some(ref ctx) => ctx.lock().unwrap().apply(list)
+            Some(ref ctx) => ctx.lock().unwrap().apply(vtun_ctx, list)
         }
     }
 }
@@ -1607,20 +1607,19 @@ impl UpDownParsingContext {
             cmds: Vec::new()
         }
     }
-    pub fn apply(&self, list: &mut llist::LList) {
+    pub fn apply(&self, ctx: &mainvtun::VtunContext, list: &mut llist::LList) {
         for cmdmtx in self.cmds.iter() {
             let mut nullterm_cmd;
             let nullterm_args;
             let mut flags: libc::c_int = 0;
-            let vtun = unsafe { &lfd_mod::vtun };
             {
                 let cmd = cmdmtx.lock().unwrap();
                 nullterm_cmd = match cmd.token {
-                    Token::KwFirewall => unsafe { CStr::from_ptr(vtun.fwall) }.to_str().unwrap().to_string(),
-                    Token::KwIp => unsafe { CStr::from_ptr(vtun.iproute) }.to_str().unwrap().to_string(),
-                    Token::KwIfconfig => unsafe { CStr::from_ptr(vtun.ifcfg) }.to_str().unwrap().to_string(),
-                    Token::KwPpp => unsafe { CStr::from_ptr(vtun.ppp) }.to_str().unwrap().to_string(),
-                    Token::KwRoute => unsafe { CStr::from_ptr(vtun.route) }.to_str().unwrap().to_string(),
+                    Token::KwFirewall => unsafe { CStr::from_ptr(ctx.vtun.fwall) }.to_str().unwrap().to_string(),
+                    Token::KwIp => unsafe { CStr::from_ptr(ctx.vtun.iproute) }.to_str().unwrap().to_string(),
+                    Token::KwIfconfig => unsafe { CStr::from_ptr(ctx.vtun.ifcfg) }.to_str().unwrap().to_string(),
+                    Token::KwPpp => unsafe { CStr::from_ptr(ctx.vtun.ppp) }.to_str().unwrap().to_string(),
+                    Token::KwRoute => unsafe { CStr::from_ptr(ctx.vtun.route) }.to_str().unwrap().to_string(),
                     Token::KwProgram => match &cmd.path {
                         None => "".to_string(),
                         Some(path) => path.to_string()
@@ -2028,11 +2027,18 @@ impl ParsingContext for BoolOptionParsingContext {
 }
 
 impl VtunConfigRoot {
-    pub fn new(file: &str) -> Option<Self> {
+    pub fn new(vtun_ctx: &mut mainvtun::VtunContext, file: &str) -> Option<Self> {
         let rootctx = Rc::new(Mutex::new(RootParsingContext::new()));
         {
             let mut ctx: Rc<Mutex<dyn ParsingContext>> = rootctx.clone();
-            let content = fs::read_to_string(file).unwrap();
+            let content = match fs::read_to_string(file) {
+                Ok(c) => c,
+                Err(_) => {
+                    let msg = format!("Failed to read config file '{}'\n\0", file);
+                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                    return None;
+                }
+            };
             let mut lexer = lexer::Token::lexer(content.as_str());
             while let Some(result) = lexer.next() {
                 match result {
@@ -2075,10 +2081,10 @@ impl VtunConfigRoot {
             }
         }
         let parsed = rootctx.lock().unwrap();
-        unsafe { parsed.apply(&mut lfd_mod::vtun); }
+        parsed.apply(&mut vtun_ctx.vtun);
 
         let root = VtunConfigRoot {
-            host_list: parsed.get_hosts()
+            host_list: parsed.get_hosts(vtun_ctx)
         };
 
         Some(root)
@@ -2104,9 +2110,8 @@ impl VtunConfigRoot {
 
 static mut CONFIG_ROOT: Option<VtunConfigRoot> = None;
 
-#[no_mangle]
-pub extern "C" fn read_config(file: *const libc::c_char) -> libc::c_int {
-    let root = VtunConfigRoot::new(unsafe { std::ffi::CStr::from_ptr(file) }.to_str().unwrap());
+pub fn read_config(ctx: &mut mainvtun::VtunContext, file: *const libc::c_char) -> libc::c_int {
+    let root = VtunConfigRoot::new(ctx, unsafe { std::ffi::CStr::from_ptr(file) }.to_str().unwrap());
     match root {
         Some(root) => unsafe { CONFIG_ROOT = Some(root); },
         None => return 0

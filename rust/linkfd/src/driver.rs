@@ -1,3 +1,5 @@
+use crate::mainvtun;
+
 pub trait Driver {
     fn write(&self, buf: &[u8]) -> Option<usize>;
     fn read(&self, buf: &mut Vec<u8>, len: usize) -> bool;
@@ -16,5 +18,5 @@ pub trait Driver {
 
 pub trait NetworkDriver {
     fn write(&self, buf: &mut Vec<u8>, flags: u16) -> Option<usize>;
-    fn read(&mut self, buf: &mut Vec<u8>) -> Option<u16>;
+    fn read(&mut self, ctx: &mut mainvtun::VtunContext, buf: &mut Vec<u8>) -> Option<u16>;
 }

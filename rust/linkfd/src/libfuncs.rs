@@ -21,7 +21,7 @@
 use std::ptr::null_mut;
 use crate::{auth, lfd_mod, linkfd, vtun_host};
 /* Read exactly len bytes (Signal safe)*/
-pub fn read_n(fd: libc::c_int, buf: &[u8]) -> Option<usize>
+pub fn read_n(fd: libc::c_int, buf: &mut [u8]) -> Option<usize>
 {
     let mut off = 0;
 
@@ -42,8 +42,7 @@ pub fn read_n(fd: libc::c_int, buf: &[u8]) -> Option<usize>
     Some(off)
 }
 
-#[no_mangle]
-pub(crate) extern "C" fn readn_t(fd: libc::c_int, buf: *mut u8, count: libc::size_t, timeout: libc::time_t) -> libc::c_int
+pub fn readn_t(fd: libc::c_int, buf: &mut [u8], timeout: libc::time_t) -> libc::c_int
 {
     let mut fdset: libc::fd_set = unsafe { std::mem::zeroed() };
     unsafe {
@@ -60,11 +59,32 @@ pub(crate) extern "C" fn readn_t(fd: libc::c_int, buf: *mut u8, count: libc::siz
         }
     }
 
-    let slice = unsafe { std::slice::from_raw_parts(buf, count) };
-    match read_n(fd, slice) {
+    match read_n(fd, buf) {
         Some(n) => n as libc::c_int,
         None => -1
     }
+}
+
+/* Write exactly len bytes (Signal safe)*/
+pub fn write_n(fd: libc::c_int, buf: &[u8]) -> Option<usize>
+{
+    let mut t: usize = 0;
+
+    while linkfd::is_io_cancelled() == 0 && t < buf.len() {
+        let w = unsafe { libc::write(fd, buf[t..buf.len()].as_ptr() as *const libc::c_void, (buf.len() - t) as usize) };
+        if w < 0 {
+            let errno = errno::errno();
+            if errno == errno::Errno(libc::EINTR) || errno == errno::Errno(libc::EAGAIN) {
+                continue;
+            }
+            return None;
+        }
+        if w == 0 {
+            return Some(t);
+        }
+        t = t + w as usize;
+    }
+    Some(t)
 }
 
 pub fn print_p(fd: libc::c_int, buf: &[u8]) -> bool {

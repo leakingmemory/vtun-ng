@@ -17,7 +17,7 @@
     GNU General Public License for more details.
  */
 use std::ptr::null_mut;
-use crate::{driver, lfd_mod, linkfd, mainvtun};
+use crate::{driver, lfd_mod, linkfd, mainvtun, syslog};
 
 pub(crate) struct UdpProto {
     pub fd: i32
@@ -99,7 +99,7 @@ impl driver::NetworkDriver for UdpProto {
                 else { break; }
             }
             if unsafe {libc::connect(self.fd,&mut from as *mut libc::sockaddr_in as *mut libc::sockaddr,fromlen)} != 0 {
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't connect socket\n\0".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't connect socket");
                 return None;
             }
             ctx.is_rmt_fd_connected = true;

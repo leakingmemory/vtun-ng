@@ -18,7 +18,7 @@
  */
 use std::{thread, time};
 use std::time::SystemTime;
-use crate::{lfd_mod, linkfd, vtun_host};
+use crate::{lfd_mod, linkfd, syslog, vtun_host};
 use crate::linkfd::LfdMod;
 
 struct LfdShaper {
@@ -37,10 +37,8 @@ impl LfdShaper {
         max_speed += 400;
 
         {
-            let logmsg = format!("Traffic shaping(speed {}K) initialized.\n\0", spd_out);
-            unsafe {
-                lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, logmsg.as_ptr() as *mut libc::c_char);
-            }
+            let logmsg = format!("Traffic shaping(speed {}K) initialized.", spd_out);
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, logmsg.as_str());
         }
 
         LfdShaper {

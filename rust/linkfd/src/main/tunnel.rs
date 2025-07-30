@@ -17,13 +17,8 @@
     GNU General Public License for more details.
  */
 use std::ffi::CStr;
-use crate::{driver, lfd_mod, linkfd, llist, mainvtun, netlib, pipe_dev, pty_dev, tcp_proto, tun_dev, udp_proto, vtun_host};
-
-extern "C" {
-    #[no_mangle]
-    fn set_title_str(title: *const libc::c_char);
-}
-
+use crate::{driver, lfd_mod, linkfd, llist, main, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
+use crate::setproctitle::set_title;
 /* Travel list from head to tail */
 fn llist_trav(l: &mut llist::LList, f: extern "C" fn(*mut libc::c_void, *mut libc::c_void) -> libc::c_int, u: *mut libc::c_void) -> *mut libc::c_void {
     let mut i = l.head;
@@ -37,12 +32,7 @@ fn llist_trav(l: &mut llist::LList, f: extern "C" fn(*mut libc::c_void, *mut lib
     std::ptr::null_mut()
 }
 
-pub(crate) fn set_title(title: &str) {
-    let str = format!("{}\0", title);
-    unsafe { set_title_str(str.as_ptr() as *const libc::c_char); }
-}
-
-/// Substitutes opt in place off '%X'. 
+/// Substitutes opt in place off '%X'.
 /// Returns new string.
 fn subst_opt(str: &str, sopt: Option<&vtun_host::VtunSopt>) -> Option<String> {
     if str.is_empty() {
@@ -216,7 +206,7 @@ extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::
 
     let forkres = unsafe { libc::fork() };
     if forkres < 0 {
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Couldn't fork()\n\0".as_ptr() as *mut libc::c_char); }
+        syslog::vtun_syslog(lfd_mod::LOG_ERR,"Couldn't fork()");
         return 0;
     }
     if forkres > 0 {
@@ -229,7 +219,7 @@ extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::
                                       prog.unwrap_or_else(|| "<unknown>".to_string()),
                                       args.unwrap_or_else(|| "<unknown>".to_string()),
                                       libc::WEXITSTATUS(st));
-                    lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char);
+                    syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
                 }
             }
         }
@@ -280,8 +270,8 @@ extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::
 
     unsafe { libc::execv(run_prog.as_ptr() as *const libc::c_char, argv.as_ptr() as *const *const libc::c_char) };
     let msg = format!("Couldn't exec program {}", run_prog);
+    syslog::vtun_syslog(lfd_mod::LOG_ERR,msg.as_str());
     unsafe {
-        lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,msg.as_ptr() as *mut libc::c_char);
         libc::exit(1);
     }
 }
@@ -293,7 +283,7 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
     }
     let retv = unsafe { libc::fork() };
     if retv < 0 {
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't fork()\n\0".as_ptr() as *mut libc::c_char); }
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't fork()");
         return 0;
     }
     if retv == 0 {
@@ -307,8 +297,8 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
                     /* Open pty slave (becomes controlling terminal) */
                     fd2 = unsafe { libc::open(dev.as_ptr() as *const libc::c_char, libc::O_RDWR) };
                     if fd2 < 0 {
+                        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't open slave pty");
                         unsafe {
-                            lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't open slave pty\n\0".as_ptr() as *mut libc::c_char);
                             libc::exit(0);
                         }
                     }
@@ -349,10 +339,8 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
     {
         let mut st: libc::c_int = 0;
         if unsafe { libc::waitpid(retv, &mut st, 0) } <= 0 {
-            unsafe {
-                lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't wait for child process\n\0".as_ptr() as *mut libc::c_char);
-                return 0;
-            }
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't wait for child process");
+            return 0;
         }
     }
     unsafe {
@@ -429,7 +417,7 @@ fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::Vtu
     } else if protflags == linkfd::VTUN_UDP {
         let opt = netlib::udp_session(ctx, host);
         if opt == false {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't establish UDP session\n\0".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't establish UDP session");
             return 0;
         }
 
@@ -438,7 +426,7 @@ fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::Vtu
         };
         return tunnel_lfd(ctx, host, driver, &mut proto, dev, interface_already_open)
     }
-    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Unknown network transport protocol\n\0".as_ptr() as *mut libc::c_char); }
+    syslog::vtun_syslog(lfd_mod::LOG_ERR,"Unknown network transport protocol");
     0
 }
 
@@ -467,7 +455,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
                     tunnel_setup_proto(ctx, host, driver, dev.as_str(), interface_already_open)
                 },
                 None => {
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't allocate pseudo tty.\n\0".as_ptr() as *mut libc::c_char); }
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't allocate pseudo tty.");
                     -1
                 }
             }
@@ -477,7 +465,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
                     tunnel_setup_proto(ctx, host, driver, "", interface_already_open)
                 },
                 None => {
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't allocate pipe.\n\0".as_ptr() as *mut libc::c_char); }
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't allocate pipe.");
                     -1
                 }
             }
@@ -500,11 +488,11 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
                 None => {
                     let msg: String;
                     if dev_specified {
-                        msg = format!("Can't open tap device {}\n\0", dev);
+                        msg = format!("Can't open tap device {}", dev);
                     } else {
-                        msg = "Can't allocate tap device.\n\0".to_string();
+                        msg = "Can't allocate tap device.".to_string();
                     }
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                     -1
                 }
             }
@@ -527,16 +515,16 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
                 None => {
                     let msg: String;
                     if dev_specified {
-                        msg = format!("Can't open tun device {}\n\0", dev);
+                        msg = format!("Can't open tun device {}", dev);
                     } else {
-                        msg = "Can't allocate tun device.\n\0".to_string();
+                        msg = "Can't allocate tun device.".to_string();
                     }
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                     -1
                 }
             }
         }  else {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.\n\0".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.");
             -1
         }
     } else {
@@ -572,7 +560,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
             let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
             tunnel_setup_proto(ctx, host, &mut driver, dev.as_str(), interface_already_open)
         }  else {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.\n\0".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.");
             -1
         }
     }

@@ -21,7 +21,7 @@ use std::ffi::CStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use signal_hook::low_level;
-use crate::{lfd_mod, linkfd, lock, mainvtun, netlib, tunnel};
+use crate::{lfd_mod, linkfd, lock, main, mainvtun, netlib, setproctitle, syslog, tunnel};
 use crate::auth::auth_server;
 
 struct ServerCtx {
@@ -38,7 +38,7 @@ impl ServerCtx {
         self.server_term.store(server_term, Ordering::Relaxed);
     }
     fn sig_term(&self) {
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,"Terminated\n\0".as_ptr() as *mut libc::c_char); }
+        syslog::vtun_syslog(lfd_mod::LOG_INFO,"Terminated");
         self.set_server_term(linkfd::VTUN_SIG_TERM);
     }
 }
@@ -46,16 +46,16 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
     let mut cl_addr : libc::sockaddr_in = unsafe { mem::zeroed() };
     let mut opt: libc::socklen_t = size_of::<libc::sockaddr_in>() as libc::socklen_t;
     if unsafe { libc::getpeername(sock, (&mut cl_addr as *mut libc::sockaddr_in).cast(), &mut opt as *mut libc::socklen_t) } != 0 {
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get peer name");
         unsafe {
-            lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't get peer name\n\0".as_ptr() as *mut libc::c_char);
             libc::exit(1);
         }
     }
     let mut my_addr : libc::sockaddr_in = unsafe { mem::zeroed() };
     let mut opt = size_of::<libc::sockaddr_in>() as libc::socklen_t;
     if unsafe { libc::getsockname(sock, (&mut my_addr as *mut libc::sockaddr_in).cast(), &mut opt) } < 0 {
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get local socket address");
         unsafe {
-            lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't get local socket address\n\0".as_ptr() as *mut libc::c_char);
             libc::exit(1);
         }
     }
@@ -72,8 +72,8 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
             unsafe { libc::sigaction(libc::SIGHUP, &sa, ptr::null_mut()); }
 
             {
-                let msg = format!("Session {}[{}:{}] opened\n\0", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), ip, u16::from_be(cl_addr.sin_port));
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Session {}[{}:{}] opened", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), ip, u16::from_be(cl_addr.sin_port));
+                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
             host.rmt_fd = sock;
 
@@ -95,16 +95,16 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
             tunnel::tunnel(ctx, &mut host);
 
             {
-                let msg = format!("Session {} closed\n\0", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Session {} closed", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
+                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
 
             /* Unlock host. (locked in auth_server) */
             lock::unlock_host(&host);
         }
         None => {
-            let msg = format!("Denied connection from {}:{}\n\0", ip, u16::from_be(cl_addr.sin_port));
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
+            let msg = format!("Denied connection from {}:{}", ip, u16::from_be(cl_addr.sin_port));
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
         }
     }
     unsafe {
@@ -119,16 +119,16 @@ fn listener(ctx: &mut mainvtun::VtunContext) {
 
     /* Set listen address */
     if !netlib::generic_addr_rs(&mut my_addr, & ctx.vtun.bind_addr) {
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't fill in listen socket");
         unsafe {
-            lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't fill in listen socket\n\0".as_ptr() as *mut libc::c_char);
             libc::exit(1);
         }
     }
 
     let s= unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM,0) };
     if s == -1 {
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't create socket");
         unsafe {
-            lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't create socket\n\0".as_ptr() as *mut libc::c_char);
             libc::exit(1);
         }
     }
@@ -137,15 +137,15 @@ fn listener(ctx: &mut mainvtun::VtunContext) {
     unsafe { libc::setsockopt(s, libc::SOL_SOCKET, libc::SO_REUSEADDR, &opt as *const i32 as *const libc::c_void, size_of::<i32>() as libc::socklen_t); }
 
     if unsafe { libc::bind(s,(&my_addr as *const libc::sockaddr_in).cast(),size_of::<libc::sockaddr_in>() as libc::socklen_t) } != 0 {
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't bind to the socket");
         unsafe {
-            lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't bind to the socket\n\0".as_ptr() as *mut libc::c_char);
             libc::exit(1);
         }
     }
 
     if unsafe { libc::listen(s, 10) } != 0 {
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't listen on the socket");
         unsafe {
-            lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Can't listen on the socket\n\0".as_ptr() as *mut libc::c_char);
             libc::exit(1);
         }
     }
@@ -171,7 +171,7 @@ fn listener(ctx: &mut mainvtun::VtunContext) {
         }
     };
 
-    tunnel::set_title(format!("waiting for connections on port {}", ctx.vtun.bind_addr.port).as_str());
+    setproctitle::set_title(format!("waiting for connections on port {}", ctx.vtun.bind_addr.port).as_str());
 
     loop {
         {
@@ -209,7 +209,7 @@ fn listener(ctx: &mut mainvtun::VtunContext) {
             unsafe { libc::close(s); }
             connection(ctx, s1);
         } else if f == -1 {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't fork()\n\0".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't fork()");
         }
         if f != 0 {
             unsafe { libc::close(s1); }
@@ -241,7 +241,7 @@ pub fn server_rs(ctx: &mut mainvtun::VtunContext, sock: i32) {
     {
         let svr_type = if ctx.vtun.svr_type == lfd_mod::VTUN_INETD  { "inetd" } else { "stand" };
         let msg = format!("VTUN server ver {} ({})", lfd_mod::VTUN_VER, svr_type);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,msg.as_ptr() as *mut libc::c_char); }
+        syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
     }
 
     let svr_type = ctx.vtun.svr_type;

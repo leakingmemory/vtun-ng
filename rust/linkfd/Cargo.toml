@@ -1,11 +1,11 @@
 [package]
-name = "vtun_linkfd"
+name = "vtun"
 version = "0.1.0"
 edition = "2021"
 
-
-[lib]
-crate-type = ["rlib", "cdylib"]
+[[bin]]
+name = "vtun"
+path = "src/main.rs"
 
 [dependencies]
 libc = "0.2"
@@ -21,3 +21,5 @@ time = { version = "0.3.41", features = ["macros", "formatting"] }
 errno = "0.3.13"
 dns-lookup = "2.0.4"
 logos = "0.15.0"
+proctitle = "0.1.1"
+getopts = "0.2.23"

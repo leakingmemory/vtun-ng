@@ -1,4 +1,4 @@
-use crate::mainvtun;
+use crate::{main, mainvtun};
 
 pub trait Driver {
     fn write(&self, buf: &[u8]) -> Option<usize>;

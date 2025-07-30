@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 use signal_hook::low_level;
-use crate::{auth, lfd_mod, libfuncs, linkfd, mainvtun, netlib, tunnel, vtun_host};
+use crate::{auth, lfd_mod, libfuncs, linkfd, main, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
 
 struct ClientCtx {
     client_term: Arc<AtomicI32>
@@ -42,7 +42,7 @@ impl ClientCtx {
         self.client_term.store(client_term, Ordering::Relaxed);
     }
     fn sig_term(&self) {
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,"Terminated\n\0".as_ptr() as *mut libc::c_char); }
+        syslog::vtun_syslog(lfd_mod::LOG_INFO,"Terminated");
         self.set_client_term(linkfd::VTUN_SIG_TERM);
     }
 }
@@ -50,8 +50,8 @@ impl ClientCtx {
 pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost)
 {
     {
-        let msg = format!("VTun client ver {} started\n\0", lfd_mod::VTUN_VER);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("VTun client ver {} started", lfd_mod::VTUN_VER);
+        syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
     let client_ctx: Arc<ClientCtx> = Arc::new(ClientCtx::new());
 
@@ -105,7 +105,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         }
 
         let msg = format!("{} init initializing", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
-        tunnel::set_title(msg.as_str());
+        setproctitle::set_title(msg.as_str());
 
         /* Set server address */
         let mut svr_addr = unsafe { mem::zeroed() };
@@ -126,8 +126,8 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         let s = unsafe { libc::socket(libc::AF_INET,libc::SOCK_STREAM,0) };
         if s==-1 {
             let errno = errno::errno();
-            let msg = format!("Can't create socket. {}\n\0", errno.to_string());
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+            let msg = format!("Can't create socket. {}", errno.to_string());
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
             continue;
         }
 
@@ -137,8 +137,8 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
 
         if unsafe { libc::bind(s,(&my_addr as *const libc::sockaddr_in).cast(),size_of::<libc::sockaddr_in>() as libc::socklen_t) } != 0 {
             let errno = errno::errno();
-            let msg = format!("Can't bind socket. {}\n\0", errno.to_string());
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+            let msg = format!("Can't bind socket. {}", errno.to_string());
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
             continue;
         }
 
@@ -153,34 +153,34 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
 
         {
             let msg = format!("{} connecting to {}", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
-            tunnel::set_title(msg.as_str());
+            setproctitle::set_title(msg.as_str());
         }
         if ctx.vtun.quiet == 0 {
-            let msg = format!("Connecting to {}\n\0", unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
+            let msg = format!("Connecting to {}", unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
         }
 
         if !netlib::connect_t(s, (&svr_addr as *const libc::sockaddr_in).cast(), host.timeout as libc::time_t) {
             let errno = errno::errno();
             if ctx.vtun.quiet == 0 || errno != errno::Errno(libc::ETIMEDOUT) {
-                let msg = format!("Connect to {} failed. {}n\0", unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap(), errno.to_string());
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Connect to {} failed. {}", unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap(), errno.to_string());
+                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
         } else {
             if auth::auth_client_rs(ctx, s, host) {
-                let msg = format!("Session {}[{}] opened\n\0", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Session {}[{}] opened", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
+                syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
 
                 host.rmt_fd = s;
 
                 /* Start the tunnel */
                 client_ctx.set_client_term(tunnel::tunnel(ctx, host));
 
-                let msg = format!("Session {}[{}] closed\n\0", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Session {}[{}] closed", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
+                syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
             } else {
                 let msg = format!("Connection denied by {}", unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,msg.as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
             }
         }
         unsafe { libc::close(s); }
@@ -196,6 +196,6 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         None => false
     };
 
-    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Exit\n\0".as_ptr() as *mut libc::c_char); }
+    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Exit");
     return;
 }

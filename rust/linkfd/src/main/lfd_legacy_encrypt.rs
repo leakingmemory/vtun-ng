@@ -40,7 +40,7 @@
 use blowfish::Blowfish;
 use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 use ecb::{Decryptor, Encryptor};
-use crate::{lfd_mod, linkfd, vtun_host};
+use crate::{lfd_mod, linkfd, syslog, vtun_host};
 use crate::linkfd::{LfdModFactory};
 
 pub struct LfdLegacyEncrypt {
@@ -63,8 +63,8 @@ impl LfdLegacyEncrypt {
             ctx_enc: BlowfishEcbEnc::new_from_slice(&key).unwrap(),
             ctx_dec: BlowfishEcbDec::new_from_slice(&key).unwrap()
         };
-
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized\n\0".as_ptr() as *mut libc::c_char); }
+        
+        syslog::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized");
 
         Some(lfd_legacy_encrypt)
     }
@@ -132,7 +132,7 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
         }
         let p = buf[0];
         if p < 1 || p > 8 {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length\n\0".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length");
             return false;
         }
 

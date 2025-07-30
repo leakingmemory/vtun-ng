@@ -24,7 +24,7 @@
  */
 use std::ffi::CStr;
 use crate::challenge::VTUN_CHAL_SIZE;
-use crate::{cfg_file, challenge, lfd_mod, libfuncs, linkfd, lock, tunnel, vtun_host};
+use crate::{cfg_file, challenge, lfd_mod, libfuncs, linkfd, lock, setproctitle, syslog, tunnel, vtun_host};
 use crate::libfuncs::print_p;
 use crate::mainvtun::VtunContext;
 
@@ -116,7 +116,7 @@ fn cf2bf(str: &[u8], host: &mut vtun_host::VtunHost) -> bool
     }
     {
         let msg = format!("Remote Server send {}.", str::from_utf8(&str[off..str.len()]).unwrap());
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_DEBUG, msg.as_ptr() as *mut libc::c_char); }
+        unsafe { syslog::vtun_syslog(lfd_mod::LOG_DEBUG, msg.as_str()); }
     }
     off = off + 1;
     while off < str.len() {
@@ -250,7 +250,7 @@ fn get_tokenize_length(slice: &mut [u8]) -> usize {
 }
 /* Authentication (Server side) */
 pub fn auth_server(ctx: &VtunContext, fd: i32) -> Option<vtun_host::VtunHost> {
-    tunnel::set_title("authentication");
+    setproctitle::set_title("authentication");
 
     let fmt = format!("VTUN server ver {}\n", lfd_mod::VTUN_VER);
     print_p(fd, fmt.as_bytes());

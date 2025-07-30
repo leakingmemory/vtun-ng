@@ -18,7 +18,7 @@ use std::ptr::null_mut;
 use std::rc::{Rc, Weak};
 use std::sync::Mutex;
 use logos::Logos;
-use crate::{lexer, lfd_mod, linkfd, llist, mainvtun, tunnel, vtun_host};
+use crate::{lexer, lfd_mod, linkfd, llist, mainvtun, syslog, tunnel, vtun_host};
 use crate::lexer::Token;
 use crate::vtun_host::VtunHost;
 
@@ -100,8 +100,8 @@ impl RootParsingContext {
 }
 impl ParsingContext for RootParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in config file\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in config file");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.failed = true;
     }
     fn Token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: lexer::Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
@@ -123,8 +123,8 @@ impl ParsingContext for RootParsingContext {
             },
             Token::Semicolon => None,
             _ => {
-                let msg = format!("Unexpected token in config\n\0");
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Unexpected token in config");
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -151,8 +151,8 @@ impl KwDefaultParsingContext {
 
 impl ParsingContext for KwDefaultParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in default\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in default");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -170,8 +170,8 @@ impl ParsingContext for KwDefaultParsingContext {
                 Some(host_ctx)
             },
             _ => {
-                let msg = format!("Expected {{ afer default\n\0");
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Expected {{ afer default");
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -197,8 +197,8 @@ impl RootIdentParsingContext {
 
 impl ParsingContext for RootIdentParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error after {}\n\0", self.identifier);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error after {}", self.identifier);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -216,8 +216,8 @@ impl ParsingContext for RootIdentParsingContext {
                 Some(host_ctx)
             },
             _ => {
-                let msg = format!("Expected {{ afer {}\n\0", self.identifier);
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Expected {{ afer {}", self.identifier);
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -383,8 +383,8 @@ impl HostConfigParsingContext {
 
 impl ParsingContext for HostConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in config section\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in config section");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -470,8 +470,8 @@ impl ParsingContext for HostConfigParsingContext {
                         Some(down_ctx)
                     },
                     _ => {
-                        let msg = format!("Unexpected token '{}' in host configuration section\n\0", ident);
-                        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                        let msg = format!("Unexpected token '{}' in host configuration section", ident);
+                        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                         self.SetFailed();
                         None
                     }
@@ -482,8 +482,8 @@ impl ParsingContext for HostConfigParsingContext {
                 self.parent.upgrade()
             },
             _ => {
-                let msg = format!("Unexpected token in host configuration section\n\0");
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Unexpected token in host configuration section");
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -513,8 +513,8 @@ impl CompressConfigParsingContext {
         host.zlevel = self.compress_level;
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after compress\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after compress");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -522,8 +522,8 @@ impl CompressConfigParsingContext {
 
 impl ParsingContext for CompressConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in compress\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in compress");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -602,8 +602,8 @@ impl EncryptConfigParsingContext {
         }
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after encrypt\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after encrypt");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -611,8 +611,8 @@ impl EncryptConfigParsingContext {
 
 impl ParsingContext for EncryptConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in encrypt\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in encrypt");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -693,8 +693,8 @@ impl TypeConfigParsingContext {
         host.flags = host.flags | self.type_value;
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after type\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after type");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -702,8 +702,8 @@ impl TypeConfigParsingContext {
 
 impl ParsingContext for TypeConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in type\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in type");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -770,8 +770,8 @@ impl ProtoConfigParsingContext {
         host.flags = host.flags | self.proto_value;
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after proto\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after proto");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -779,8 +779,8 @@ impl ProtoConfigParsingContext {
 
 impl ParsingContext for ProtoConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in proto\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in proto");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -841,8 +841,8 @@ impl KeepaliveConfigParsingContext {
         host.ka_maxfail = self.keepalive_count;
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after keepalive\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after keepalive");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -850,8 +850,8 @@ impl KeepaliveConfigParsingContext {
 
 impl ParsingContext for KeepaliveConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in keepalive\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in keepalive");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -967,8 +967,8 @@ impl NatHackConfigParsingContext {
         }
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after nat_hack\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after nat_hack");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -976,8 +976,8 @@ impl NatHackConfigParsingContext {
 
 impl ParsingContext for NatHackConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in nat_hack\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in nat_hack");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1031,8 +1031,8 @@ impl KwOptionsParsingContext {
 
 impl ParsingContext for KwOptionsParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in default\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in default");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1050,8 +1050,8 @@ impl ParsingContext for KwOptionsParsingContext {
                 Some(options_ctx)
             },
             _ => {
-                let msg = format!("Expected {{ afer default\n\0");
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Expected {{ afer default");
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -1169,8 +1169,8 @@ impl OptionsConfigParsingContext {
 
 impl ParsingContext for OptionsConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in options section\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in options section");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1233,8 +1233,8 @@ impl ParsingContext for OptionsConfigParsingContext {
                 self.parent.upgrade()
             },
             _ => {
-                let msg = format!("Unexpected token in options section\n\0");
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Unexpected token in options section");
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -1268,8 +1268,8 @@ impl KwBindaddrConfigParsingContext {
 
 impl ParsingContext for KwBindaddrConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1287,8 +1287,8 @@ impl ParsingContext for KwBindaddrConfigParsingContext {
                 Some(bindaddr_ctx)
             },
             _ => {
-                let msg = format!("Expected {{ afer bindaddr\n\0");
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Expected {{ afer bindaddr");
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -1317,8 +1317,8 @@ impl BindaddrConfigParsingContext {
             None => {},
             Some(ref iface_ctx) => {
                 if self.addr_ctx.is_some() {
-                    let msg = format!("In '{}' iface overrides addr\n\0", self.token_name);
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                    let msg = format!("In '{}' iface overrides addr", self.token_name);
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 }
                 let ifname = format!("{}\0", iface_ctx.lock().unwrap().value);
                 if bindaddr.name != null_mut() {
@@ -1338,8 +1338,8 @@ impl BindaddrConfigParsingContext {
         }
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token afer {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token afer {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -1347,8 +1347,8 @@ impl BindaddrConfigParsingContext {
 
 impl ParsingContext for BindaddrConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1418,8 +1418,8 @@ impl AddrConfigParsingContext {
         None
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after addr\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after addr");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -1427,8 +1427,8 @@ impl AddrConfigParsingContext {
 
 impl ParsingContext for AddrConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error after addr\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error after addr");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1510,8 +1510,8 @@ impl SyslogOptionParsingContext {
         None
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after syslog\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after syslog");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -1519,8 +1519,8 @@ impl SyslogOptionParsingContext {
 
 impl ParsingContext for SyslogOptionParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error after syslog\n\0");
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error after syslog");
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1565,8 +1565,8 @@ impl KwUpDownParsingContext {
 
 impl ParsingContext for KwUpDownParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in {}\n\0", self.ident);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in {}", self.ident);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1584,8 +1584,8 @@ impl ParsingContext for KwUpDownParsingContext {
                 Some(updown_ctx)
             },
             _ => {
-                let msg = format!("Expected {{ afer {}\n\0", self.ident);
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Expected {{ afer {}", self.ident);
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -1676,8 +1676,8 @@ impl UpDownParsingContext {
 
 impl ParsingContext for UpDownParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in {}\n\0", self.ident);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in {}", self.ident);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1720,8 +1720,8 @@ impl ParsingContext for UpDownParsingContext {
                 self.parent.upgrade()
             },
             _ => {
-                let msg = format!("Unexpected token in {} section\n\0", self.ident);
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Unexpected token in {} section", self.ident);
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 self.SetFailed();
                 None
             }
@@ -1793,8 +1793,8 @@ impl CommandConfigParsingContext {
         }
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -1802,8 +1802,8 @@ impl CommandConfigParsingContext {
 
 impl ParsingContext for CommandConfigParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1849,8 +1849,8 @@ impl IntegerOptionParsingContext {
         }
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -1858,8 +1858,8 @@ impl IntegerOptionParsingContext {
 
 impl ParsingContext for IntegerOptionParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1908,8 +1908,8 @@ impl StringOptionParsingContext {
         }
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -1917,8 +1917,8 @@ impl StringOptionParsingContext {
 
 impl ParsingContext for StringOptionParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -1985,8 +1985,8 @@ impl BoolOptionParsingContext {
         None
     }
     fn UnexpectedToken(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        let msg = format!("Unexpected token after {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Unexpected token after {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         self.SetFailed();
         None
     }
@@ -1994,8 +1994,8 @@ impl BoolOptionParsingContext {
 
 impl ParsingContext for BoolOptionParsingContext {
     fn SetFailed(&mut self) {
-        let msg = format!("Parse error in {}\n\0", self.token_name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Parse error in {}", self.token_name);
+        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
             Some(parent) => parent.lock().unwrap().SetFailed(),
             None => {}
@@ -2034,8 +2034,8 @@ impl VtunConfigRoot {
             let content = match fs::read_to_string(file) {
                 Ok(c) => c,
                 Err(_) => {
-                    let msg = format!("Failed to read config file '{}'\n\0", file);
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                    let msg = format!("Failed to read config file '{}'", file);
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                     return None;
                 }
             };
@@ -2056,8 +2056,8 @@ impl VtunConfigRoot {
                         {
                             let rctx = rootctx.lock().unwrap();
                             if (rctx.failed) {
-                                let msg = format!("Parse error at: {}\n\0", lexer.slice());
-                                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                                let msg = format!("Parse error at: {}", lexer.slice());
+                                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                                 return None;
                             }
                         }
@@ -2067,16 +2067,16 @@ impl VtunConfigRoot {
                         }
                     },
                     Err(_) => {
-                        let msg = format!("Parse error at: {}\n\0", lexer.slice());
-                        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                        let msg = format!("Parse error at: {}", lexer.slice());
+                        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                         return None;
                     }
                 }
             }
             let mut mctx = ctx.lock().unwrap();
             if !mctx.EndOfFileOk() {
-                let msg = format!("Parse error at: End of file\n\0");
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                let msg = format!("Parse error at: End of file");
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 return None;
             }
         }

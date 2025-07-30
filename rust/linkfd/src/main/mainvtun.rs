@@ -1,9 +1,10 @@
-/*  
+/*
     VTun - Virtual Tunnel over TCP/IP network.
 
     Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 2025 Jan-Espen Oversand <sigsegv@radiotube.org>
 
-    VTun has been derived from VPPP package by Maxim Krasnyansky. 
+    VTun has been derived from VPPP package by Maxim Krasnyansky.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -16,18 +17,17 @@
     GNU General Public License for more details.
  */
 
-/*
- * $Id: lib.h,v 1.7.2.4 2016/10/01 21:27:51 mtbishop Exp $
- */ 
-#ifndef _VTUN_LIB_H
-#define _VTUN_LIB_H
+use crate::{cfg_file, lfd_mod, syslog};
 
-#include "config.h"
-#include <sys/types.h>
-#include <signal.h>
-#include <errno.h>
+pub struct VtunContext {
+    pub vtun: lfd_mod::VtunOpts,
+    pub is_rmt_fd_connected: bool
+}
 
-/* signal safe syslog function */
-void vtun_syslog (int priority, char *format, ...);
-
-#endif /* _VTUN_LIB_H */
+pub fn reread_config(ctx: &mut VtunContext)
+{
+    if cfg_file::read_config(ctx, ctx.vtun.cfg_file) == 0 {
+        syslog::vtun_syslog(lfd_mod::LOG_ERR,"No hosts defined");
+        unsafe { libc::exit(1); }
+    }
+}

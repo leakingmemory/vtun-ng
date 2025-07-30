@@ -17,10 +17,67 @@
     GNU General Public License for more details.
  */
 
+#[path = "main/cfg_file.rs"]
+mod cfg_file;
+#[path = "main/server.rs"]
+mod server;
+#[path = "main/client.rs"]
+mod client;
+#[path = "main/challenge.rs"]
+mod challenge;
+#[path = "main/auth.rs"]
+mod auth;
+#[path = "main/lfd_mod.rs"]
+mod lfd_mod;
+#[path = "main/setproctitle.rs"]
+mod setproctitle;
+#[path = "main/lfd_encrypt.rs"]
+mod lfd_encrypt;
+#[path = "main/lfd_legacy_encrypt.rs"]
+mod lfd_legacy_encrypt;
+#[path = "main/lfd_lzo.rs"]
+mod lfd_lzo;
+#[path = "main/lfd_zlib.rs"]
+mod lfd_zlib;
+#[path = "main/lfd_shaper.rs"]
+mod lfd_shaper;
+#[path = "main/linkfd.rs"]
+mod linkfd;
+#[path = "main/driver.rs"]
+mod driver;
+#[path = "main/pipe_dev.rs"]
+mod pipe_dev;
+#[path = "main/pty_dev.rs"]
+mod pty_dev;
+#[path = "main/tun_dev.rs"]
+mod tun_dev;
+#[path = "main/tcp_proto.rs"]
+mod tcp_proto;
+#[path = "main/udp_proto.rs"]
+mod udp_proto;
+#[path = "main/tunnel.rs"]
+mod tunnel;
+#[path = "main/libfuncs.rs"]
+mod libfuncs;
+#[path = "main/lock.rs"]
+mod lock;
+#[path = "main/netlib.rs"]
+mod netlib;
+#[path = "main/llist.rs"]
+mod llist;
+#[path = "main/vtun_host.rs"]
+mod vtun_host;
+#[path = "main/lexer.rs"]
+mod lexer;
+#[path = "main/mainvtun.rs"]
+mod mainvtun;
+#[path = "main/syslog.rs"]
+mod syslog;
+
 use std::ffi::CStr;
 use std::io::Write;
-use std::ptr;
-use crate::{cfg_file, client, lfd_mod, server};
+use std::{env, ptr};
+use getopts::Options;
 
 const VTUN_PORT: libc::c_int = 5000;
 const VTUN_TIMEOUT: libc::c_int = 30;
@@ -31,31 +88,17 @@ const SERVOPT_STRING: &'static str = "s";
 const VTUN_CONFIG_FILE: &'static str = env!("VTUN_CONFIG_FILE");
 const VTUN_PID_FILE: &'static str = env!("VTUN_PID_FILE");
 
-extern "C" {
-    #[no_mangle]
-    pub static mut optind: libc::c_int;
-    #[no_mangle]
-    pub static mut optarg: *const libc::c_char;
-
-    #[no_mangle]
-    pub fn init_title_from_rs(argc: libc::c_int, argv: *const *const libc::c_char, env: *const *const libc::c_char, name: *const libc::c_char);
-}
-
-pub struct VtunContext {
-    pub vtun: lfd_mod::VtunOpts,
-    pub is_rmt_fd_connected: bool
-}
-
-#[no_mangle]
-extern "C" fn main_rs(argc: libc::c_int, argv: *const *mut libc::c_char, env: *const *const libc::c_char) -> libc::c_int
+fn main()
 {
+    setproctitle::init_title();
+
     /* Configure default settings */
     let mut svr = false;
     let mut daemon = true;
     let mut sock: libc::c_int = 0;
     let mut dofork = true;
 
-    let mut ctx: VtunContext = VtunContext {
+    let mut ctx: mainvtun::VtunContext = mainvtun::VtunContext {
         vtun: lfd_mod::VtunOpts::new(),
         is_rmt_fd_connected: true
     };
@@ -79,57 +122,85 @@ extern "C" fn main_rs(argc: libc::c_int, argv: *const *mut libc::c_char, env: *c
     /* Start logging to syslog and stderr */
     unsafe { libc::openlog("vtund\0".as_ptr() as *mut libc::c_char, libc::LOG_PID | libc::LOG_NDELAY | libc::LOG_PERROR, libc::LOG_DAEMON); }
 
-    let optstr = format!("{}{}\0", OPTSTRING, SERVOPT_STRING);
-    loop {
-        let mut opt = unsafe { libc::getopt(argc, argv, optstr.as_ptr() as *mut libc::c_char) };
-        if opt == libc::EOF {
-            break;
+    let args: Vec<String> = env::args().collect();
+    let program = args[0].clone();
+
+    let mut opts = Options::new();
+    opts.optflag("h", "help", "print this help menu");
+    opts.optflag("m", "mlockall", "mlockall() all memory");
+    opts.optflag("i", "inetd", "run as inetd");
+    opts.optflag("s", "server", "run as server");
+    opts.optopt("P", "port", "listen port", "PORT");
+    opts.optopt("L", "local", "local address", "ADDR");
+    opts.optopt("f", "config", "config file", "FILE");
+    opts.optopt("t", "timeout", "timeout", "SEC");
+    opts.optflag("n", "no-daemon", "don't daemonize");
+    opts.optflag("p", "persist", "persist mode");
+    opts.optflag("q", "quiet", "quiet mode");
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(f) => {
+            print_usage(&program, opts);
+            unsafe { libc::exit(1); }
         }
-        if opt < 0 || opt > 255 {
-            opt = 0;
-        }
-        match opt as u8 {
-            b'm' => unsafe {
-                if (libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) < 0) {
-                    libc::perror("Unable to mlockall()\0".as_ptr() as *mut libc::c_char);
-                    libc::exit(-1);
-                }
-            },
-            b'i' => {
-                ctx.vtun.svr_type = lfd_mod::VTUN_INETD;
-                svr = true;
-            },
-            b's' => {
-                svr = true;
-            },
-            b'L' => unsafe {
-                ctx.vtun.svr_addr = libc::strdup(optarg);
-            },
-            b'P' => unsafe {
-                ctx.vtun.bind_addr.port = libc::atoi(optarg);
-            },
-            b'f' => unsafe {
-                ctx.vtun.cfg_file = libc::strdup(optarg);
-            },
-            b'n' => {
-                daemon = false;
-            },
-            b'p' => {
-                ctx.vtun.persist = 1;
-            },
-            b't' => unsafe {
-                ctx.vtun.timeout = libc::atoi(optarg);
-            },
-            b'q' => {
-                ctx.vtun.quiet = 1;
-            },
-            _ => {
-                usage();
-                unsafe { libc::exit(1); }
+    };
+    if matches.opt_present("h") {
+        print_usage(&program, opts);
+        return;
+    }
+    if matches.opt_present("m") {
+        unsafe {
+            if (libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) < 0) {
+                libc::perror("Unable to mlockall()\0".as_ptr() as *mut libc::c_char);
+                libc::exit(-1);
             }
         }
     }
-    reread_config(&mut ctx);
+    if matches.opt_present("i") {
+        ctx.vtun.svr_type = lfd_mod::VTUN_INETD;
+        svr = true;
+    }
+    if matches.opt_present("s") {
+        svr = true;
+    }
+    match matches.opt_str("L") {
+        Some(str) => unsafe {
+            let str = format!("{}\0", str);
+            ctx.vtun.svr_addr = libc::strdup(str.as_ptr() as *const libc::c_char);
+        },
+        None => {}
+    }
+    match matches.opt_str("P") {
+        Some(str) => unsafe {
+            let str = format!("{}\0", str);
+            ctx.vtun.bind_addr.port = libc::atoi(str.as_ptr() as *const libc::c_char);
+        },
+        None => {}
+    }
+    match matches.opt_str("f") {
+        Some(str) => unsafe {
+            let str = format!("{}\0", str);
+            ctx.vtun.cfg_file = libc::strdup(str.as_ptr() as *const libc::c_char);
+        },
+        None => {}
+    }
+    match matches.opt_str("t") {
+        Some(str) => unsafe {
+            let str = format!("{}\0", str);
+            ctx.vtun.timeout = libc::atoi(str.as_ptr() as *const libc::c_char);
+        },
+        None => {}
+    }
+    if matches.opt_present("n") {
+        daemon = false;
+    }
+    if matches.opt_present("p") {
+        ctx.vtun.persist = 1;
+    }
+    if matches.opt_present("q") {
+        ctx.vtun.quiet = 1;
+    }
+    mainvtun::reread_config(&mut ctx);
 
     if (ctx.vtun.syslog != libc::LOG_DAEMON) {
         /* Restart logging to syslog using specified facility  */
@@ -143,23 +214,23 @@ extern "C" fn main_rs(argc: libc::c_int, argv: *const *mut libc::c_char, env: *c
 
     let mut host = ptr::null_mut();
     if(!svr){
-        if( argc - unsafe { optind } < 2 ) {
-            usage();
+        if( matches.free.len() < 2 ) {
+            print_usage(&program, opts);
             unsafe { libc::exit(1); }
         }
-        let hst = unsafe { *argv.add(optind as usize) };
-        unsafe { optind = optind + 1; }
+        let host_nullterm = format!("{}\0", matches.free[0]);
+        let hst = host_nullterm.as_ptr() as *const libc::c_char;
 
         host = cfg_file::find_host(hst);
         if host == ptr::null_mut() {
-            let msg = format!("Host {} not found in {}\n\0", unsafe { CStr::from_ptr(hst) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.cfg_file) }.to_str().unwrap());
+            let msg = format!("Host {} not found in {}", unsafe { CStr::from_ptr(hst) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.cfg_file) }.to_str().unwrap());
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
             unsafe {
-                lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char);
                 libc::exit(1);
             }
         }
 
-        ctx.vtun.svr_name = unsafe { libc::strdup(*argv.add(optind as usize)) };
+        ctx.vtun.svr_name = unsafe { libc::strdup(matches.free[1].as_ptr() as *const libc::c_char) };
     }
 
     /*
@@ -210,7 +281,7 @@ extern "C" fn main_rs(argc: libc::c_int, argv: *const *mut libc::c_char, env: *c
 
     if svr {
 
-        unsafe { init_title_from_rs(argc,argv as *const *const libc::c_char,env,"vtunngd[s]: \0".as_ptr() as *const libc::c_char); }
+        setproctitle::set_title("vtunngd[s]: ");
 
         if ctx.vtun.svr_type == lfd_mod::VTUN_STAND_ALONE {
             write_pid();
@@ -218,13 +289,11 @@ extern "C" fn main_rs(argc: libc::c_int, argv: *const *mut libc::c_char, env: *c
 
         server::server_rs(&mut ctx, sock);
     } else {
-        unsafe { init_title_from_rs(argc,argv as *const *const libc::c_char,env,"vtunngd[c]: \0".as_ptr() as *const libc::c_char); }
+        setproctitle::set_title("vtunngd[c]: ");
         client::client_rs(&mut ctx, unsafe { &mut *host });
     }
 
     unsafe { libc::closelog(); }
-
-    0
 }
 
 /*
@@ -236,7 +305,7 @@ fn write_pid()
     let mut f = match std::fs::File::create(VTUN_PID_FILE) {
         Ok(f) => f,
         Err(_) => {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't write PID file\n\0".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't write PID file");
             return;
         },
     };
@@ -246,28 +315,13 @@ fn write_pid()
     match f.write_all(pid.as_bytes()) {
         Ok(_) => {},
         Err(_) => {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"Can't write to PID file\n\0".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't write to PID file");
             return;
         }
     };
 }
 
-pub fn reread_config(ctx: &mut VtunContext)
-{
-    if cfg_file::read_config(ctx, ctx.vtun.cfg_file) == 0 {
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR,"No hosts defined\n\0".as_ptr() as *mut libc::c_char); }
-        unsafe { libc::exit(1); }
-    }
-}
-
-fn usage()
-{
-    println!("VTun ver {}\n", lfd_mod::VTUN_VER);
-    println!("Usage: \n");
-    println!("  Server:\n");
-    println!("\tvtund <-s|-i> [-f file] [-P port] [-L local address]\n");
-    println!("  Client:\n");
-    /* I don't think these work. I'm disabling the suggestion - bish 20050601*/
-    println!("{}{}", "\tvtund [-f file] ", /* [-P port] [-L local address] */
-        "[-q] [-p] [-m] [-t timeout] <host profile> <server address>\n");
+fn print_usage(program: &str, opts: Options) {
+    let brief = format!("Usage: {} FILE [options]", program);
+    print!("{}", opts.usage(&brief));
 }

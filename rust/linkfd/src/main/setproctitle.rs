@@ -1,9 +1,9 @@
-/*  
+/*
     VTun - Virtual Tunnel over TCP/IP network.
 
-    Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
+    Copyright (C) 2025 Jan-Espen Oversand <sigsegv@radiotube.org>
 
-    VTun has been derived from VPPP package by Maxim Krasnyansky. 
+    VTun has been derived from VPPP package by Maxim Krasnyansky.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,17 +17,14 @@
  */
 
 /*
- * $Id: lib.h,v 1.7.2.4 2016/10/01 21:27:51 mtbishop Exp $
- */ 
-#ifndef _VTUN_LIB_H
-#define _VTUN_LIB_H
+ * This stuff is very close to, if not actually, impossible with
+ * rust. There are maybe some syscalls accesible as root, so potentially
+ * those could be invoked if getuid() == 0
+ */
 
-#include "config.h"
-#include <sys/types.h>
-#include <signal.h>
-#include <errno.h>
+pub fn init_title() {
+}
 
-/* signal safe syslog function */
-void vtun_syslog (int priority, char *format, ...);
-
-#endif /* _VTUN_LIB_H */
+pub fn set_title(title: &str) {
+    proctitle::set_title(title);
+}

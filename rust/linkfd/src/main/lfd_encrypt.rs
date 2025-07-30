@@ -43,7 +43,7 @@ use std::ptr::null_mut;
 use std::time::SystemTime;
 use openssl::cipher::{Cipher, CipherRef};
 use openssl::cipher_ctx::CipherCtx;
-use crate::{lfd_mod, linkfd, vtun_host};
+use crate::{lfd_mod, linkfd, syslog, vtun_host};
 use lfd_mod::{VTUN_ENC_AES128CBC, VTUN_ENC_AES128CFB, VTUN_ENC_AES128OFB, VTUN_ENC_AES256CBC, VTUN_ENC_AES256CFB, VTUN_ENC_AES256OFB, VTUN_ENC_BF128CBC, VTUN_ENC_BF128CFB, VTUN_ENC_BF128OFB, VTUN_ENC_BF256CBC, VTUN_ENC_BF256CFB, VTUN_ENC_BF256OFB};
 use crate::linkfd::LfdMod;
 
@@ -245,10 +245,8 @@ impl LfdEncrypt {
             lfd_encrypt.ctx_dec.set_padding(false);
             lfd_encrypt.cipher_enc_state = CipherState::CipherCode;
             lfd_encrypt.cipher_dec_state = CipherState::CipherCode;
-            let tmpstr = format!("{}! encryption initialized", cipher_name);
-            unsafe {
-                lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_ptr() as *mut libc::c_char);
-            }
+            let tmpstr = format!("{} encryption initialized", cipher_name);
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_str());
         }
         Some(lfd_encrypt)
     }
@@ -316,8 +314,8 @@ impl LfdEncrypt {
         self.ctx_enc.set_padding(false);
         if self.enc_init_first_time
         {
-            let tmpstr = format!("{} encryption initialized\n\0", cipher_name);
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_ptr() as *mut libc::c_char); }
+            let tmpstr = format!("{} encryption initialized", cipher_name);
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_str());
             self.enc_init_first_time = false;
         }
         true
@@ -386,8 +384,8 @@ impl LfdEncrypt {
         self.ctx_dec.set_padding(false);
         if self.dec_init_first_time
         {
-            let tmpstr = format!("{} decryption initialized\n\0", cipher_name);
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_ptr() as *mut libc::c_char); }
+            let tmpstr = format!("{} decryption initialized", cipher_name);
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_str());
             self.dec_init_first_time = false;
         }
         true
@@ -469,7 +467,7 @@ impl LfdEncrypt {
             if output.len() < self.blocksize as usize {
                 output.resize(self.blocksize as usize, 0u8);
             }
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Requesting remote encryptor re-init".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, "Requesting remote encryptor re-init");
             self.cipher_enc_state = CipherState::CipherSequence;
             self.send_a_packet = true;
         }
@@ -526,10 +524,8 @@ impl LfdEncrypt {
                 {
                     self.cipher_enc_state = CipherState::CipherReqInit;
                     self.send_a_packet = true;
-                    unsafe {
-                        lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,
-                                             "Min. gibberish threshold reached".as_ptr() as *mut libc::c_char);
-                    }
+                    syslog::vtun_syslog(lfd_mod::LOG_INFO,
+                                             "Min. gibberish threshold reached");
                 }
                 if self.gibberish >= MAX_GIBBERISH || gibberish_diff_time >= MAX_GIBBERISH_TIME
                 {
@@ -537,18 +533,14 @@ impl LfdEncrypt {
                     self.gib_time_start = 0;
                     self.send_a_packet = true;
 
-                    unsafe {
-                        lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,
-                                             "Max. gibberish threshold reached".as_ptr() as *mut libc::c_char);
-                    }
+                    syslog::vtun_syslog(lfd_mod::LOG_INFO,
+                                             "Max. gibberish threshold reached");
                     if matches!(self.cipher_enc_state, CipherState::CipherInit)
                     {
                         self.cipher_enc_state = CipherState::CipherInit;
                         self.ctx_enc = CipherCtx::new().unwrap();
-                        unsafe {
-                            lfd_mod::vtun_syslog(lfd_mod::LOG_INFO,
-                                                 "Forcing local encryptor re-init".as_ptr() as *mut libc::c_char);
-                        }
+                        syslog::vtun_syslog(lfd_mod::LOG_INFO,
+                                                 "Forcing local encryptor re-init");
                     }
                 }
             }
@@ -574,7 +566,7 @@ impl LfdEncrypt {
                     self.cipher_enc_state = CipherState::CipherInit;
                     self.ctx_enc = CipherCtx::new().unwrap();
                 }
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Remote requests encryptor re-init".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_INFO, "Remote requests encryptor re-init");
             }
             else
             {
@@ -586,7 +578,7 @@ impl LfdEncrypt {
                     self.cipher_dec_state = CipherState::CipherInit;
                     self.cipher_enc_state = CipherState::CipherReqInit;
                 }
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Local decryptor out of sync".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_INFO, "Local decryptor out of sync");
 
                 buf.clear();
                 return true;
@@ -703,7 +695,7 @@ impl LfdMod for LfdEncrypt {
         let iblen = buf.len();
         let pad = buf[iblen - 1];
         if pad < 1 || (pad as u32) > self.blocksize {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "decrypt_buf: bad pad length".as_ptr() as *mut libc::c_char); }
+            syslog::vtun_syslog(lfd_mod::LOG_INFO, "decrypt_buf: bad pad length");
             return false;
         }
         buf.resize(iblen - pad as usize, 0u8);

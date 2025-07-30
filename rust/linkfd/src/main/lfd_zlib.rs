@@ -19,7 +19,7 @@
 
 /* ZLIB compression module */
 use std::io::Write;
-use crate::{lfd_mod, vtun_host};
+use crate::{lfd_mod, syslog, vtun_host};
 use crate::linkfd::{LfdMod, LfdModFactory};
 
 struct LfdZlib {
@@ -29,7 +29,7 @@ struct LfdZlib {
 
 impl LfdZlib {
     pub fn new(host: &vtun_host::VtunHost) -> LfdZlib {
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "ZLIB compression initialized\n\0".as_ptr() as *mut libc::c_char); }
+        syslog::vtun_syslog(lfd_mod::LOG_INFO, "ZLIB compression initialized");
         LfdZlib {
             encoder: flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(host.zlevel as u32)),
             decoder: flate2::write::ZlibDecoder::new(Vec::new())
@@ -57,7 +57,7 @@ impl LfdMod for LfdZlib {
         match self.encoder.write_all(buf) {
             Ok(_) => (),
             Err(_) => {
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB compression error\n\0".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB compression error");
                 return false
             }
         };
@@ -76,7 +76,7 @@ impl LfdMod for LfdZlib {
         match self.decoder.write_all(buf) {
             Ok(_) => (),
             Err(_) => {
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB decompression error\n\0".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB decompression error");
                 return false;
             }
         };

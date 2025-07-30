@@ -8,7 +8,7 @@ use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, vtun_host};
+use crate::{driver, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, main, mainvtun, syslog, vtun_host};
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -167,13 +167,13 @@ pub extern "C" fn io_init() {
 }
 
 pub fn sig_term() {
-    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Closing connection\n\0".as_ptr() as *mut libc::c_char); }
+    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Closing connection");
     io_cancel();
     unsafe { LINKER_TERM.store(VTUN_SIG_TERM, std::sync::atomic::Ordering::SeqCst); }
 }
 
 pub fn sig_hup() {
-    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Reestablishing connection".as_ptr() as *mut libc::c_char); }
+    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Reestablishing connection");
     io_cancel();
     unsafe { LINKER_TERM.store(VTUN_SIG_HUP, std::sync::atomic::Ordering::SeqCst); }
 }
@@ -352,9 +352,9 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, hostptr: *mut vtun_host::VtunHost
             .open(file.clone()) {
             Ok(f) => unsafe { STAT_FILE = Some(f) },
             Err(_) => {
-                let msg = format!("Can't open stats file {}\n\0", file);
+                let msg = format!("Can't open stats file {}", file);
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 unsafe {
-                    lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char);
                     STAT_FILE = None;
                 }
             }
@@ -447,7 +447,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
         if len < 0 {
             let errno = errno();
             if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Select error\n\0".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Select error");
                 break;
             } else {
                 continue;
@@ -457,8 +457,8 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
         if unsafe { KA_NEED_VERIFY.load(std::sync::atomic::Ordering::SeqCst) } {
             if idle > host.ka_maxfail {
                 unsafe {
-                    let msg = format!("Session {} network timeout\n\0", CStr::from_ptr(host.host).to_str().unwrap_or(""));
-                    lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char);
+                    let msg = format!("Session {} network timeout", CStr::from_ptr(host.host).to_str().unwrap_or(""));
+                    syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
                 }
                 break;
             }
@@ -468,7 +468,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
                 buf.clear();
                 let retv = proto.write(&mut buf, VTUN_ECHO_REQ as u16);
                 if retv.is_none() {
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Failed to send ECHO_REQ\n\0".as_ptr() as *mut libc::c_char); }
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Failed to send ECHO_REQ");
                     break;
                 }
             }
@@ -482,14 +482,14 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
             unsafe { STAT_BYTE_OUT += tmplen; }
             buf.resize(1, 0u8);
             if !lfd_stack.encode(&mut buf) {
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure\n\0".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure");
                 break;
             }
             let encoded = buf.len();
             if encoded > 0 {
                 let retv = proto.write(&mut buf, 0);
                 if retv.is_none() {
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure\n\0".as_ptr() as *mut libc::c_char); }
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure");
                     break;
                 }
                 unsafe { STAT_COMP_OUT += encoded as u64; }
@@ -504,7 +504,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
             buf.clear();
             let fl = proto.read(ctx, &mut buf);
             if fl.is_none() {
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Network read failure\n\0".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Network read failure");
                 break;
             }
             let fl = fl.unwrap();
@@ -512,7 +512,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
             /* Handle frame flags */
             if fl != 0 {
                 if fl == VTUN_BAD_FRAME as u16 {
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Received bad frame\n\0".as_ptr() as *mut libc::c_char); }
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Received bad frame");
                     continue;
                 }
                 if fl == VTUN_ECHO_REQ as u16 {
@@ -520,7 +520,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
                     buf.clear();
                     let retv = proto.write(&mut buf, VTUN_ECHO_REP as u16);
                     if retv.is_none() {
-                        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure\n\0".as_ptr() as *mut libc::c_char); }
+                        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure");
                         break;
                     }
                     continue;
@@ -530,14 +530,14 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
                     continue;
                 }
                 if fl == VTUN_CONN_CLOSE as u16 {
-                    unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "Connection closed by other side\n\0".as_ptr() as *mut libc::c_char); }
+                    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Connection closed by other side");
                     break;
                 }
             }
 
             unsafe { STAT_COMP_IN += len as u64; }
             if !lfd_stack.decode(&mut buf) {
-                unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "Decoding failure\n\0".as_ptr() as *mut libc::c_char); }
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Decoding failure");
                 break;
             }
             let decoded = buf.len();
@@ -550,8 +550,8 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
                 if retv.is_none() {
                     let errno = errno();
                     if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
-                        let msg = format!("Driver write failed: {}\n\0", errno.to_string());
-                        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, msg.as_ptr() as *mut libc::c_char); }
+                        let msg = format!("Driver write failed: {}", errno.to_string());
+                        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                         break;
                     } else {
                         continue;
@@ -603,7 +603,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
     if unsafe {*LINKER_TERM.as_ptr()} != 0 && errno() != errno::Errno(0) {
         let errno = errno();
         let msg = format!("{}: {}\n\0", errno.to_string(), errno);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
+        syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
 
     if unsafe { LINKER_TERM.load(std::sync::atomic::Ordering::SeqCst)} == VTUN_SIG_TERM {

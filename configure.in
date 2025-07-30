@@ -67,14 +67,6 @@ AC_SEARCH_LIBS(gethostbyname, resolv nsl)
 dnl Check for librt
 AC_SEARCH_LIBS(nanosleep, rt posix4)
 
-dnl Check for setproctitle in libutil
-AC_SEARCH_LIBS(setproctitle, util bsd, AC_DEFINE(HAVE_SETPROC_TITLE, [1], [Define to 1 if you have setproctitle() function]) )
-
-AC_CHECK_FUNCS([setproctitle_init])
-
-dnl Check for fork() (fallback to vfork() on non-MMU systems)
-AC_FUNC_FORK
-
 if test "$NATHACK" = "yes"; then
    AC_DEFINE(ENABLE_NAT_HACK, [1], [Define to 1 if you want to enable Nat Hack code])
    NATHACK_ENABLED=true

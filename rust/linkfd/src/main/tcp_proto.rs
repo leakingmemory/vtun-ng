@@ -16,7 +16,7 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-use crate::{driver, linkfd, mainvtun};
+use crate::{driver, linkfd, main, mainvtun};
 
 pub(crate) struct TcpProto {
     pub fd: i32

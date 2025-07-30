@@ -21,7 +21,7 @@
 /* LZO compression module */
 
 use rust_lzo::{worst_compress, LZOContext, LZOError};
-use crate::{lfd_mod, linkfd, vtun_host};
+use crate::{lfd_mod, linkfd, syslog, vtun_host};
 use crate::linkfd::LfdMod;
 
 struct LfdLzo {
@@ -30,7 +30,7 @@ struct LfdLzo {
 
 impl LfdLzo {
     pub fn new(_host: &vtun_host::VtunHost) -> LfdLzo {
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, "LZO compression initialized\n\0".as_ptr() as *mut libc::c_char); }
+        syslog::vtun_syslog(lfd_mod::LOG_INFO, "LZO compression initialized");
         LfdLzo {
             compress_ctx: LZOContext::new()
         }
@@ -65,7 +65,7 @@ impl LfdMod for LfdLzo {
             }
             true
         } else {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "LZO compression failed\n\0".as_ptr() as *mut libc::c_char)}
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, "LZO compression failed");
             false
         }
     }
@@ -80,7 +80,7 @@ impl LfdMod for LfdLzo {
             }
             true
         } else {
-            unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_ERR, "LZO decompression failed\n\0".as_ptr() as *mut libc::c_char)}
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, "LZO decompression failed");
             false
         }
     }

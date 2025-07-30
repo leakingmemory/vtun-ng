@@ -17,7 +17,7 @@
     GNU General Public License for more details.
  */
 use std::cmp::PartialEq;
-use crate::{driver, lfd_mod};
+use crate::{driver, lfd_mod, syslog};
 
 pub(crate) enum TunDevType {
     Tun, Tap
@@ -112,8 +112,8 @@ impl TunDev {
             None => "none".to_string(),
             Some(ref name) => name.to_string()
         };
-        let msg = format!("Opened device endpoint {}\n\0", name);
-        unsafe { lfd_mod::vtun_syslog(lfd_mod::LOG_INFO, msg.as_ptr() as *mut libc::c_char); }
+        let msg = format!("Opened device endpoint {}", name);
+        syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
 
     #[cfg(not(target_os = "linux"))]

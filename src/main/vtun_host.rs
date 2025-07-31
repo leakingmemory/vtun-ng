@@ -44,25 +44,6 @@ impl VtunSopt {
 }
 
 #[derive(Clone)]
-pub struct VtunStat {
-    pub byte_in: u64,
-    pub byte_out: u64,
-    pub comp_in: u64,
-    pub comp_out: u64,
-}
-
-impl VtunStat {
-    pub fn new() -> Self {
-        Self {
-            byte_in: 0,
-            byte_out: 0,
-            comp_in: 0,
-            comp_out: 0
-        }
-    }
-}
-
-#[derive(Clone)]
 pub struct VtunAddr {
     pub name: Option<String>,
     pub ip: Option<String>,
@@ -101,7 +82,6 @@ pub struct VtunHost {
     pub ka_interval: libc::c_int,
     pub ka_maxfail: libc::c_int,
     pub src_addr: VtunAddr,
-    pub stat: VtunStat,
     pub sopt: VtunSopt,
 }
 
@@ -126,7 +106,6 @@ impl VtunHost {
             ka_interval: 30,
             ka_maxfail: 4,
             src_addr: VtunAddr::new(),
-            stat: VtunStat::new(),
             sopt: VtunSopt::new(),
         }
     }

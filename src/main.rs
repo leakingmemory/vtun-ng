@@ -72,9 +72,8 @@ mod mainvtun;
 #[path = "main/syslog.rs"]
 mod syslog;
 
-use std::ffi::CStr;
 use std::io::Write;
-use std::{env, ptr};
+use std::{env};
 use getopts::Options;
 
 const VTUN_PORT: libc::c_int = 5000;
@@ -94,6 +93,7 @@ fn main()
     let mut dofork = true;
 
     let mut ctx: mainvtun::VtunContext = mainvtun::VtunContext {
+        config: None,
         vtun: lfd_mod::VtunOpts::new(),
         is_rmt_fd_connected: true
     };
@@ -200,21 +200,29 @@ fn main()
         }
     }
 
-    cfg_file::clear_nat_hack_flags(if svr {1} else {0});
+    match ctx.config {
+        Some(ref mut config) => config.clear_nat_hack_flags(svr),
+        None => {}
+    };
 
-    let mut host = ptr::null_mut();
+    let mut host = None;
     if !svr {
         if matches.free.len() < 2 {
             print_usage(&program, opts);
             unsafe { libc::exit(1); }
         }
-        let host_nullterm = format!("{}\0", matches.free[0]);
-        let hst = host_nullterm.as_ptr() as *const libc::c_char;
+        let hst = matches.free[0].clone();
 
-        host = cfg_file::find_host(hst);
-        if host == ptr::null_mut() {
+        host = match match ctx.config {
+            Some(ref config) => config.find_host(hst.as_str()),
+            None => None
+        } {
+            Some(host) => Some(host.clone()),
+            None => None
+        };
+        if host.is_none() {
             let msg = format!("Host {} not found in {}",
-                              unsafe { CStr::from_ptr(hst) }.to_str().unwrap(),
+                              hst.as_str(),
                               match ctx.vtun.cfg_file {Some(ref s) => s.as_str(), None => "<none>"});
             syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
             unsafe {
@@ -282,7 +290,10 @@ fn main()
         server::server_rs(&mut ctx, sock);
     } else {
         setproctitle::set_title("vtunngd[c]: ");
-        client::client_rs(&mut ctx, unsafe { &mut *host });
+        match host {
+            Some(ref mut host) => client::client_rs(&mut ctx, host),
+            None => {}
+        };
     }
 
     unsafe { libc::closelog(); }

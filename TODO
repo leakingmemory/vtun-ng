@@ -1,5 +1,4 @@
 
- - Clean up the code with regards to warnings and statics
  - Legacy crypto algorithms should be moved off openssl
  - New bidirectional auth
  - Add new crypto algorithms

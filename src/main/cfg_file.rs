@@ -13,8 +13,6 @@
  */
 
 use std::{fs};
-use std::ffi::CStr;
-use std::ptr::null_mut;
 use std::rc::{Rc, Weak};
 use std::sync::Mutex;
 use logos::Logos;
@@ -23,19 +21,7 @@ use crate::lexer::Token;
 use crate::tunnel::VtunCmd;
 use crate::vtun_host::VtunHost;
 
-pub fn find_host_rs(host: &str) -> Option<&mut VtunHost> {
-    unsafe {
-        let mut host = host.to_string();
-        host.push_str("\0");
-        let host = find_host(host.as_ptr() as *const libc::c_char);
-        if host.is_null() {
-            return None;
-        }
-        Some( &mut *host)
-    }
-}
-
-struct VtunConfigRoot {
+pub struct VtunConfigRoot {
     pub host_list: Vec<VtunHost>
 }
 
@@ -68,10 +54,6 @@ impl RootParsingContext {
             let options_ctx = options_ctx.lock().unwrap();
             options_ctx.apply(opts);
         }
-    }
-    fn strdup(s: &str) -> *mut libc::c_char {
-        let nullterm = format!("{}\0", s);
-        unsafe { libc::strdup(nullterm.as_ptr() as *const libc::c_char) }
     }
     fn get_hosts(&self, ctx: &mainvtun::VtunContext) -> Vec<VtunHost> {
         let mut vec: Vec<VtunHost> = Vec::new();
@@ -261,15 +243,6 @@ impl HostConfigParsingContext {
             keep_ctx: None,
             stat_ctx: None
         }
-    }
-    pub fn free_nonnull(s: *mut libc::c_char) {
-        if !s.is_null() {
-            unsafe { libc::free(s as *mut libc::c_void) };
-        }
-    }
-    pub fn strdup(s: &str) -> *mut libc::c_char {
-        let nullterm = format!("{}\0", s);
-        unsafe { libc::strdup(nullterm.as_ptr() as *const libc::c_char) }
     }
     pub fn apply(&self, ctx: &mainvtun::VtunContext, host: &mut VtunHost) {
         match self.compress_ctx {
@@ -1068,15 +1041,6 @@ impl OptionsConfigParsingContext {
             persist_ctx: None,
             syslog_ctx: None
         }
-    }
-    fn free_non_null(str: *mut libc::c_char) {
-        if str != null_mut() {
-            unsafe { libc::free(str as *mut libc::c_void); }
-        }
-    }
-    fn strdup(str: &str) -> *mut libc::c_char {
-        let str = format!("{}\0", str);
-        unsafe { libc::strdup(str.as_ptr() as *mut libc::c_char) }
     }
     fn apply(&self, opts: &mut lfd_mod::VtunOpts) {
         match self.port_ctx {
@@ -2032,48 +1996,12 @@ impl VtunConfigRoot {
             }
         }
     }
-    pub fn find_host(&mut self, name: &str) -> Option<&mut VtunHost> {
-        for host in &mut self.host_list {
+    pub fn find_host(&self, name: &str) -> Option<&VtunHost> {
+        for host in &self.host_list {
             if host.host_name() == name {
                 return Some(host);
             }
         }
         None
-    }
-}
-
-static mut CONFIG_ROOT: Option<VtunConfigRoot> = None;
-
-pub fn read_config(ctx: &mut mainvtun::VtunContext, file: &str) -> libc::c_int {
-    let root = VtunConfigRoot::new(ctx, file);
-    match root {
-        Some(root) => unsafe { CONFIG_ROOT = Some(root); },
-        None => return 0
-    }
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn clear_nat_hack_flags(server: libc::c_int) -> libc::c_int {
-    unsafe {
-        if let Some(root) = &mut CONFIG_ROOT {
-            root.clear_nat_hack_flags(if server != 0 { true } else { false });
-        }
-    }
-    0
-}
-
-#[no_mangle]
-pub extern "C" fn find_host(name: *const libc::c_char) -> *mut VtunHost {
-    let found_host = unsafe {
-        if let Some(root) = &mut CONFIG_ROOT {
-            root.find_host(CStr::from_ptr(name).to_str().unwrap())
-        } else {
-            None
-        }
-    };
-    match found_host {
-        Some(host) => host as *mut VtunHost,
-        None => null_mut()
     }
 }

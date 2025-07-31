@@ -22,6 +22,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use signal_hook::low_level;
 use crate::{lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, syslog, tunnel};
 use crate::auth::auth_server;
+use crate::linkfd::LinkfdCtx;
 
 struct ServerCtx {
     server_term: Arc<AtomicI32>
@@ -61,9 +62,10 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
 
     let ip = std::net::Ipv4Addr::from(u32::from_be(cl_addr.sin_addr.s_addr)).to_string();
 
-    linkfd::io_init();
+    let linkfdctx = LinkfdCtx::new();
+    linkfdctx.io_init();
 
-    match auth_server(ctx, sock) {
+    match auth_server(ctx, &linkfdctx, sock) {
         Some(mut host) => {
             let mut sa: libc::sigaction = unsafe { mem::zeroed() };
             sa.sa_sigaction = libc::SIG_IGN;
@@ -92,7 +94,8 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
             host.sopt.rport = u16::from_be(cl_addr.sin_port) as libc::c_int;
 
             /* Start tunnel */
-            tunnel::tunnel(ctx, &mut host);
+            let linkfdctx = Arc::new(linkfdctx);
+            tunnel::tunnel(ctx, &linkfdctx, &mut host);
 
             {
                 let msg = format!("Session {} closed", match host.host {Some(ref h) => h.as_str(), None => "<none>"});

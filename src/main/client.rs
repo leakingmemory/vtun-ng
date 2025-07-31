@@ -143,7 +143,8 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         host.spd_out = 0;
         host.flags = host.flags & lfd_mod::VTUN_CLNT_MASK;
 
-        linkfd::io_init();
+        let linkfdctx = linkfd::LinkfdCtx::new();
+        linkfdctx.io_init();
 
         {
             let msg = format!("{} connecting to {}",
@@ -165,7 +166,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
         } else {
-            if auth::auth_client_rs(ctx, s, host) {
+            if auth::auth_client_rs(ctx, &linkfdctx, s, host) {
                 let msg = format!("Session {}[{}] opened",
                                   match host.host { Some(ref host) => host.as_str(), None => "<none>" },
                                   match ctx.vtun.svr_name { Some(ref svr_name) => svr_name.as_str(), None => "<none>" });
@@ -174,7 +175,8 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 host.rmt_fd = s;
 
                 /* Start the tunnel */
-                client_ctx.set_client_term(tunnel::tunnel(ctx, host));
+                let linkfdctx = Arc::new(linkfdctx);
+                client_ctx.set_client_term(tunnel::tunnel(ctx, &linkfdctx, host));
 
                 let msg = format!("Session {}[{}] closed",
                                   match &host.host { Some(host) => host.as_str(), None => "<none>" },

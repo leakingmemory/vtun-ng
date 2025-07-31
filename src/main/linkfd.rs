@@ -1,8 +1,9 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::{mem, ptr};
-use std::sync::atomic::{AtomicBool, AtomicI32};
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU64};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
@@ -29,7 +30,7 @@ pub const VTUN_ENCRYPT: libc::c_int = 0x0008;
 
 pub const VTUN_CMD_WAIT: libc::c_int =	0x01;
 pub const VTUN_CMD_DELAY: libc::c_int =  0x02;
-pub const VTUN_CMD_SHELL: libc::c_int =  0x04;
+pub const _VTUN_CMD_SHELL: libc::c_int =  0x04;
 
 /* Number of seconds for delay after pppd startup*/
 pub const VTUN_DELAY_SEC: u64 =  10;
@@ -38,7 +39,7 @@ pub const VTUN_SIG_TERM: i32 = 1;
 pub const VTUN_SIG_HUP: i32 =  2;
 
 pub const VTUN_STAT: libc::c_int =	0x1000;
-pub const VTUN_PERSIST: libc::c_int =    0x2000;
+pub const _VTUN_PERSIST: libc::c_int =    0x2000;
 
 pub const VTUN_STAT_IVAL: libc::c_uint =  5*60;  /* 5 min */
 
@@ -65,10 +66,6 @@ pub fn is_enabled_nat_hack(host: &mut vtun_host::VtunHost) -> bool {
     }
     false
 }
-
-pub static mut SEND_A_PACKET: bool = false;
-pub static mut HOST_FLAGS: libc::c_int = 0;
-pub static mut HOST_KA_INTERVAL: libc::c_int = 0;
 
 pub trait LfdMod {
     fn avail_encode(&mut self) -> bool {
@@ -153,85 +150,112 @@ impl Linkfd {
     }
 }
 
-static mut IO_CANCELLED: AtomicBool = AtomicBool::new(false);
-static mut LINKER_TERM: AtomicI32 = AtomicI32::new(0);
-
-pub fn io_cancel() {
-    unsafe { IO_CANCELLED.store(true, std::sync::atomic::Ordering::SeqCst); }
+pub(crate) struct LinkfdCtx {
+    io_cancelled: AtomicBool,
+    linker_term: AtomicI32,
+    sig_alarm_tm_old: AtomicI64,
+    sig_alarm_tm: AtomicI64,
+    ka_timer: AtomicI64,
+    stat_timer: AtomicI64,
+    ka_need_verify: AtomicBool,
+    stat_file: Mutex<Option<std::fs::File>>,
+    stat_byte_in: AtomicU64,
+    stat_byte_out: AtomicU64,
+    stat_comp_in: AtomicU64,
+    stat_comp_out: AtomicU64,
+    send_a_packet: AtomicBool,
+    host_flags: AtomicI32,
+    host_ka_interval: libc::c_int
 }
 
-#[no_mangle]
-pub extern "C" fn io_init() {
-    unsafe { IO_CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst); }
-}
-
-pub fn sig_term() {
-    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Closing connection");
-    io_cancel();
-    unsafe { LINKER_TERM.store(VTUN_SIG_TERM, std::sync::atomic::Ordering::SeqCst); }
-}
-
-pub fn sig_hup() {
-    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Reestablishing connection");
-    io_cancel();
-    unsafe { LINKER_TERM.store(VTUN_SIG_HUP, std::sync::atomic::Ordering::SeqCst); }
-}
-
-static mut SIG_ALARM_TM_OLD: SystemTime = SystemTime::UNIX_EPOCH;
-static mut SIG_ALARM_TM: SystemTime = SystemTime::UNIX_EPOCH;
-static mut KA_TIMER: i64 = 0;
-static mut STAT_TIMER: i64 = 0;
-static mut KA_NEED_VERIFY: AtomicBool = AtomicBool::new(false);
-static mut STAT_FILE: Option<std::fs::File> = None;
-static mut STAT_BYTE_IN: u64 = 0;
-static mut STAT_BYTE_OUT: u64 = 0;
-static mut STAT_COMP_IN: u64 = 0;
-static mut STAT_COMP_OUT: u64 = 0;
-
-
-pub fn sig_alarm() {
-    let tm_old: SystemTime;
-    let tm: SystemTime;
-    let mut ka_timer_value: i64;
-    let mut stat_timer_value: i64;
-    let flags: i32;
-    tm = SystemTime::now();
-    unsafe {
-        tm_old = SIG_ALARM_TM;
-        SIG_ALARM_TM_OLD = tm_old;
-        SIG_ALARM_TM = tm;
-        KA_TIMER -= tm_old.elapsed().unwrap().as_secs() as i64;
-        STAT_TIMER -= tm_old.elapsed().unwrap().as_secs() as i64;
-        ka_timer_value = KA_TIMER;
-        stat_timer_value = STAT_TIMER;
-        flags = HOST_FLAGS;
+impl LinkfdCtx {
+    pub(crate) fn new() -> LinkfdCtx {
+        LinkfdCtx {
+            io_cancelled: AtomicBool::new(false),
+            linker_term: AtomicI32::new(0),
+            sig_alarm_tm_old: AtomicI64::new(0),
+            sig_alarm_tm: AtomicI64::new(0),
+            ka_timer: AtomicI64::new(0),
+            stat_timer: AtomicI64::new(0),
+            ka_need_verify: AtomicBool::new(false),
+            stat_file: Mutex::new(None),
+            stat_byte_in: AtomicU64::new(0),
+            stat_byte_out: AtomicU64::new(0),
+            stat_comp_in: AtomicU64::new(0),
+            stat_comp_out: AtomicU64::new(0),
+            send_a_packet: AtomicBool::new(false),
+            host_flags: AtomicI32::new(0),
+            host_ka_interval: 0
+        }
+    }
+    fn io_cancel(&self) {
+        self.io_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
+    pub(crate) fn io_init(&self) {
+        self.io_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn is_io_cancelled(&self) -> bool {
+        self.io_cancelled.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+pub fn sig_term(ctx: &LinkfdCtx) {
+    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Closing connection");
+    ctx.io_cancel();
+    ctx.linker_term.store(VTUN_SIG_TERM, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn sig_hup(ctx: &LinkfdCtx) {
+    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Reestablishing connection");
+    ctx.io_cancel();
+    ctx.linker_term.store(VTUN_SIG_HUP, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn sig_alarm(ctx: &LinkfdCtx) {
+    let flags: i32;
+    let tm = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+    let tm_old = ctx.sig_alarm_tm.load(std::sync::atomic::Ordering::SeqCst);
+    ctx.sig_alarm_tm_old.store(tm_old, std::sync::atomic::Ordering::SeqCst);
+    ctx.sig_alarm_tm.store(tm, std::sync::atomic::Ordering::SeqCst);
+    let mut ka_timer_value = ctx.ka_timer.load(std::sync::atomic::Ordering::SeqCst);
+    let mut stat_timer_value = ctx.stat_timer.load(std::sync::atomic::Ordering::SeqCst);
+    if tm_old < tm {
+        ka_timer_value = ka_timer_value - (tm - tm_old);
+        stat_timer_value = stat_timer_value - (tm - tm_old);
+    }
+    ctx.ka_timer.store(ka_timer_value, std::sync::atomic::Ordering::SeqCst);
+    ctx.stat_timer.store(stat_timer_value, std::sync::atomic::Ordering::SeqCst);
+    flags = ctx.host_flags.load(std::sync::atomic::Ordering::SeqCst);
+
     if (flags & VTUN_KEEP_ALIVE) != 0 && ka_timer_value <= 0 {
-        unsafe {
-            KA_NEED_VERIFY.store(true, std::sync::atomic::Ordering::SeqCst);
-            KA_TIMER = (HOST_KA_INTERVAL as i64)
-                + 1; /* We have to complete select() on idle */
-            ka_timer_value = KA_TIMER;
-        }
+        ctx.ka_need_verify.store(true, std::sync::atomic::Ordering::SeqCst);
+        ka_timer_value = ctx.host_ka_interval as i64 + 1;
+        ctx.ka_timer.store(ka_timer_value, std::sync::atomic::Ordering::SeqCst);
     }
 
     if (flags & VTUN_STAT) != 0 && stat_timer_value <= 0 {
-        let dt: OffsetDateTime = tm.into();
+        let dt = if tm >= 0
+            { UNIX_EPOCH + Duration::from_secs(tm as u64) }
+            else
+            { UNIX_EPOCH - Duration::from_secs((0 - tm) as u64) };
+        let dt: OffsetDateTime = dt.into();
         let fmt = time::macros::format_description!("[month] [day] [hour]:[minute]:[second]");
         let stm = dt.format(fmt).unwrap_or_else(|_| "No time".to_string());
-        let statmsg = unsafe {format!("{} {} {} {} {}", stm, STAT_BYTE_IN, STAT_BYTE_OUT, STAT_COMP_IN, STAT_COMP_OUT)};
-        unsafe {
-            match STAT_FILE {
-                None => {},
-                Some(ref mut f) => match f.write(statmsg.as_bytes()) {
-                    Ok(_) => {},
-                    Err(_) => {}
-                }
-            };
-            STAT_TIMER = VTUN_STAT_IVAL as i64;
-            stat_timer_value = STAT_TIMER;
-        }
+        let statmsg = format!("{} {} {} {} {}", stm,
+                              ctx.stat_byte_in.load(std::sync::atomic::Ordering::SeqCst),
+                              ctx.stat_byte_out.load(std::sync::atomic::Ordering::SeqCst),
+                              ctx.stat_comp_in.load(std::sync::atomic::Ordering::SeqCst),
+                              ctx.stat_comp_out.load(std::sync::atomic::Ordering::SeqCst));
+        {
+            let mut f = ctx.stat_file.lock().unwrap();
+            if let Some(ref mut f) = *f {
+                f.write(statmsg.as_bytes()).unwrap();
+            }
+        };
+        stat_timer_value = VTUN_STAT_IVAL as i64;
+        ctx.stat_timer.store(stat_timer_value, std::sync::atomic::Ordering::SeqCst);
     }
 
     if ka_timer_value > 0 && stat_timer_value > 0 {
@@ -249,28 +273,17 @@ pub fn sig_alarm() {
     }
 }
 
-fn sig_usr1() {
+fn sig_usr1(ctx: &LinkfdCtx) {
     /* Reset statistic counters on SIGUSR1 */
-    unsafe {
-        STAT_BYTE_IN = 0;
-        STAT_BYTE_OUT = 0;
-        STAT_COMP_IN = 0;
-        STAT_COMP_OUT = 0;
-    }
+    ctx.stat_byte_in.store(0, std::sync::atomic::Ordering::SeqCst);
+    ctx.stat_byte_out.store(0, std::sync::atomic::Ordering::SeqCst);
+    ctx.stat_comp_in.store(0, std::sync::atomic::Ordering::SeqCst);
+    ctx.stat_comp_out.store(0, std::sync::atomic::Ordering::SeqCst);
 }
 
-#[no_mangle]
-pub extern "C" fn is_io_cancelled() -> libc::c_int {
-    let val = unsafe { IO_CANCELLED.load(std::sync::atomic::Ordering::SeqCst) };
-    if val == true {
-        1
-    } else {
-        0
-    }
-}
 
 /* Link remote and local file descriptors */
-pub fn linkfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     let old_prio = unsafe { libc::getpriority(libc::PRIO_PROCESS,0) };
     unsafe {libc::setpriority(libc::PRIO_PROCESS,0, LINKFD_PRIO); }
@@ -279,7 +292,7 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
 
     /* Build modules stack */
     let flags = host.flags;
-    unsafe { HOST_FLAGS = flags; }
+    linkfdctx.host_flags.store(flags, std::sync::atomic::Ordering::SeqCst);
     if (flags & VTUN_ZLIB) != 0 {
         factory.add(Box::new(lfd_zlib::LfdZlibFactory::new()));
     }
@@ -301,27 +314,42 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
         factory.add(Box::new(lfd_shaper::LfdShaperFactory::new()));
     }
 
-    let sigterm_restore = match unsafe { low_level::register(SIGTERM, || sig_term()) } {
-        Ok(id) => Some(id),
-        Err(_) => None
-    };
-    let sigint_restore = match unsafe { low_level::register(SIGINT, || sig_term()) } {
-        Ok(id) => Some(id),
-        Err(_) => None
-    };
-    let sighup_restore = match unsafe { low_level::register(SIGHUP, || sig_hup()) } {
-        Ok(id) => Some(id),
-        Err(_) => None
-    };
+    let sigterm_restore;
+    {
+        let linkfdctx = linkfdctx.clone();
+        sigterm_restore = match unsafe { low_level::register(SIGTERM, move || sig_term(&linkfdctx)) } {
+            Ok(id) => Some(id),
+            Err(_) => None
+        };
+    }
+    let sigint_restore;
+    {
+        let linkfdctx = linkfdctx.clone();
+        sigint_restore = match unsafe { low_level::register(SIGINT, move || sig_term(&linkfdctx)) } {
+            Ok(id) => Some(id),
+            Err(_) => None
+        };
+    }
+    let sighup_restore;
+    {
+        let linkfdctx = linkfdctx.clone();
+        sighup_restore = match unsafe { low_level::register(SIGHUP, move || sig_hup(&linkfdctx)) } {
+            Ok(id) => Some(id),
+            Err(_) => None
+        };
+    }
 
     
     let mut sigalrm_restore: Option<SigId> = None;
     /* Initialize keep-alive timer */
     if (flags & (VTUN_STAT|VTUN_KEEP_ALIVE)) != 0 {
-        sigalrm_restore = match unsafe { low_level::register(SIGALRM, || sig_alarm()) } {
-            Ok(id) => Some(id),
-            Err(_) => None
-        };
+        {
+            let linkfdctx = linkfdctx.clone();
+            sigalrm_restore = match unsafe { low_level::register(SIGALRM, move || sig_alarm(&linkfdctx)) } {
+                Ok(id) => Some(id),
+                Err(_) => None
+            };
+        }
 
         if host.ka_interval > 0 && (host.ka_interval as libc::c_uint) < VTUN_STAT_IVAL {
             unsafe { libc::alarm(host.ka_interval as libc::c_uint); }
@@ -333,10 +361,13 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
     let mut sigusr1restore: Option<SigId> = None;
     /* Initialize statstic dumps */
     if (flags & VTUN_STAT) != 0 {
-        sigusr1restore = match unsafe { low_level::register(SIGUSR1, || sig_usr1()) } {
-            Ok(id) => Some(id),
-            Err(_) => None
-        };
+        {
+            let linkfdctx = linkfdctx.clone();
+            sigusr1restore = match unsafe { low_level::register(SIGUSR1, move || sig_usr1(&linkfdctx)) } {
+                Ok(id) => Some(id),
+                Err(_) => None
+            };
+        }
 
         let host_name = match host.host {
             Some(ref host_name) => host_name.as_str(),
@@ -346,28 +377,31 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
         match OpenOptions::new()
             .append(true)
             .open(file.clone()) {
-            Ok(f) => unsafe { STAT_FILE = Some(f) },
+            Ok(f) => {
+                let mut l = linkfdctx.stat_file.lock().unwrap();
+                *l = Some(f);
+            },
             Err(_) => {
                 let msg = format!("Can't open stats file {}", file);
                 syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                unsafe {
-                    STAT_FILE = None;
-                }
+                let mut l = linkfdctx.stat_file.lock().unwrap();
+                *l = None;
             }
         };
     }
 
     let mut lfd_stack: Linkfd = Linkfd::new(& mut factory, host);
 
-    io_init();
+    linkfdctx.io_init();
 
-    lfd_linker(ctx, &mut lfd_stack, host, driver, proto);
+    lfd_linker(ctx, & *linkfdctx, &mut lfd_stack, host, driver, proto);
 
     if (flags & (VTUN_STAT|VTUN_KEEP_ALIVE)) != 0 {
         unsafe {
             libc::alarm(0);
-            STAT_FILE = None;
         }
+        let mut l = linkfdctx.stat_file.lock().unwrap();
+        *l = None;
     }
 
     match sigalrm_restore {
@@ -393,12 +427,12 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
 
     unsafe {
         libc::setpriority(libc::PRIO_PROCESS,0,old_prio);
-        let term: i32 = LINKER_TERM.load(std::sync::atomic::Ordering::SeqCst);
+        let term: i32 = linkfdctx.linker_term.load(std::sync::atomic::Ordering::SeqCst);
         term
     }
 }
 
-fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     let fd1 = host.rmt_fd;
     let fd2 = host.loc_fd;
@@ -421,8 +455,8 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
 
     let maxfd =  (if fd1 > fd2 { fd1 } else { fd2 }) + 1;
 
-    unsafe { LINKER_TERM.store(0, std::sync::atomic::Ordering::SeqCst); }
-    while unsafe { LINKER_TERM.load(std::sync::atomic::Ordering::SeqCst) == 0 } {
+    linkfdctx.linker_term.store(0, std::sync::atomic::Ordering::SeqCst);
+    while linkfdctx.linker_term.load(std::sync::atomic::Ordering::SeqCst) == 0 {
         //errno = 0;
 
         /* Wait for data */
@@ -450,7 +484,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
             }
         }
 
-        if unsafe { KA_NEED_VERIFY.load(std::sync::atomic::Ordering::SeqCst) } {
+        if linkfdctx.ka_need_verify.load(std::sync::atomic::Ordering::SeqCst) {
             if idle > host.ka_maxfail {
                 let msg = format!("Session {} network timeout", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
                 syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
@@ -466,14 +500,16 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
                     break;
                 }
             }
-            unsafe { KA_NEED_VERIFY.store(false, std::sync::atomic::Ordering::SeqCst); }
+            linkfdctx.ka_need_verify.store(false, std::sync::atomic::Ordering::SeqCst);
         }
 
-        if unsafe { SEND_A_PACKET }
+        if linkfdctx.send_a_packet.load(std::sync::atomic::Ordering::SeqCst)
         {
-            unsafe { SEND_A_PACKET = false; }
-            let tmplen = 1;
-            unsafe { STAT_BYTE_OUT += tmplen; }
+            linkfdctx.send_a_packet.store(false, std::sync::atomic::Ordering::SeqCst);
+            {
+                let tmplen = linkfdctx.stat_byte_out.load(std::sync::atomic::Ordering::SeqCst) + 1;
+                linkfdctx.stat_byte_out.store(tmplen, std::sync::atomic::Ordering::SeqCst);
+            }
             buf.resize(1, 0u8);
             if !lfd_stack.encode(&mut buf) {
                 syslog::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure");
@@ -486,7 +522,10 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
                     syslog::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure");
                     break;
                 }
-                unsafe { STAT_COMP_OUT += encoded as u64; }
+                {
+                    let tmplen = linkfdctx.stat_comp_out.load(std::sync::atomic::Ordering::SeqCst) + encoded as u64;
+                    linkfdctx.stat_comp_out.store(tmplen, std::sync::atomic::Ordering::SeqCst);
+                }
             }
         }
 
@@ -494,7 +533,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
          * the local device (fd2) */
         if unsafe { libc::FD_ISSET(fd1, &fdset) } && lfd_stack.avail_decode() {
             idle = 0;
-            unsafe { KA_NEED_VERIFY.store(false, std::sync::atomic::Ordering::SeqCst); }
+            linkfdctx.ka_need_verify.store(false, std::sync::atomic::Ordering::SeqCst);
             buf.clear();
             let fl = proto.read(ctx, &mut buf);
             if fl.is_none() {
@@ -529,7 +568,10 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
                 }
             }
 
-            unsafe { STAT_COMP_IN += len as u64; }
+            {
+                let tmplen = linkfdctx.stat_comp_in.load(std::sync::atomic::Ordering::SeqCst) + len as u64;
+                linkfdctx.stat_comp_in.store(tmplen, std::sync::atomic::Ordering::SeqCst);
+            }
             if !lfd_stack.decode(&mut buf) {
                 syslog::vtun_syslog(lfd_mod::LOG_ERR, "Decoding failure");
                 break;
@@ -537,9 +579,10 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
             let decoded = buf.len();
             if decoded > 0 {
                 let retv;
-                unsafe {
+                {
                     retv = driver.write(&mut buf);
-                    STAT_BYTE_IN += decoded as u64;
+                    let tmplen = linkfdctx.stat_byte_in.load(std::sync::atomic::Ordering::SeqCst) + decoded as u64;
+                    linkfdctx.stat_byte_in.store(tmplen, std::sync::atomic::Ordering::SeqCst);
                 }
                 if retv.is_none() {
                     let errno = errno();
@@ -551,7 +594,10 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
                         continue;
                     }
                 }
-                unsafe { STAT_BYTE_IN += decoded as u64; }
+                {
+                    let tmplen = linkfdctx.stat_byte_in.load(std::sync::atomic::Ordering::SeqCst) + decoded as u64;
+                    linkfdctx.stat_byte_in.store(tmplen, std::sync::atomic::Ordering::SeqCst);
+                }
             }
         }
 
@@ -575,7 +621,10 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
 
             let len = buf.len();
 
-            unsafe { STAT_BYTE_OUT += len as u64; }
+            {
+                let tmplen = linkfdctx.stat_byte_out.load(std::sync::atomic::Ordering::SeqCst) + len as u64;
+                linkfdctx.stat_byte_out.store(tmplen, std::sync::atomic::Ordering::SeqCst);
+            }
 
 
             if !lfd_stack.encode(&mut buf) {
@@ -583,24 +632,22 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
             }
             let encoded = buf.len();
             if encoded > 0 {
-                let retv;
-                unsafe {
-                    retv = proto.write(&mut buf, 0);
-                    STAT_COMP_OUT += encoded as u64;
-                }
+                let retv = proto.write(&mut buf, 0);
+                let tmplen = linkfdctx.stat_comp_out.load(std::sync::atomic::Ordering::SeqCst) + encoded as u64;
+                linkfdctx.stat_comp_out.store(tmplen, std::sync::atomic::Ordering::SeqCst);
                 if retv.is_none() {
                     break;
                 }
             }
         }
     }
-    if unsafe {*LINKER_TERM.as_ptr()} != 0 && errno() != errno::Errno(0) {
+    if linkfdctx.linker_term.load(std::sync::atomic::Ordering::SeqCst) != 0 && errno() != errno::Errno(0) {
         let errno = errno();
         let msg = format!("{}: {}\n\0", errno.to_string(), errno);
         syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
 
-    if unsafe { LINKER_TERM.load(std::sync::atomic::Ordering::SeqCst)} == VTUN_SIG_TERM {
+    if linkfdctx.linker_term.load(std::sync::atomic::Ordering::SeqCst) == VTUN_SIG_TERM {
         host.persist = 0;
     }
 

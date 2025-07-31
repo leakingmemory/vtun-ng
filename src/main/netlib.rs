@@ -21,7 +21,7 @@ use std::ptr::null_mut;
 use libc::{timeval};
 use crate::{lfd_mod, libfuncs, mainvtun, syslog, vtun_host};
 use crate::lfd_mod::VTUN_ADDR_NAME;
-
+use crate::linkfd::LinkfdCtx;
 /* Connect with timeout */
 pub fn connect_t(s: i32, svr: *const libc::sockaddr, timeout: libc::time_t) -> bool {
     let mut tv: timeval = timeval { tv_sec: timeout, tv_usec: 0 };
@@ -229,7 +229,7 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
  * Establish UDP session with host connected to fd(socket).
  * Returns connected UDP socket or -1 on error.
  */
-pub fn udp_session(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -> bool
+pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host: &mut vtun_host::VtunHost) -> bool
 {
     let mut saddr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
 
@@ -259,7 +259,7 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHo
     let port: libc::c_short = saddr.sin_port as libc::c_short;
     {
         let buf = u16::from_be(port as libc::in_port_t).to_be_bytes();
-        if libfuncs::write_n(host.rmt_fd, &buf).is_none() {
+        if libfuncs::write_n(linkfdctx, host.rmt_fd, &buf).is_none() {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't write port number");
             return false;
         }
@@ -268,7 +268,7 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHo
 
     /* Read port of the other's end UDP socket */
     let mut port = [0u8; 2];
-    if libfuncs::readn_t(host.rmt_fd,&mut port,host.timeout as libc::time_t) < 0 {
+    if libfuncs::readn_t(linkfdctx, host.rmt_fd,&mut port,host.timeout as libc::time_t) < 0 {
         let msg = format!("Can't read port number {}", errno::errno().to_string());
         syslog::vtun_syslog(lfd_mod::LOG_ERR,msg.as_str());
         return false;

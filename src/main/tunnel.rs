@@ -16,6 +16,7 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
+use std::sync::Arc;
 use crate::{driver, lfd_mod, linkfd, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
 use crate::setproctitle::set_title;
 
@@ -243,7 +244,7 @@ extern "C" fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> l
     }
 }
 
-fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver, dev: &str, interface_already_open: bool) -> libc::c_int {
+fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver, dev: &str, interface_already_open: bool) -> libc::c_int {
     /* TODO - Which platforms do not have fork? */
     unsafe {
         libc::signal(libc::SIGCHLD, libc::SIG_DFL);
@@ -334,7 +335,7 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
         set_title(ttle.as_str());
     }
     host.loc_fd = driver.io_fd();
-    let linkfd_result = linkfd::linkfd(ctx, host, driver, proto);
+    let linkfd_result = linkfd::linkfd(ctx, linkfdctx, host, driver, proto);
 
     {
         let ttle = format!("{} running down commands", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
@@ -355,7 +356,7 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
     linkfd_result
 }
 
-fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, dev: &str, interface_already_open: bool) -> libc::c_int {
+fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, dev: &str, interface_already_open: bool) -> libc::c_int {
     host.sopt.host = match host.host {
         Some(ref host) => Some(host.clone()),
         None => None
@@ -379,9 +380,9 @@ fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::Vtu
         let mut proto = tcp_proto::TcpProto {
             fd: host.rmt_fd
         };
-        return tunnel_lfd(ctx, host, driver, &mut proto, dev, interface_already_open)
+        return tunnel_lfd(ctx, linkfdctx, host, driver, &mut proto, dev, interface_already_open)
     } else if protflags == linkfd::VTUN_UDP {
-        let opt = netlib::udp_session(ctx, host);
+        let opt = netlib::udp_session(ctx, linkfdctx, host);
         if opt == false {
             syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't establish UDP session");
             return 0;
@@ -390,13 +391,13 @@ fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::Vtu
         let mut proto = udp_proto::UdpProto {
             fd: host.rmt_fd
         };
-        return tunnel_lfd(ctx, host, driver, &mut proto, dev, interface_already_open)
+        return tunnel_lfd(ctx, linkfdctx, host, driver, &mut proto, dev, interface_already_open)
     }
     syslog::vtun_syslog(lfd_mod::LOG_ERR,"Unknown network transport protocol");
     0
 }
 
-pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -> libc::c_int
+pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost) -> libc::c_int
 {
     let mut dev_specified: bool = false;
     let mut dev: &str = "";
@@ -421,7 +422,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
             match pty_dev::PtyDev::new() {
                 Some(ref mut driver) => {
                     let dev = *driver.ptyname.clone();
-                    tunnel_setup_proto(ctx, host, driver, dev.as_str(), interface_already_open)
+                    tunnel_setup_proto(ctx, linkfdctx, host, driver, dev.as_str(), interface_already_open)
                 },
                 None => {
                     syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't allocate pseudo tty.");
@@ -431,7 +432,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
         } else if typeflag == linkfd::VTUN_PIPE {
             match pipe_dev::PipeDev::new() {
                 Some(ref mut driver) => {
-                    tunnel_setup_proto(ctx, host, driver, "", interface_already_open)
+                    tunnel_setup_proto(ctx, linkfdctx, host, driver, "", interface_already_open)
                 },
                 None => {
                     syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't allocate pipe.");
@@ -452,7 +453,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
                         Some(name) => (*name).to_string(),
                         None => "".to_string()
                     };
-                    tunnel_setup_proto(ctx, host, driver, dev.as_str(), interface_already_open)
+                    tunnel_setup_proto(ctx, linkfdctx, host, driver, dev.as_str(), interface_already_open)
                 },
                 None => {
                     let msg: String;
@@ -479,7 +480,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
                         Some(name) => (*name).to_string(),
                         None => "".to_string()
                     };
-                    tunnel_setup_proto(ctx, host, driver, dev.as_str(), interface_already_open)
+                    tunnel_setup_proto(ctx, linkfdctx, host, driver, dev.as_str(), interface_already_open)
                 },
                 None => {
                     let msg: String;
@@ -504,24 +505,24 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
                 None => "".to_string()
             };
             let mut driver = pty_dev::PtyDev::new_from_fd(host.loc_fd, dev.as_str());
-            tunnel_setup_proto(ctx, host, &mut driver, dev.as_str(), interface_already_open)
+            tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, dev.as_str(), interface_already_open)
         } else if typeflag == linkfd::VTUN_PIPE {
             let mut driver = pipe_dev::PipeDev::new_from_fd(host.loc_fd);
-            tunnel_setup_proto(ctx, host, &mut driver, "", interface_already_open)
+            tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, "", interface_already_open)
         } else if typeflag == linkfd::VTUN_ETHER {
             let dev: String = match host.sopt.dev {
                 Some(ref d) => d.clone(),
                 None => "".to_string()
             };
             let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
-            tunnel_setup_proto(ctx, host, &mut driver, dev.as_str(), interface_already_open)
+            tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, dev.as_str(), interface_already_open)
         } else if typeflag == linkfd::VTUN_TUN {
             let dev: String = match host.sopt.dev {
                 Some(ref d) => d.clone(),
                 None => "".to_string()
             };
             let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
-            tunnel_setup_proto(ctx, host, &mut driver, dev.as_str(), interface_already_open)
+            tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, dev.as_str(), interface_already_open)
         }  else {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.");
             -1

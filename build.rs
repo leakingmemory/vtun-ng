@@ -1,6 +1,5 @@
 
 fn main() {
-    println!("cargo:rustc-cdylib-link-arg=-Wl,-soname,libvtun_linkfd.so");
     let stat_dir = std::env::var("VTUN_STAT_DIR")
         .unwrap_or_else(|_| "/var/run/vtunng".to_string());
     println!("cargo:rustc-env=VTUN_STAT_DIR={}", stat_dir);

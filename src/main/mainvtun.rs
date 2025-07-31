@@ -20,6 +20,7 @@
 use crate::{cfg_file, lfd_mod, syslog};
 
 pub struct VtunContext {
+    pub config: Option<cfg_file::VtunConfigRoot>,
     pub vtun: lfd_mod::VtunOpts,
     pub is_rmt_fd_connected: bool
 }
@@ -33,8 +34,11 @@ pub fn reread_config(ctx: &mut VtunContext)
             unsafe { libc::exit(1); }
         }
     };
-    if cfg_file::read_config(ctx, cfg_file.as_str()) == 0 {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR,"No hosts defined");
-        unsafe { libc::exit(1); }
-    }
+    ctx.config = match cfg_file::VtunConfigRoot::new(ctx, cfg_file.as_str()) {
+        Some(config) => Some(config),
+        None => {
+            syslog::vtun_syslog(lfd_mod::LOG_ERR,"No hosts defined");
+            unsafe { libc::exit(1); }
+        }
+    };
 }

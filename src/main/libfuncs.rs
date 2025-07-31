@@ -19,13 +19,14 @@
 
 /* Read N bytes with timeout */
 use std::ptr::null_mut;
-use crate::{auth, linkfd};
+use crate::{auth};
+use crate::linkfd::LinkfdCtx;
 /* Read exactly len bytes (Signal safe)*/
-pub fn read_n(fd: libc::c_int, buf: &mut [u8]) -> Option<usize>
+pub fn read_n(linkfdctx: &LinkfdCtx, fd: libc::c_int, buf: &mut [u8]) -> Option<usize>
 {
     let mut off = 0;
 
-    while linkfd::is_io_cancelled() == 0 && off < buf.len() {
+    while !linkfdctx.is_io_cancelled() && off < buf.len() {
         let w = unsafe { libc::read(fd, buf.as_ptr().add(off) as *mut libc::c_void, buf.len() - off) };
         if w < 0 {
             let errno = errno::errno();
@@ -42,7 +43,7 @@ pub fn read_n(fd: libc::c_int, buf: &mut [u8]) -> Option<usize>
     Some(off)
 }
 
-pub fn readn_t(fd: libc::c_int, buf: &mut [u8], timeout: libc::time_t) -> libc::c_int
+pub fn readn_t(linkfdctx: &LinkfdCtx, fd: libc::c_int, buf: &mut [u8], timeout: libc::time_t) -> libc::c_int
 {
     let mut fdset: libc::fd_set = unsafe { std::mem::zeroed() };
     unsafe {
@@ -59,18 +60,18 @@ pub fn readn_t(fd: libc::c_int, buf: &mut [u8], timeout: libc::time_t) -> libc::
         }
     }
 
-    match read_n(fd, buf) {
+    match read_n(linkfdctx, fd, buf) {
         Some(n) => n as libc::c_int,
         None => -1
     }
 }
 
 /* Write exactly len bytes (Signal safe)*/
-pub fn write_n(fd: libc::c_int, buf: &[u8]) -> Option<usize>
+pub fn write_n(linkfdctx: &LinkfdCtx, fd: libc::c_int, buf: &[u8]) -> Option<usize>
 {
     let mut t: usize = 0;
 
-    while linkfd::is_io_cancelled() == 0 && t < buf.len() {
+    while !linkfdctx.is_io_cancelled() && t < buf.len() {
         let w = unsafe { libc::write(fd, buf[t..buf.len()].as_ptr() as *const libc::c_void, buf.len() - t) };
         if w < 0 {
             let errno = errno::errno();

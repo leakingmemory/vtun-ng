@@ -37,27 +37,15 @@ impl FileDes {
     pub fn getpt() -> FileDes {
         FileDes { fd: unsafe { libc::getpt() } }
     }
-    #[cfg(not(target_os = "linux"))]
-    pub fn getpt() -> FileDes {
-        FileDes { fd: -1 }
-    }
 
     #[cfg(target_os = "linux")]
     pub fn grantpt(&self) -> bool {
         unsafe { libc::grantpt(self.fd) == 0 }
     }
-    #[cfg(not(target_os = "linux"))]
-    pub fn grantpt(&self) -> bool {
-        false
-    }
 
     #[cfg(target_os = "linux")]
     pub fn unlockpt(&self) -> bool {
         unsafe { libc::unlockpt(self.fd) == 0 }
-    }
-    #[cfg(not(target_os = "linux"))]
-    pub fn unlockpt(&self) -> bool {
-        false
     }
 
     #[cfg(target_os = "linux")]
@@ -68,10 +56,6 @@ impl FileDes {
         }
         let name = unsafe { std::ffi::CStr::from_ptr(ptr) };
         Some(name.to_string_lossy().into_owned())
-    }
-    #[cfg(not(target_os = "linux"))]
-    pub fn ptsname(&self) -> Option<String> {
-        None
     }
 
     pub fn socketpair(domain: libc::c_int, type_: libc::c_int, protocol: libc::c_int) -> Result<(FileDes, FileDes), libc::c_int> {
@@ -135,8 +119,42 @@ impl FileDes {
             Err(r)
         }
     }
+    // open for more when needed
+    #[cfg(target_os = "openbsd")]
+    pub fn read_both(&self, buf1: &mut [u8], buf2: &mut [u8]) -> Result<usize, libc::ssize_t> {
+        let len1 = buf1.len();
+        let len2 = buf2.len();
+        let iov: [libc::iovec; 2] = [
+            libc::iovec { iov_base: buf1.as_mut_ptr() as *mut libc::c_void, iov_len: len1 },
+            libc::iovec { iov_base: buf2.as_mut_ptr() as *mut libc::c_void, iov_len: len2 }
+        ];
+        let r = unsafe { libc::readv(self.fd, iov.as_ptr(), 2) };
+        if r >= 0 {
+            let n = r as usize;
+            Ok(n)
+        } else {
+            Err(r)
+        }
+    }
     pub fn write(&self, buf: &[u8]) -> Result<usize, libc::ssize_t> {
         let r = unsafe { libc::write(self.fd, buf.as_ptr() as *const libc::c_void, buf.len() as libc::size_t) };
+        if r >= 0 {
+            let n = r as usize;
+            Ok(n)
+        } else {
+            Err(r)
+        }
+    }
+    // open for more when needed
+    #[cfg(target_os = "openbsd")]
+    pub fn write_both(&self, buf1: &[u8], buf2: &[u8]) -> Result<usize, libc::ssize_t> {
+        let len1 = buf1.len();
+        let len2 = buf2.len();
+        let iov: [libc::iovec; 2] = [
+            libc::iovec { iov_base: buf1.as_ptr() as *mut libc::c_void, iov_len: len1 },
+            libc::iovec { iov_base: buf2.as_ptr() as *mut libc::c_void, iov_len: len2 }
+        ];
+        let r = unsafe { libc::writev(self.fd, iov.as_ptr(), 2) };
         if r >= 0 {
             let n = r as usize;
             Ok(n)
@@ -154,6 +172,8 @@ impl FileDes {
             Err(r)
         }
     }
+    // enable when needed
+    #[cfg(target_os = "linux")]
     pub unsafe fn ioctl<T>(&self, request: libc::c_ulong, arg: T) -> Result<libc::c_int, libc::c_int> {
         let r = unsafe { libc::ioctl(self.fd, request, arg) };
         if r >= 0 {

@@ -253,18 +253,13 @@ impl driver::Driver for TunDev {
     #[cfg(target_os = "openbsd")]
     fn write(&self, buf: &[u8]) -> Option<usize> {
         match self.fd {
-            None => false,
-            Some(fd) => {
-                let tp: u32 = libc::htonl(libc::AF_INET);
-                let iov: [libc::iovec; 2] = [
-                    libc::iovec { iov_base: &mut tp as *mut u32 as *mut libc::c_void, iov_len: 4 },
-                    libc::iovec { iov_base: buf.as_mut_ptr() as *mut libc::c_void, iov_len: len }
-                ];
-                let res = libc::writev(fd, iov.as_ptr(), 2);
-                if (res >= 0) {
-                    Some(res as usize)
-                } else {
-                    None
+            None => None,
+            Some(ref fd) => {
+                let tpv: u32 = libc::AF_INET as u32;
+                let tp: [u8; 4] = [(tpv >> 24) as u8, ((tpv >> 16) & 0xFF) as u8, ((tpv >> 8) & 0xFF) as u8, (tpv & 0xFF) as u8];
+                match fd.write_both(&tp, buf) {
+                    Ok(res) => Some(res),
+                    Err(_) => None
                 }
             }
         }
@@ -291,21 +286,25 @@ impl driver::Driver for TunDev {
     fn read(&self, buf: &mut Vec<u8>, len: usize) -> bool {
         match self.fd {
             None => false,
-            Some(fd) => {
-                if (buf.len() < len) {
+            Some(ref fd) => {
+                if (buf.len() != len) {
                     buf.resize(len, 0);
                 }
-                let mut tp: u32 = 0;
+                let mut tp: [u8; 4] = [0,0,0,0];
                 let iov: [libc::iovec; 2] = [
                     libc::iovec { iov_base: &mut tp as *mut u32 as *mut libc::c_void, iov_len: 4 },
                     libc::iovec { iov_base: buf.as_mut_ptr() as *mut libc::c_void, iov_len: len }
                 ];
-                let res = unsafe { libc::readv(fd, iov.as_ptr(), 2) };
-                if res >= 4 {
-                    buf.truncate((res - 4) as usize);
-                    true
-                } else {
-                    false
+                match fd.read_both(&mut tp, buf) {
+                    Ok(res) => {
+                        if (res >= 4) {
+                            buf.truncate(res - 4);
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    Err(_) => false
                 }
             }
         }

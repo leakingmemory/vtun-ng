@@ -45,14 +45,14 @@ impl PtyDev {
                 ptyname[9 as usize] = digit[m];
                 let nm = String::from_utf8(ptyname.to_vec()).unwrap();
                 /* Open the master */
-                let mr_fd= FileDes::open(nm.as_str(), libc::O_RDWR);
+                let mut mr_fd= FileDes::open_m(nm.as_str(), libc::O_RDWR);
                 if !mr_fd.ok() {
                     continue;
                 }
                 /* Check the slave */
                 ptyname[5 as usize] = 't' as u8;
                 if unsafe { libc::access(ptyname.as_ptr() as *const i8, libc::R_OK | libc::W_OK) } < 0 {
-                    unsafe { libc::close(mr_fd); }
+                    mr_fd.close();
                     ptyname[5 as usize] = 'p' as u8;
                     continue;
                 }

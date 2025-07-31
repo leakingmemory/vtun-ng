@@ -16,6 +16,10 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
+
+#[cfg(target_os = "linux")]
+use std::ffi::CStr;
+
 use crate::driver;
 
 pub(crate) struct PtyDev{

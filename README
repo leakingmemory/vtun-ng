@@ -12,9 +12,6 @@ Compilation and Installation:
 
 In order to compile VTun you need several software packages.
 Required packages: 
-  - Good C compiler (gcc, egcs, etc)
-  - Lexical Analyzer (flex, lex)
-  - YACC (bison)
   - Universal TUN/TAP driver 	http://vtun.sourceforge.net/tun
   - OpenSSL encryption library 	http://www.openssl.org
   - Rust and cargo
@@ -24,34 +21,9 @@ Optional packages:
 	 Socks5 by NEC (recommended)	http://www.socks.nec.com 
 	 Dante Socks4/5 	http://www.inet.no/dante 
 
-To configure VTun run:
-  aclocal
-  autoconf
-  ./configure 
-Optional support:
-  --enable-socks 	compile with SOCKS support
-
-Configure automatically searches for all required library and header
-files.  However you might need to specify location of the files which
-could not be found in default location:
-  SSL(Crypto) library:
-  --with-ssl-lib=/path/to/library (libcrypto.a) 
-  --with-ssl-headers=/path/to/headers (md5.h blowfish.h)
-
-  LZO library:
-  --with-lzo-lib=/path/to/library (liblzo.a) 
-  --with-lzo-headers=/path/to/headers (lzo1x.h)
-
-  SOCKS library:
-  --with-socks-lib=/path/to/library (libsocks.a or libsocks5.a) 
-
 To compile and install run:
-  make install
-Currently VTun-ng is a hybrid rust, C and bison setup, which
-unfortunately means it can be a little bit painful to compile
-and install. The rust part is contained in a shared object for
-now, which enables the rust part to be independent of the C
-part with regards to runtime dependencies.
+  cargo build -r
+  ./install.sh
 
 Read manual page for 'vtunngd' and the config file example for
 configuration and other suggestions.

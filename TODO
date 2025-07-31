@@ -1,27 +1,13 @@
 
-netlib.c:196 - set a timeout for waiting for the remote UDP start
+ - Clean up the code with regards to warnings and statics
+ - Legacy crypto algorithms should be moved off openssl
+ - New bidirectional auth
+ - Add new crypto algorithms
 
-NATHack
+General plan is to remain completely backwards compatible with
+vtun-3.0.4 for a while.
 
- - unify the config as one (local) setting, and use a connection
-   cookie passed to coordinate which side goes passive.  The server
-   wins in all ties.  auth.c:195
+You are welcome to come with suggestions and comments. Please
+open issues at the github page or send an email.
 
- - lose the global variable and move it into the vtun struct.  For
-   now.  main.c:54, vtun.h:111
-
- - generally clean up the cfg_file.y and main.c stuff.  
-
-2.6 compatibility
-
- - has to remain.
-
- - needs a cleanup too, so the redundant file isn't in there.
-
----
-
-Comments, suggestion, wishes and if possible patches are always welcome.
-Send them to vtun-users@lists.sourceforge.net .
-
-Bishop Clark <bishop@platypus.bc.ca>
-
+Jan-Espen Oversand <sigsegv at radiotube.org>

@@ -89,11 +89,13 @@ impl TunDev {
                 for i in 0..255 {
                     let name;
                     if matches!(dev_type, TunDevType::Tun) {
-                        name = format!("/dev/tun{}", i);
+                        name = format!("tun{}", i);
                     } else {
-                        name = format!("/dev/tap{}", i);
+                        name = format!("tap{}", i);
                     }
-                    if dev.open(&name, dev_type) {
+                    let path = format!("/dev/{}", &name);
+                    if dev.open(path.as_str(), dev_type) {
+                        dev.name = Some(Box::new(name));
                         dev.log_open();
                         return Some(dev);
                     }

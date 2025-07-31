@@ -18,8 +18,9 @@ use std::ptr::null_mut;
 use std::rc::{Rc, Weak};
 use std::sync::Mutex;
 use logos::Logos;
-use crate::{lfd_mod, linkfd, llist, mainvtun, syslog, tunnel, vtun_host};
+use crate::{lfd_mod, linkfd, mainvtun, syslog, vtun_host};
 use crate::lexer::Token;
+use crate::tunnel::VtunCmd;
 use crate::vtun_host::VtunHost;
 
 pub fn find_host_rs(host: &str) -> Option<&mut VtunHost> {
@@ -77,13 +78,12 @@ impl RootParsingContext {
         vec.reserve(self.ident_ctx.len());
         for ident_ctx in &self.ident_ctx {
             let ident_ctx = ident_ctx.lock().unwrap();
-            let name = Self::strdup(ident_ctx.identifier.as_str());
             let host_ctx = match ident_ctx.host_ctx {
                 Some(ref host_ctx) => host_ctx.lock().unwrap(),
                 None => continue
             };
             let mut host = VtunHost::new();
-            host.host = name;
+            host.host = Some(ident_ctx.identifier.clone());
             for default_ctx in &self.default_ctx {
                 let default_ctx = default_ctx.lock().unwrap();
                 let host_ctx = match default_ctx.host_ctx {
@@ -287,8 +287,7 @@ impl HostConfigParsingContext {
             None => {},
             Some(ref passwd_ctx) => {
                 let passwd_ctx = passwd_ctx.lock().unwrap();
-                Self::free_nonnull(host.passwd);
-                host.passwd = Self::strdup(passwd_ctx.value.as_str());
+                host.passwd = Some(passwd_ctx.value.clone());
             }
         }
         match self.type_ctx {
@@ -335,8 +334,7 @@ impl HostConfigParsingContext {
             None => {},
             Some(ref device_ctx) => {
                 let device_ctx = device_ctx.lock().unwrap();
-                Self::free_nonnull(host.dev);
-                host.dev = Self::strdup(device_ctx.value.as_str());
+                host.dev = Some(device_ctx.value.clone());
             }
         }
         match self.nathack_ctx {
@@ -1093,40 +1091,35 @@ impl OptionsConfigParsingContext {
             None => {},
             Some(ref ppp_ctx) => {
                 let ppp_ctx = ppp_ctx.lock().unwrap();
-                Self::free_non_null(opts.ppp);
-                opts.ppp = Self::strdup(&ppp_ctx.value);
+                opts.ppp = Some(ppp_ctx.value.clone());
             }
         }
         match self.ifconfig_ctx {
             None => {},
             Some(ref ifconfig_ctx) => {
                 let ifconfig_ctx = ifconfig_ctx.lock().unwrap();
-                Self::free_non_null(opts.ifcfg);
-                opts.ifcfg = Self::strdup(&ifconfig_ctx.value);
+                opts.ifcfg = Some(ifconfig_ctx.value.clone());
             }
         }
         match self.route_ctx {
             None => {},
             Some(ref route_ctx) => {
                 let route_ctx = route_ctx.lock().unwrap();
-                Self::free_non_null(opts.route);
-                opts.route = Self::strdup(&route_ctx.value);
+                opts.route = Some(route_ctx.value.clone());
             }
         }
         match self.firewall_ctx {
             None => {},
             Some(ref firewall_ctx) => {
                 let firewall_ctx = firewall_ctx.lock().unwrap();
-                Self::free_non_null(opts.fwall);
-                opts.fwall = Self::strdup(&firewall_ctx.value);
+                opts.fwall = Some(firewall_ctx.value.clone());
             }
         }
         match self.ip_ctx {
             None => {},
             Some(ref ip_ctx) => {
                 let ip_ctx = ip_ctx.lock().unwrap();
-                Self::free_non_null(opts.iproute);
-                opts.iproute = Self::strdup(&ip_ctx.value);
+                opts.iproute = Some(ip_ctx.value.clone());
             }
         }
         match self.bindaddr_ctx {
@@ -1298,11 +1291,7 @@ impl BindaddrConfigParsingContext {
                     let msg = format!("In '{}' iface overrides addr", self.token_name);
                     syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 }
-                let ifname = format!("{}\0", iface_ctx.lock().unwrap().value);
-                if bindaddr.name != null_mut() {
-                    unsafe { libc::free(bindaddr.name as *mut libc::c_void); }
-                }
-                bindaddr.name = unsafe { libc::strdup(ifname.as_ptr() as *mut libc::c_char) };
+                bindaddr.name = Some(iface_ctx.lock().unwrap().value.clone());
                 bindaddr.type_ = lfd_mod::VTUN_ADDR_IFACE;
                 return;
             }
@@ -1367,11 +1356,7 @@ impl AddrConfigParsingContext {
     pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
         match self.hostname {
             Some(ref hostname) => {
-                let hostname = format!("{}\0", hostname);
-                if bindaddr.name != null_mut() {
-                    unsafe { libc::free(bindaddr.name as *mut libc::c_void); }
-                }
-                bindaddr.name = unsafe { libc::strdup(hostname.as_ptr() as *mut libc::c_char) };
+                bindaddr.name = Some(hostname.clone());
                 bindaddr.type_ = lfd_mod::VTUN_ADDR_NAME;
                 return;
             }
@@ -1379,11 +1364,8 @@ impl AddrConfigParsingContext {
         }
         match self.ipv4 {
             Some(ipv4) => {
-                let ipv4 = format!("{}\0", std::net::Ipv4Addr::from(ipv4).to_string());
-                if bindaddr.ip != null_mut() {
-                    unsafe { libc::free(bindaddr.ip as *mut libc::c_void); }
-                }
-                bindaddr.ip = unsafe { libc::strdup(ipv4.as_ptr() as *mut libc::c_char) };
+                let ipv4 = format!("{}", std::net::Ipv4Addr::from(ipv4).to_string());
+                bindaddr.ip = Some(ipv4);
             },
             None => {}
         }
@@ -1529,7 +1511,7 @@ impl KwUpDownParsingContext {
             updown_ctx: None
         }
     }
-    pub fn apply(&self, vtun_ctx: &mainvtun::VtunContext, list: &mut llist::LList) {
+    pub fn apply(&self, vtun_ctx: &mainvtun::VtunContext, list: &mut Vec<VtunCmd>) {
         match self.updown_ctx {
             None => {},
             Some(ref ctx) => ctx.lock().unwrap().apply(vtun_ctx, list)
@@ -1581,29 +1563,36 @@ impl UpDownParsingContext {
             cmds: Vec::new()
         }
     }
-    pub fn apply(&self, ctx: &mainvtun::VtunContext, list: &mut llist::LList) {
+    pub fn apply(&self, ctx: &mainvtun::VtunContext, list: &mut Vec<VtunCmd>) {
         for cmdmtx in self.cmds.iter() {
-            let mut nullterm_cmd;
-            let nullterm_args;
+            let final_cmd;
+            let final_args;
             let mut flags: libc::c_int = 0;
             {
                 let cmd = cmdmtx.lock().unwrap();
-                nullterm_cmd = match cmd.token {
-                    Token::KwFirewall => unsafe { CStr::from_ptr(ctx.vtun.fwall) }.to_str().unwrap().to_string(),
-                    Token::KwIp => unsafe { CStr::from_ptr(ctx.vtun.iproute) }.to_str().unwrap().to_string(),
-                    Token::KwIfconfig => unsafe { CStr::from_ptr(ctx.vtun.ifcfg) }.to_str().unwrap().to_string(),
-                    Token::KwPpp => unsafe { CStr::from_ptr(ctx.vtun.ppp) }.to_str().unwrap().to_string(),
-                    Token::KwRoute => unsafe { CStr::from_ptr(ctx.vtun.route) }.to_str().unwrap().to_string(),
-                    Token::KwProgram => match &cmd.path {
-                        None => "".to_string(),
-                        Some(path) => path.to_string()
-                    },
+                let perhaps_cmd = match match cmd.token {
+                    Token::KwFirewall => &ctx.vtun.fwall,
+                    Token::KwIp => &ctx.vtun.iproute,
+                    Token::KwIfconfig => &ctx.vtun.ifcfg,
+                    Token::KwPpp => &ctx.vtun.ppp,
+                    Token::KwRoute => &ctx.vtun.route,
+                    Token::KwProgram => &cmd.path,
                     _ => continue
+                } {
+                    Some(perhaps_cmd) => Some(perhaps_cmd.clone()),
+                    None => None
                 };
-                nullterm_cmd.push_str("\0");
-                nullterm_args = match cmd.args {
-                    Some(ref args) => format!("{}\0", args),
-                    None => "\0".to_string()
+                final_cmd = match perhaps_cmd {
+                    Some(cmd) => cmd,
+                    None => {
+                        let msg = format!("No valid command specified for {}", match cmd.args { Some(ref args) => args.as_str(), None => "<none>" });
+                        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                        continue;
+                    }
+                };
+                final_args = match cmd.args {
+                    Some(ref args) => args.clone(),
+                    None => "".to_string()
                 };
                 if cmd.wait {
                     flags = flags | linkfd::VTUN_CMD_WAIT;
@@ -1616,34 +1605,12 @@ impl UpDownParsingContext {
                     flags = flags | linkfd::VTUN_CMD_SHELL;
                 }*/
             }
-            let cmdobj = {
-                let cmdobj;
-                unsafe {
-                    cmdobj = libc::malloc(size_of::<tunnel::VtunCmd>()) as *mut tunnel::VtunCmd;
-                    libc::memset(cmdobj as *mut libc::c_void, 0, size_of::<tunnel::VtunCmd>());
-                    (*cmdobj).prog = libc::strdup(nullterm_cmd.as_ptr() as *mut libc::c_char);
-                    (*cmdobj).args = libc::strdup(nullterm_args.as_ptr() as *mut libc::c_char);
-                    (*cmdobj).flags = flags;
-                }
-                cmdobj
+            let cmdobj = VtunCmd {
+                prog: Some(final_cmd),
+                args: Some(final_args),
+                flags,
             };
-            if list.head != null_mut() {
-                unsafe {&mut *(list.tail)}.next = unsafe {
-                    let next: *mut llist::LListElement = libc::malloc(size_of::<llist::LListElement>()) as *mut llist::LListElement;
-                    libc::memset(next as *mut libc::c_void, 0, size_of::<llist::LListElement>());
-                    (*next).data = cmdobj as *mut libc::c_void;
-                    next
-                };
-                list.tail = unsafe {&mut *(list.tail)}.next;
-            } else {
-                list.head = unsafe {
-                    let next: *mut llist::LListElement = libc::malloc(size_of::<llist::LListElement>()) as *mut llist::LListElement;
-                    libc::memset(next as *mut libc::c_void, 0, size_of::<llist::LListElement>());
-                    (*next).data = cmdobj as *mut libc::c_void;
-                    next
-                };
-                list.tail = list.head;
-            }
+            list.push(cmdobj);
         }
     }
 }
@@ -2077,8 +2044,8 @@ impl VtunConfigRoot {
 
 static mut CONFIG_ROOT: Option<VtunConfigRoot> = None;
 
-pub fn read_config(ctx: &mut mainvtun::VtunContext, file: *const libc::c_char) -> libc::c_int {
-    let root = VtunConfigRoot::new(ctx, unsafe { CStr::from_ptr(file) }.to_str().unwrap());
+pub fn read_config(ctx: &mut mainvtun::VtunContext, file: &str) -> libc::c_int {
+    let root = VtunConfigRoot::new(ctx, file);
     match root {
         Some(root) => unsafe { CONFIG_ROOT = Some(root); },
         None => return 0

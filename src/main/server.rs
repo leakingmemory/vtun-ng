@@ -17,7 +17,6 @@
     GNU General Public License for more details.
  */
 use std::{mem, ptr};
-use std::ffi::CStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use signal_hook::low_level;
@@ -72,22 +71,23 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
             unsafe { libc::sigaction(libc::SIGHUP, &sa, ptr::null_mut()); }
 
             {
-                let msg = format!("Session {}[{}:{}] opened", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), ip, u16::from_be(cl_addr.sin_port));
+                let msg = format!("Session {}[{}:{}] opened",
+                                  match host.host {Some(ref h) => h.as_str(), None => "<none>"},
+                                  ip,
+                                  u16::from_be(cl_addr.sin_port));
                 syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
             host.rmt_fd = sock;
 
             let l_ip = std::net::Ipv4Addr::from(cl_addr.sin_addr.s_addr).to_string();
             {
-                let mut l_n_ip = l_ip.clone();
-                l_n_ip.push_str("\0");
-                host.sopt.laddr = unsafe { libc::strdup(l_n_ip.as_ptr() as *const libc::c_char) };
+                let l_n_ip = l_ip.clone();
+                host.sopt.laddr = Some(l_n_ip);
             }
             host.sopt.lport = ctx.vtun.bind_addr.port;
             {
-                let mut n_ip = ip.clone();
-                n_ip.push_str("\0");
-                host.sopt.raddr = unsafe { libc::strdup(n_ip.as_ptr() as *const libc::c_char) };
+                let n_ip = ip.clone();
+                host.sopt.raddr = Some(n_ip);
             }
             host.sopt.rport = u16::from_be(cl_addr.sin_port) as libc::c_int;
 
@@ -95,7 +95,7 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
             tunnel::tunnel(ctx, &mut host);
 
             {
-                let msg = format!("Session {} closed", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
+                let msg = format!("Session {} closed", match host.host {Some(ref h) => h.as_str(), None => "<none>"});
                 syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
 

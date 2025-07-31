@@ -21,12 +21,12 @@
  * $Id: client.c,v 1.11.2.4 2016/10/01 21:27:51 mtbishop Exp $
  */
 use std::{mem, ptr, thread};
-use std::ffi::CStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 use signal_hook::{low_level, SigId};
-use crate::{auth, lfd_mod, libfuncs, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
+use crate::{auth, lfd_mod, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
+use crate::vtun_host::VtunSopt;
 
 struct ClientCtx {
     client_term: Arc<AtomicI32>
@@ -98,7 +98,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
             }
         }
 
-        let msg = format!("{} init initializing", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
+        let msg = format!("{} init initializing", match &host.host { Some(host) => host.as_str(), None => "<none>"});
         setproctitle::set_title(msg.as_str());
 
         /* Set server address */
@@ -146,23 +146,29 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         linkfd::io_init();
 
         {
-            let msg = format!("{} connecting to {}", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
+            let msg = format!("{} connecting to {}",
+                              match host.host { Some(ref host) => host.as_str(), None => "<none>" },
+                              match ctx.vtun.svr_name { Some(ref svr_name) => svr_name.as_str(), None => "<none>" });
             setproctitle::set_title(msg.as_str());
         }
         if ctx.vtun.quiet == 0 {
-            let msg = format!("Connecting to {}", unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
+            let msg = format!("Connecting to {}", match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
             syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
         }
 
         if !netlib::connect_t(s, (&svr_addr as *const libc::sockaddr_in).cast(), host.timeout as libc::time_t) {
             let errno = errno::errno();
             if ctx.vtun.quiet == 0 || errno != errno::Errno(libc::ETIMEDOUT) {
-                let msg = format!("Connect to {} failed. {}", unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap(), errno.to_string());
+                let msg = format!("Connect to {} failed. {}",
+                                  match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" },
+                                  errno.to_string());
                 syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
         } else {
             if auth::auth_client_rs(ctx, s, host) {
-                let msg = format!("Session {}[{}] opened", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
+                let msg = format!("Session {}[{}] opened",
+                                  match host.host { Some(ref host) => host.as_str(), None => "<none>" },
+                                  match ctx.vtun.svr_name { Some(ref svr_name) => svr_name.as_str(), None => "<none>" });
                 syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
 
                 host.rmt_fd = s;
@@ -170,15 +176,17 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 /* Start the tunnel */
                 client_ctx.set_client_term(tunnel::tunnel(ctx, host));
 
-                let msg = format!("Session {}[{}] closed", unsafe { CStr::from_ptr(host.host) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
+                let msg = format!("Session {}[{}] closed",
+                                  match &host.host { Some(host) => host.as_str(), None => "<none>" },
+                                  match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
                 syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
             } else {
-                let msg = format!("Connection denied by {}", unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap());
+                let msg = format!("Connection denied by {}", match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
                 syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
             }
         }
         unsafe { libc::close(s); }
-        libfuncs::free_sopt(&mut host.sopt);
+        host.sopt = VtunSopt::new();
     }
 
     match sigint_restore {

@@ -22,7 +22,6 @@
  * string format:  <CS64> 
  * C - compression, S - speed for shaper and so on.
  */
-use std::ffi::CStr;
 use crate::challenge::VTUN_CHAL_SIZE;
 use crate::{cfg_file, challenge, lfd_mod, libfuncs, linkfd, lock, setproctitle, syslog, vtun_host};
 use crate::libfuncs::print_p;
@@ -348,7 +347,10 @@ pub fn auth_server(ctx: &VtunContext, fd: i32) -> Option<vtun_host::VtunHost> {
                 h = cfg_file::find_host_rs(host.as_str());
 
                 match h {
-                    Some(ref mut h) => challenge::decrypt_chal(chal_res.as_mut_slice(), h.passwd),
+                    Some(ref mut h) => match h.passwd {
+                        Some(ref passwd) => challenge::decrypt_chal(chal_res.as_mut_slice(), passwd.as_str()),
+                        None => break
+                    },
                     None => break
                 };
 
@@ -419,7 +421,10 @@ pub(crate) fn auth_client_rs(ctx: &VtunContext, fd: libc::c_int, host: &mut vtun
                 msg.push(b'T');
                 msg.push(b':');
                 msg.push(b' ');
-                let host = unsafe { CStr::from_ptr(host.host) }.to_bytes();
+                let host = match host.host {
+                    Some(ref host) => host.as_bytes(),
+                    None => break
+                };
                 for i in 0..host.len() {
                     msg.push(host[i]);
                 }
@@ -432,7 +437,10 @@ pub(crate) fn auth_client_rs(ctx: &VtunContext, fd: libc::c_int, host: &mut vtun
             if buf[0] == b'O' && buf[1] == b'K' && cs2cl(&buf, &mut chal) {
                 stage = ST_CHAL;
 
-                challenge::encrypt_chal(chal.as_mut_slice(), host.passwd);
+                match host.passwd {
+                    Some(ref passwd) => challenge::encrypt_chal(chal.as_mut_slice(), passwd.as_str()),
+                    None => break
+                };
                 let mut msg: Vec<u8> = Vec::new();
                 msg.reserve(32);
                 msg.push(b'C');

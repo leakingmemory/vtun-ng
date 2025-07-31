@@ -16,7 +16,6 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-use std::ffi::CStr;
 use crate::{lfd_mod, syslog, vtun_host};
 use crate::lfd_mod::VTUN_MULTI_DENY;
 
@@ -105,7 +104,12 @@ pub fn lock_host_rs(host: &vtun_host::VtunHost) -> bool {
         return true;
     }
 
-    let lock_file = format!("{}/{}", VTUN_LOCK_DIR, unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
+    let lock_file = format!("{}/{}",
+                            VTUN_LOCK_DIR,
+                            match host.host {
+                                Some(ref host) => host.as_str(),
+                                None => return false
+                            });
 
     /* Check if lock already exists. */
     let pid = read_lock(&lock_file);
@@ -156,7 +160,9 @@ pub fn unlock_host(host: &vtun_host::VtunHost)
         return;
     }
 
-    let lock_file = format!("{}/{}\0", VTUN_LOCK_DIR, unsafe { CStr::from_ptr(host.host) }.to_str().unwrap());
+    let lock_file = format!("{}/{}\0",
+        VTUN_LOCK_DIR,
+        match host.host { Some(ref host) => host.as_str(), None => return });
 
     if unsafe { libc::unlink(lock_file.as_ptr() as *const libc::c_char) } < 0  {
         let msg = format!("Unable to remove lock {}", lock_file);

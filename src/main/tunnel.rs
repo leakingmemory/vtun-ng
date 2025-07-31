@@ -16,21 +16,8 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-use std::ffi::CStr;
-use crate::{driver, lfd_mod, linkfd, llist, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
+use crate::{driver, lfd_mod, linkfd, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
 use crate::setproctitle::set_title;
-/* Travel list from head to tail */
-fn llist_trav(l: &mut llist::LList, f: extern "C" fn(*mut libc::c_void, *mut libc::c_void) -> libc::c_int, u: *mut libc::c_void) -> *mut libc::c_void {
-    let mut i = l.head;
-
-    while !i.is_null() {
-        if unsafe { f((*i).data, u) } != 0 {
-            return unsafe { (*i).data };
-        }
-        i = unsafe { (*i).next };
-    }
-    std::ptr::null_mut()
-}
 
 /// Substitutes opt in place off '%X'.
 /// Returns new string.
@@ -40,40 +27,36 @@ fn subst_opt(str: &str, sopt: Option<&vtun_host::VtunSopt>) -> Option<String> {
     }
     let dev = match sopt {
         Some(sopt) => {
-            if !sopt.dev.is_null() {
-                Some(unsafe { CStr::from_ptr(sopt.dev) }.to_str().unwrap().to_string())
-            } else {
-                None
+            match sopt.dev {
+                Some(ref dev) => Some(dev.clone()),
+                None => None
             }
         },
         None => None
     };
     let laddr = match sopt {
         Some(sopt) => {
-            if !sopt.laddr.is_null() {
-                Some(unsafe { CStr::from_ptr(sopt.laddr) }.to_str().unwrap().to_string())
-            } else {
-                None
+            match sopt.laddr {
+                Some(ref laddr) => Some(laddr.clone()),
+                None => None
             }
         },
         None => None
     };
     let raddr = match sopt {
         Some(sopt) => {
-            if !sopt.raddr.is_null() {
-                Some(unsafe { CStr::from_ptr(sopt.raddr) }.to_str().unwrap().to_string())
-            } else {
-                None
+            match sopt.raddr {
+                Some(ref raddr) => Some(raddr.clone()),
+                None => None
             }
         },
         None => None
     };
     let host = match sopt {
         Some(sopt) => {
-            if !sopt.host.is_null() {
-                Some(unsafe { CStr::from_ptr(sopt.host) }.to_str().unwrap().to_string())
-            } else {
-                None
+            match sopt.host {
+                Some(ref host) => Some(host.clone()),
+                None => None
             }
         },
         None => None
@@ -179,30 +162,22 @@ fn split_args(str: & String) -> Vec<String> {
     argv
 }
 
-#[repr(C)]
+#[derive(Clone)]
 pub(crate) struct VtunCmd {
-    pub(crate) prog: *mut libc::c_char,
-    pub(crate) args: *mut libc::c_char,
+    pub(crate) prog: Option<String>,
+    pub(crate) args: Option<String>,
     pub(crate) flags: libc::c_int,
 }
-extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::c_int {
-    let prog: Option<String>;
-    let args: Option<String>;
-    let flags: libc::c_int;
-    {
-        let cmd = unsafe { &*(d as *mut VtunCmd) };
-        if !cmd.prog.is_null() {
-            prog = Some(unsafe { CStr::from_ptr(cmd.prog).to_str().unwrap().to_string() });
-        } else {
-            prog = None;
-        }
-        if !cmd.args.is_null() {
-            args = Some(unsafe { CStr::from_ptr(cmd.args).to_str().unwrap().to_string() });
-        } else {
-            args = None;
-        }
-        flags = cmd.flags;
-    }
+extern "C" fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> libc::c_int {
+    let prog = match cmd.prog {
+        Some(ref prog) => Some(prog.clone()),
+        None => None
+    };
+    let args = match cmd.args {
+        Some(ref args) => Some(args.clone()),
+        None => None
+    };
+    let flags = cmd.flags;
 
     let forkres = unsafe { libc::fork() };
     if forkres < 0 {
@@ -230,12 +205,6 @@ extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::
         return 0;
     }
 
-    let sopt;
-    if !opt.is_null() {
-        sopt = Some(unsafe {&*(opt as *const vtun_host::VtunSopt)});
-    } else {
-        sopt = None;
-    }
     let args_string =
         subst_opt(args.unwrap_or_else(|| "".to_string()).as_str(),
                   sopt).unwrap_or_else(|| "".to_string());
@@ -326,11 +295,12 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
                 }
             }
         }
-        let msg = format!("{} running up commands", unsafe {CStr::from_ptr(host.host)}.to_str().unwrap());
+        let msg = format!("{} running up commands", match host.host { Some(ref host) => host.as_str(), None => "<none>"});
         set_title(msg.as_str());
+        for cmd in &host.up {
+            run_cmd_rs(cmd, Some(&host.sopt));
+        }
         unsafe {
-            llist_trav(&mut (host.up), run_cmd_rs, &mut host.sopt as *mut vtun_host::VtunSopt as *mut libc::c_void);
-
             libc::exit(0);
         }
     }
@@ -347,30 +317,32 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
 
     let typeflags = host.flags & linkfd::VTUN_TYPE_MASK;
     if typeflags == linkfd::VTUN_TTY {
-        let msg = format!("{} tty\0", unsafe {CStr::from_ptr(host.host)}.to_str().unwrap());
+        let msg = format!("{} tty", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
         set_title(msg.as_str());
     } else if typeflags == linkfd::VTUN_PIPE {
         /* Close second end of the pipe */
         driver.close_second_pipe_fd();
         {
-            let ttle = format!("{} pipe\0", unsafe {CStr::from_ptr(host.host)}.to_str().unwrap());
+            let ttle = format!("{} pipe", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
             set_title(ttle.as_str());
         }
     } else if typeflags == linkfd::VTUN_ETHER {
-        let ttle = format!("{} ether {}\0", unsafe {CStr::from_ptr(host.host)}.to_str().unwrap(), dev);
+        let ttle = format!("{} ether {}", match host.host {Some(ref host) => host.as_str(), None => "<none>"}, dev);
         set_title(ttle.as_str());
     } else if typeflags == linkfd::VTUN_TUN {
-        let ttle = format!("{} tun {}\0", unsafe {CStr::from_ptr(host.host)}.to_str().unwrap(), dev);
+        let ttle = format!("{} tun {}", match host.host {Some(ref host) => host.as_str(), None => "<none>"}, dev);
         set_title(ttle.as_str());
     }
     host.loc_fd = driver.io_fd();
-    let linkfd_result = linkfd::linkfd(ctx, host as *mut vtun_host::VtunHost, driver, proto);
+    let linkfd_result = linkfd::linkfd(ctx, host, driver, proto);
 
     {
-        let ttle = format!("{} running down commands\0", unsafe {CStr::from_ptr(host.host)}.to_str().unwrap());
+        let ttle = format!("{} running down commands", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
         set_title(ttle.as_str());
     }
-    llist_trav(&mut host.down, run_cmd_rs, &mut host.sopt as *mut vtun_host::VtunSopt as *mut libc::c_void);
+    for cmd in &host.down {
+        run_cmd_rs(cmd, Some(&host.sopt));
+    }
 
     // TODO - Not to close with 'keep'. (closing is automatic by destructors)
     if host.persist == lfd_mod::VTUN_PERSIST_KEEPIF {
@@ -384,16 +356,12 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, d
 }
 
 fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, dev: &str, interface_already_open: bool) -> libc::c_int {
-    if !host.sopt.host.is_null() {
-        unsafe { libc::free(host.sopt.host as *mut libc::c_void); }
-    }
-    if !host.sopt.dev.is_null() {
-        unsafe { libc::free(host.sopt.dev as *mut libc::c_void); }
-    }
-    host.sopt.host = unsafe { libc::strdup(host.host) };
+    host.sopt.host = match host.host {
+        Some(ref host) => Some(host.clone()),
+        None => None
+    };
     {
-        let dev = format!("{}\0", dev);
-        host.sopt.dev = unsafe { libc::strdup(dev.as_ptr() as *mut libc::c_char) };
+        host.sopt.dev = Some(dev.to_string());
     }
 
     /* Initialize protocol. */
@@ -440,10 +408,13 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
     }
 
     /* Initialize device. */
-    if !host.dev.is_null() {
-        dev = unsafe { CStr::from_ptr(host.dev) }.to_str().unwrap();
-        dev_specified = true;
-    }
+    match host.dev {
+        Some(ref d) => {
+            dev = d.as_str();
+            dev_specified = true;
+        }
+        None => {}
+    };
     if ! interface_already_open {
         let typeflag = host.flags & linkfd::VTUN_TYPE_MASK;
         if typeflag == linkfd::VTUN_TTY {
@@ -528,33 +499,27 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -
     } else {
         let typeflag = host.flags & linkfd::VTUN_TYPE_MASK;
         if typeflag == linkfd::VTUN_TTY {
-            let dev: String;
-            if !host.sopt.dev.is_null() {
-                dev = unsafe { CStr::from_ptr(host.sopt.dev) }.to_str().unwrap().to_string();
-            } else {
-                dev = "".to_string();
-            }
+            let dev: String = match host.sopt.dev {
+                Some(ref d) => d.clone(),
+                None => "".to_string()
+            };
             let mut driver = pty_dev::PtyDev::new_from_fd(host.loc_fd, dev.as_str());
             tunnel_setup_proto(ctx, host, &mut driver, dev.as_str(), interface_already_open)
         } else if typeflag == linkfd::VTUN_PIPE {
             let mut driver = pipe_dev::PipeDev::new_from_fd(host.loc_fd);
             tunnel_setup_proto(ctx, host, &mut driver, "", interface_already_open)
         } else if typeflag == linkfd::VTUN_ETHER {
-            let dev: String;
-            if !host.sopt.dev.is_null() {
-                dev = unsafe { CStr::from_ptr(host.sopt.dev) }.to_str().unwrap().to_string();
-            } else {
-                dev = "".to_string();
-            }
+            let dev: String = match host.sopt.dev {
+                Some(ref d) => d.clone(),
+                None => "".to_string()
+            };
             let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
             tunnel_setup_proto(ctx, host, &mut driver, dev.as_str(), interface_already_open)
         } else if typeflag == linkfd::VTUN_TUN {
-            let dev: String;
-            if !host.sopt.dev.is_null() {
-                dev = unsafe { CStr::from_ptr(host.sopt.dev) }.to_str().unwrap().to_string();
-            } else {
-                dev = "".to_string();
-            }
+            let dev: String = match host.sopt.dev {
+                Some(ref d) => d.clone(),
+                None => "".to_string()
+            };
             let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
             tunnel_setup_proto(ctx, host, &mut driver, dev.as_str(), interface_already_open)
         }  else {

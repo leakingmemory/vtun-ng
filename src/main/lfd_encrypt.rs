@@ -76,13 +76,16 @@ pub struct LfdEncrypt {
 }
 
 impl LfdEncrypt {
-    pub fn prep_key(keysize: usize, host: *mut vtun_host::VtunHost) -> Option<Vec<u8>> {
+    pub fn prep_key(keysize: usize, host: &mut vtun_host::VtunHost) -> Option<Vec<u8>> {
         if keysize != 32 && keysize != 16 {
             return None;
         }
         let mut pkey: Vec<u8> = Vec::new();
         pkey.resize(keysize, 0u8);
-        let passwd = unsafe { std::ffi::CStr::from_ptr((*host).passwd).to_str().unwrap() };
+        let passwd = match host.passwd {
+            Some(ref passwd) => passwd.as_str(),
+            None => return None
+        };
         if keysize == 32 {
             let first_half = passwd[0..passwd.len()/2].as_bytes();
             let second_half = passwd[passwd.len()/2..passwd.len()].as_bytes();
@@ -106,7 +109,7 @@ impl LfdEncrypt {
         }
         Some(pkey)
     }
-    pub fn new(host: *mut vtun_host::VtunHost) -> Option<LfdEncrypt> {
+    pub fn new(host: &mut vtun_host::VtunHost) -> Option<LfdEncrypt> {
         let mut lfd_encrypt: LfdEncrypt = LfdEncrypt {
             sequence_num: 0,
             gibberish: 0,
@@ -136,9 +139,7 @@ impl LfdEncrypt {
         lfd_encrypt.gibberish = 0;
         lfd_encrypt.gib_time_start = 0;
         lfd_encrypt.p_host = host;
-        unsafe {
-            lfd_encrypt.cipher = (*host).cipher;
-        }
+        lfd_encrypt.cipher = host.cipher;
         let cipher_name: &str;
         if lfd_encrypt.cipher == VTUN_ENC_AES256OFB ||
             lfd_encrypt.cipher == VTUN_ENC_AES256OFB ||

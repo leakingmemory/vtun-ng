@@ -1,4 +1,3 @@
-use std::ffi::CStr;
 use blowfish::Blowfish;
 use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 
@@ -11,10 +10,9 @@ pub fn gen_chal(buf: &mut [u8]) {
 type BlowfishEcbEnc = ecb::Encryptor<Blowfish>;
 type BlowfishEcbDec = ecb::Decryptor<Blowfish>;
 
-pub fn encrypt_chal(slice: &mut [u8], in_pwd: *mut libc::c_char)
+pub fn encrypt_chal(slice: &mut [u8], pwd: &str)
 {
-    let pwd = unsafe {CStr::from_ptr(in_pwd).to_bytes()};
-    let key = md5::compute(pwd);
+    let key = md5::compute(pwd.as_bytes());
 
     let mut bfecb = BlowfishEcbEnc::new_from_slice(&(key[0..16])).unwrap();
 
@@ -23,10 +21,9 @@ pub fn encrypt_chal(slice: &mut [u8], in_pwd: *mut libc::c_char)
     }
 }
 
-pub fn decrypt_chal(slice: &mut [u8], in_pwd: *mut libc::c_char)
+pub fn decrypt_chal(slice: &mut [u8], pwd: &str)
 {
-    let pwd = unsafe {CStr::from_ptr(in_pwd).to_bytes()};
-    let key = md5::compute(pwd);
+    let key = md5::compute(pwd.as_bytes());
 
     let mut bfecb = BlowfishEcbDec::new_from_slice(&(key[0..16])).unwrap();
 

@@ -1,4 +1,3 @@
-use std::ffi::CStr;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::{mem, ptr};
@@ -271,14 +270,8 @@ pub extern "C" fn is_io_cancelled() -> libc::c_int {
 }
 
 /* Link remote and local file descriptors */
-pub fn linkfd(ctx: &mut mainvtun::VtunContext, hostptr: *mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+pub fn linkfd(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
-    //struct sigaction sa, sa_oldterm, sa_oldint, sa_oldhup;
-    //int old_prio;
-    let host: &mut vtun_host::VtunHost = unsafe { &mut *hostptr };
-
-    //lfd_host = host;
-
     let old_prio = unsafe { libc::getpriority(libc::PRIO_PROCESS,0) };
     unsafe {libc::setpriority(libc::PRIO_PROCESS,0, LINKFD_PRIO); }
 
@@ -345,7 +338,10 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, hostptr: *mut vtun_host::VtunHost
             Err(_) => None
         };
 
-        let host_name = unsafe { CStr::from_ptr(host.host) }.to_str().unwrap_or_else(|_| "vtun.unknown");
+        let host_name = match host.host {
+            Some(ref host_name) => host_name.as_str(),
+            None => "vtun.unknown"
+        };
         let file = format!("{}/{}", VTUN_STAT_DIR, host_name);
         match OpenOptions::new()
             .append(true)
@@ -456,10 +452,8 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, lfd_stack: &mut Linkfd, host: &mu
 
         if unsafe { KA_NEED_VERIFY.load(std::sync::atomic::Ordering::SeqCst) } {
             if idle > host.ka_maxfail {
-                unsafe {
-                    let msg = format!("Session {} network timeout", CStr::from_ptr(host.host).to_str().unwrap_or(""));
-                    syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
-                }
+                let msg = format!("Session {} network timeout", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
+                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
                 break;
             }
             idle += 1;

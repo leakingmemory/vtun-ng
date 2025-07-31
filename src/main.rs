@@ -63,8 +63,6 @@ mod libfuncs;
 mod lock;
 #[path = "main/netlib.rs"]
 mod netlib;
-#[path = "main/llist.rs"]
-mod llist;
 #[path = "main/vtun_host.rs"]
 mod vtun_host;
 #[path = "main/lexer.rs"]
@@ -100,18 +98,15 @@ fn main()
         is_rmt_fd_connected: true
     };
     {
-        let cfg = format!("{}\0", VTUN_CONFIG_FILE);
-        ctx.vtun.cfg_file = unsafe { libc::strdup(cfg.as_ptr() as *const libc::c_char) };
+        let cfg = format!("{}", VTUN_CONFIG_FILE);
+        ctx.vtun.cfg_file = Some(cfg);
     }
 
-    /* Dup strings because parser will try to free them */
-    unsafe {
-        ctx.vtun.ppp = libc::strdup("/usr/sbin/pppd\0".as_ptr() as *const libc::c_char);
-        ctx.vtun.ifcfg = libc::strdup("/sbin/ifconfig\0".as_ptr() as *const libc::c_char);
-        ctx.vtun.route = libc::strdup("/sbin/route\0".as_ptr() as *const libc::c_char);
-        ctx.vtun.fwall = libc::strdup("/sbin/ipchains\0".as_ptr() as *const libc::c_char);
-        ctx.vtun.iproute = libc::strdup("/sbin/ip\0".as_ptr() as *const libc::c_char);
-    }
+    ctx.vtun.ppp = Some("/usr/sbin/pppd".to_string());
+    ctx.vtun.ifcfg = Some("/sbin/ifconfig".to_string());
+    ctx.vtun.route = Some("/sbin/route".to_string());
+    ctx.vtun.fwall = Some("/sbin/ipchains".to_string());
+    ctx.vtun.iproute = Some("/sbin/ip".to_string());
 
     ctx.vtun.bind_addr.port = -1;
     ctx.vtun.syslog   = libc::LOG_DAEMON;
@@ -161,9 +156,8 @@ fn main()
         svr = true;
     }
     match matches.opt_str("L") {
-        Some(str) => unsafe {
-            let str = format!("{}\0", str);
-            ctx.vtun.svr_addr = libc::strdup(str.as_ptr() as *const libc::c_char);
+        Some(str) => {
+            ctx.vtun.svr_addr = Some(str);
         },
         None => {}
     }
@@ -175,9 +169,8 @@ fn main()
         None => {}
     }
     match matches.opt_str("f") {
-        Some(str) => unsafe {
-            let str = format!("{}\0", str);
-            ctx.vtun.cfg_file = libc::strdup(str.as_ptr() as *const libc::c_char);
+        Some(str) => {
+            ctx.vtun.cfg_file = Some(str);
         },
         None => {}
     }
@@ -220,14 +213,16 @@ fn main()
 
         host = cfg_file::find_host(hst);
         if host == ptr::null_mut() {
-            let msg = format!("Host {} not found in {}", unsafe { CStr::from_ptr(hst) }.to_str().unwrap(), unsafe { CStr::from_ptr(ctx.vtun.cfg_file) }.to_str().unwrap());
+            let msg = format!("Host {} not found in {}",
+                              unsafe { CStr::from_ptr(hst) }.to_str().unwrap(),
+                              match ctx.vtun.cfg_file {Some(ref s) => s.as_str(), None => "<none>"});
             syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
             unsafe {
                 libc::exit(1);
             }
         }
 
-        ctx.vtun.svr_name = unsafe { libc::strdup(matches.free[1].as_ptr() as *const libc::c_char) };
+        ctx.vtun.svr_name = Some(matches.free[1].to_string());
     }
 
     /*

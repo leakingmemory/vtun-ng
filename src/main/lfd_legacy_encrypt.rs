@@ -52,8 +52,11 @@ type BlowfishEcbEnc = Encryptor<Blowfish>;
 type BlowfishEcbDec = Decryptor<Blowfish>;
 
 impl LfdLegacyEncrypt {
-    pub fn new(host: *mut vtun_host::VtunHost) -> Option<LfdLegacyEncrypt> {
-        let passwd = unsafe { std::ffi::CStr::from_ptr((*host).passwd).to_str().unwrap() };
+    pub fn new(host: &mut vtun_host::VtunHost) -> Option<LfdLegacyEncrypt> {
+        let passwd = match host.passwd {
+            Some(ref passwd) => passwd.as_str(),
+            None => return None
+        };
         let k = md5::compute(passwd.as_bytes());
         let mut key: [u8; 16] = [0u8; 16];
         for i in 0..16 {

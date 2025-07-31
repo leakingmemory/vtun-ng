@@ -19,7 +19,7 @@
 
 /* Read N bytes with timeout */
 use std::ptr::null_mut;
-use crate::{auth, linkfd, vtun_host};
+use crate::{auth, linkfd};
 /* Read exactly len bytes (Signal safe)*/
 pub fn read_n(fd: libc::c_int, buf: &mut [u8]) -> Option<usize>
 {
@@ -97,22 +97,4 @@ pub fn print_p(fd: libc::c_int, buf: &[u8]) -> bool {
     }
     let res = unsafe { libc::write(fd, padded.as_ptr() as *const libc::c_void, auth::VTUN_MESG_SIZE) };
     res == auth::VTUN_MESG_SIZE as libc::ssize_t
-}
-
-pub fn free_sopt( opt: &mut vtun_host::VtunSopt )
-{
-    if opt.dev != null_mut() {
-        unsafe { libc::free(opt.dev as *mut libc::c_void); }
-        opt.dev = null_mut();
-    }
-
-    if opt.laddr != null_mut() {
-        unsafe { libc::free(opt.laddr as *mut libc::c_void); }
-        opt.laddr = null_mut();
-    }
-
-    if opt.raddr != null_mut() {
-        unsafe { libc::free(opt.raddr as *mut libc::c_void); }
-        opt.raddr = null_mut();
-    }
 }

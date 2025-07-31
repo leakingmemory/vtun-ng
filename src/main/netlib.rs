@@ -17,7 +17,6 @@
     GNU General Public License for more details.
  */
 
-use std::ffi::CStr;
 use std::ptr::null_mut;
 use libc::{timeval};
 use crate::{lfd_mod, libfuncs, mainvtun, syslog, vtun_host};
@@ -104,9 +103,8 @@ pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHos
     }
 
     // TODO - IPv6
-    let mut ipv4addr = std::net::Ipv4Addr::from(addr.sin_addr.s_addr).to_string();
-    ipv4addr.push_str("\0");
-    host.sopt.laddr = unsafe { libc::strdup(ipv4addr.as_ptr() as *const libc::c_char) };
+    let ipv4addr = std::net::Ipv4Addr::from(addr.sin_addr.s_addr).to_string();
+    host.sopt.laddr = Some(ipv4addr);
 
     true
 }
@@ -124,8 +122,14 @@ pub fn server_addr(ctx: &mainvtun::VtunContext, addr: &mut libc::sockaddr_in, ho
      * We do it on every reconnect because server's IP
      * address can be dynamic.
      */
-    let hostname = unsafe { CStr::from_ptr(ctx.vtun.svr_name) }.to_str().unwrap();
-    let hent = dns_lookup::lookup_host(hostname).unwrap_or(Vec::new());
+    let hostname = match ctx.vtun.svr_name {
+        Some(ref s) => s.clone(),
+        None => {
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, "Server name is not specified");
+            return false;
+        }
+    };
+    let hent = dns_lookup::lookup_host(hostname.as_str()).unwrap_or(Vec::new());
 
     if hent.is_empty() {
         let msg = format!("Can't resolv server address: {}", hostname);
@@ -143,12 +147,8 @@ pub fn server_addr(ctx: &mainvtun::VtunContext, addr: &mut libc::sockaddr_in, ho
         straddr = ipv4.to_string();
         addr.sin_addr.s_addr = u32::from_ne_bytes(ipv4.octets());
     }
-    straddr.push_str("\0");
 
-    if host.sopt.raddr != null_mut() {
-        unsafe { libc::free(host.sopt.raddr as *mut libc::c_void) };
-    }
-    host.sopt.raddr = unsafe { libc::strdup(straddr.as_ptr() as *const libc::c_char) };
+    host.sopt.raddr = Some(straddr);
     host.sopt.rport = ctx.vtun.bind_addr.port;
 
     true
@@ -167,7 +167,13 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
      * TODO - IPv6 and multiple dns results
      */
     if vaddr.type_ == lfd_mod::VTUN_ADDR_IFACE {
-        let ifname = unsafe { CStr::from_ptr(vaddr.name) }.to_str().unwrap().to_string();
+        let ifname = match vaddr.name {
+            Some(ref ifname) => ifname.clone(),
+            None => {
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get interface name");
+                return false;
+            }
+        };
         addr.sin_addr.s_addr = match getifaddr(ifname.as_str()) {
             Some(s_addr) => s_addr as libc::in_addr_t,
             None => {
@@ -177,7 +183,13 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
             }
         };
     } else if vaddr.type_ == VTUN_ADDR_NAME {
-        let hostname = unsafe { CStr::from_ptr(vaddr.name) }.to_str().unwrap().to_string();
+        let hostname = match vaddr.name {
+            Some(ref name) => name.clone(),
+            None => {
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get address to resolve");
+                return false;
+            }
+        };
         let hent = dns_lookup::lookup_host(hostname.as_str()).unwrap_or(Vec::new());
         if hent.is_empty() {
             let msg = format!("Can't resolv local address {}", hostname);
@@ -189,8 +201,8 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
                 addr.sin_addr.s_addr = u32::from_ne_bytes(ipv4.octets());
             }
         }
-    } else if vaddr.ip != null_mut() {
-        let ip = unsafe { CStr::from_ptr(vaddr.ip) }.to_str().unwrap().to_string();
+    } else if let Some(ref ip) = vaddr.ip {
+        let ip = ip.to_string();
         let parts = ip.split('.').collect::<Vec<&str>>();
         if parts.len() != 4 {
             let msg = format!("Can't decode address {}", ip);

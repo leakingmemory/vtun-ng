@@ -16,26 +16,24 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-use std::ptr;
 use libc::LOG_DAEMON;
 use crate::vtun_host;
 
-#[repr(C)]
 pub struct VtunOpts {
     pub timeout: libc::c_int,
     pub persist: libc::c_int,
 
-    pub cfg_file: *mut libc::c_char,
+    pub cfg_file: Option<String>,
 
-    pub shell: *mut libc::c_char, /* Shell */
-    pub ppp: *mut libc::c_char, /* Command to configure ppp devices */
-    pub ifcfg: *mut libc::c_char, /* Command to configure net devices */
-    pub route: *mut libc::c_char, /* Command to configure routing */
-    pub fwall: *mut libc::c_char, /* Command to configure FireWall */
-    pub iproute: *mut libc::c_char, /* iproute command */
+    pub _shell: Option<String>, /* Shell */
+    pub ppp: Option<String>, /* Command to configure ppp devices */
+    pub ifcfg: Option<String>, /* Command to configure net devices */
+    pub route: Option<String>, /* Command to configure routing */
+    pub fwall: Option<String>, /* Command to configure FireWall */
+    pub iproute: Option<String>, /* iproute command */
 
-    pub svr_name: *mut libc::c_char, /* Server's host name */
-    pub svr_addr: *mut libc::c_char, /* Server's address (string) */
+    pub svr_name: Option<String>, /* Server's host name */
+    pub svr_addr: Option<String>, /* Server's address (string) */
     pub bind_addr: vtun_host::VtunAddr, /* Server should listen on this address */
     pub svr_type: libc::c_int, /* Server mode */
     pub syslog: libc::c_int, /* Facility to log messages to syslog under */
@@ -47,16 +45,16 @@ impl VtunOpts {
         Self {
             timeout: -1,
             persist: -1,
-            cfg_file: ptr::null_mut(),
-            shell: ptr::null_mut(),
-            ppp: ptr::null_mut(),
-            ifcfg: ptr::null_mut(),
-            route: ptr::null_mut(),
-            fwall: ptr::null_mut(),
-            iproute: ptr::null_mut(),
+            cfg_file: None,
+            _shell: None,
+            ppp: None,
+            ifcfg: None,
+            route: None,
+            fwall: None,
+            iproute: None,
 
-            svr_name: ptr::null_mut(),
-            svr_addr: ptr::null_mut(),
+            svr_name: None,
+            svr_addr: None,
             bind_addr: vtun_host::VtunAddr::new(),
             svr_type: -1,
             syslog: LOG_DAEMON,
@@ -109,11 +107,11 @@ pub const VTUN_CONNECT_TIMEOUT: libc::c_int = 30;
 
 pub const VTUN_VER: &str = "3.X 07/24/2025";
 
-pub const LOG_EMERG: libc::c_int = 0;
-pub const LOG_ALERT: libc::c_int = 1;
-pub const LOG_CRIT: libc::c_int = 2;
+pub const _LOG_EMERG: libc::c_int = 0;
+pub const _LOG_ALERT: libc::c_int = 1;
+pub const _LOG_CRIT: libc::c_int = 2;
 pub const LOG_ERR: libc::c_int = 3;
-pub const LOG_WARNING: libc::c_int = 4;
-pub const LOG_NOTICE: libc::c_int = 5;
+pub const _LOG_WARNING: libc::c_int = 4;
+pub const _LOG_NOTICE: libc::c_int = 5;
 pub const LOG_INFO: libc::c_int = 6;
 pub const LOG_DEBUG: libc::c_int = 7;

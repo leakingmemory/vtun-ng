@@ -26,7 +26,14 @@ pub struct VtunContext {
 
 pub fn reread_config(ctx: &mut VtunContext)
 {
-    if cfg_file::read_config(ctx, ctx.vtun.cfg_file) == 0 {
+    let cfg_file = match ctx.vtun.cfg_file {
+        Some(ref cfg_file) => cfg_file.clone(),
+        None => {
+            syslog::vtun_syslog(lfd_mod::LOG_ERR,"No config file specified");
+            unsafe { libc::exit(1); }
+        }
+    };
+    if cfg_file::read_config(ctx, cfg_file.as_str()) == 0 {
         syslog::vtun_syslog(lfd_mod::LOG_ERR,"No hosts defined");
         unsafe { libc::exit(1); }
     }

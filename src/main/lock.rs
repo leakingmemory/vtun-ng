@@ -17,6 +17,7 @@
     GNU General Public License for more details.
  */
 use crate::{lfd_mod, syslog, vtun_host};
+use crate::filedes::FileDes;
 use crate::lfd_mod::VTUN_MULTI_DENY;
 
 const VTUN_LOCK_DIR: &str = env!("VTUN_LOCK_DIR");
@@ -27,28 +28,34 @@ fn create_lock(file: &str) -> bool  {
 
     /* Create temp file */
     let tmp_file = format!("{}_{}_tmp", file, pid);
-    let tmp_file_nullterm = format!("{}\0", tmp_file);
-    let fd = unsafe { libc::open(tmp_file_nullterm.as_ptr() as *const libc::c_char, libc::O_WRONLY|libc::O_CREAT|libc::O_TRUNC, 0644) };
-    if fd < 0 {
+    let mut fd = FileDes::open(tmp_file.as_str(), libc::O_WRONLY|libc::O_CREAT|libc::O_TRUNC, 0644);
+    if !fd.ok() {
         let msg = format!("Can't create temp lock file {}", file);
         syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
         return false;
     }
 
-    let str = format!("{}", pid);
-    if unsafe { libc::write(fd, str.as_ptr() as *const libc::c_void, str.len()) } == str.len() as libc::ssize_t {
-        /* Create lock file */
-        let file_nullterm = format!("{}\0", file);
-        if unsafe { libc::link(tmp_file_nullterm.as_ptr() as *const libc::c_char, file_nullterm.as_ptr() as *const libc::c_char) } < 0 {
-            /* Oops, already locked */
+    let tmp_file_nullterm = format!("{}\0", tmp_file);
+    {
+        let hold_str = format!("{}", pid);
+        let str = hold_str.as_bytes();
+        if match fd.write(str) {
+            Ok(l) => l == str.len(),
+            Err(_) => false
+        } {
+            /* Create lock file */
+            let file_nullterm = format!("{}\0", file);
+            if unsafe { libc::link(tmp_file_nullterm.as_ptr() as *const libc::c_char, file_nullterm.as_ptr() as *const libc::c_char) } < 0 {
+                /* Oops, already locked */
+                success = false;
+            }
+        } else {
+            let msg = format!("Can't write to {}", tmp_file);
+            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
             success = false;
         }
-    } else {
-        let msg = format!("Can't write to {}", tmp_file);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-        success = false;
     }
-    unsafe { libc::close(fd); }
+    fd.close();
 
     /* Remove temp file */
     unsafe { libc::unlink(tmp_file_nullterm.as_ptr() as *const libc::c_char); }
@@ -58,19 +65,22 @@ fn create_lock(file: &str) -> bool  {
 
 pub fn read_lock(file: &str) -> libc::pid_t {
     /* Read PID from existing lock */
-    let fd;
+    let mut fd;
     {
-        let filen = format!("{}\0", file);
-        fd = unsafe { libc::open(filen.as_ptr() as *const libc::c_char, libc::O_RDONLY) };
+        fd = FileDes::open_m(file, libc::O_RDONLY);
     }
-    if fd < 0 {
+    if !fd.ok() {
         return -1;
     }
 
-    let buf = [0u8; 20];
-    let rdres = unsafe { libc::read(fd,buf.as_ptr() as *mut libc::c_void,buf.len() - 1) };
-    unsafe { libc::close(fd); }
-    if rdres <= 0  {
+    let mut buf = [0u8; 20];
+    let rdres = fd.read(&mut buf[0..19]);
+    fd.close();
+    let success = match rdres {
+        Ok(n) => n > 0,
+        Err(_) => false,
+    };
+    if !success {
         return -1;
     }
 

@@ -18,6 +18,7 @@
  */
 
 use crate::{lfd_mod, linkfd};
+use crate::filedes::FileDes;
 use crate::tunnel::VtunCmd;
 
 #[derive(Clone)]
@@ -76,7 +77,7 @@ pub struct VtunHost {
     pub zlevel: libc::c_int,
     pub cipher: libc::c_int,
     pub rmt_fd: libc::c_int,
-    pub loc_fd: libc::c_int,
+    pub loc_fd: FileDes,
     pub persist: libc::c_int,
     pub multi: libc::c_int,
     pub ka_interval: libc::c_int,
@@ -100,7 +101,7 @@ impl VtunHost {
             zlevel: 0,
             cipher: 0,
             rmt_fd: -1,
-            loc_fd: -1,
+            loc_fd: FileDes::new(),
             persist: 0,
             multi: lfd_mod::VTUN_MULTI_ALLOW,
             ka_interval: 30,

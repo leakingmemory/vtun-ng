@@ -71,6 +71,8 @@ mod lexer;
 mod mainvtun;
 #[path = "main/syslog.rs"]
 mod syslog;
+#[path = "main/filedes.rs"]
+mod filedes;
 
 use std::io::Write;
 use std::{env};

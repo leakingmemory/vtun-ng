@@ -18,6 +18,7 @@
  */
 use std::cmp::PartialEq;
 use crate::{driver, lfd_mod, syslog};
+use crate::filedes::FileDes;
 
 pub(crate) enum TunDevType {
     Tun, Tap
@@ -34,7 +35,7 @@ impl Copy for TunDevType {
 
 pub(crate) struct TunDev {
     pub name: Option<Box<String>>,
-    pub fd: Option<libc::c_int>
+    pub fd: Option<FileDes>
 }
 
 #[cfg(target_os = "linux")]
@@ -104,7 +105,7 @@ impl TunDev {
             }
         }
     }
-    pub fn new_from_fd(fd: i32, dev: &str) -> TunDev {
+    pub fn new_from_fd(fd: FileDes, dev: &str) -> TunDev {
         let tun = TunDev { name: Some(Box::new(dev.to_string())), fd: Some(fd) };
         tun.log_open();
         tun
@@ -148,47 +149,56 @@ impl TunDev {
             }
             self.name = Some(Box::new(name.unwrap().to_string()));
         }
-        let fd = self.fd.unwrap();
-        let res = unsafe {
-            libc::ioctl(fd, libc::TUNSETIFF, &ifreq as *const TunIfreq)
-        };
-        /* TODO - what kernels is this actually needed on?
-        if res < 0 && errno::errno() == libc::EBADFFD {
-            res = unsafe {
-                libc::ioctl(fd, libc::OTUNSETIFF, &ifreq as *const libc::c_ifreq)
-            };
-        }
-        */
-        if res >= 0 {
-            if name.is_none() {
-                let mut len = 16;
-                let mut nm: [u8; 16] = [0u8;16];
-                for i in 0..len {
-                    if ifreq.ifr_name[i] == 0 {
-                        len = i;
-                        break;
+        if let Some(ref fd) = self.fd {
+            match unsafe {
+                fd.ioctl(libc::TUNSETIFF, &ifreq as *const TunIfreq)
+            } {
+                Ok(_) => {},
+                Err(_) => {
+                    /* TODO - what kernels is this actually needed on?
+                    if errno::errno() == libc::EBADFFD {
+                        match unsafe {
+                            fd.ioctl(libc::OTUNSETIFF, &ifreq as *const libc::c_ifreq)
+                        } { Ok(res) => res, Err(_) => return false };
+                    } else {
+                        return false;
                     }
-                    nm[i] = ifreq.ifr_name[i] as u8;
+                    */
+                    return false;
                 }
-                self.name = Some(Box::new(String::from_utf8_lossy(&nm[0..len]).to_string()));
             }
-            true
         } else {
-            false
+            return false;
         }
+        if name.is_none() {
+            let mut len = 16;
+            let mut nm: [u8; 16] = [0u8; 16];
+            for i in 0..len {
+                if ifreq.ifr_name[i] == 0 {
+                    len = i;
+                    break;
+                }
+                nm[i] = ifreq.ifr_name[i] as u8;
+            }
+            self.name = Some(Box::new(String::from_utf8_lossy(&nm[0..len]).to_string()));
+        }
+        true
     }
     pub fn open(&mut self, name: &str, dev_type: TunDevType) -> bool {
-        let n: String = format!("{}\0", name);
         self.close();
-        let fd = unsafe { libc::open(n.as_ptr() as *const libc::c_char, libc::O_RDWR) };
-        if fd >= 0 {
+        let fd = FileDes::open_m(name, libc::O_RDWR);
+        if fd.ok() {
             if cfg!(target_os = "freebsd") {
                 if matches!(dev_type, TunDevType::Tun) {
                     /* Disable extended modes */
-                    let mut i: libc::c_int = 0;
-                    unsafe { libc::ioctl(fd, /*libc::TUNSLMODE*/93, &mut i) };
-                    i = 0;
-                    unsafe { libc::ioctl(fd, /*libc::TUNSIFHEAD*/ 96, &mut i) };
+                    match unsafe { fd.ioctl_mut_ulong(93, 0) } {
+                        Ok(_) => {}
+                        Err(_) => return false
+                    };
+                    match unsafe { fd.ioctl_mut_ulong(96, 0) } {
+                        Ok(_) => {}
+                        Err(_) => return false
+                    };
                 }
             }
             self.fd = Some(fd);
@@ -202,8 +212,8 @@ impl TunDev {
     }
     pub fn close(&mut self) {
         match self.fd {
-            Some(fd) => {
-                unsafe { libc::close(fd); }
+            Some(ref mut fd) => {
+                fd.close();
                 self.fd = None;
             },
             None => {}
@@ -232,12 +242,10 @@ impl driver::Driver for TunDev {
     fn write(&self, buf: &[u8]) -> Option<usize> {
         match self.fd {
             None => None,
-            Some(fd) => {
-                let res = unsafe { libc::write(fd, buf.as_ptr() as *const libc::c_void, buf.len()) };
-                if res >= 0 {
-                    Some(res as usize)
-                } else {
-                    None
+            Some(ref fd) => {
+                match fd.write(buf) {
+                    Ok(res) => Some(res),
+                    Err(_) => None
                 }
             }
         }
@@ -265,16 +273,16 @@ impl driver::Driver for TunDev {
     fn read(&self, buf: &mut Vec<u8>, len: usize) -> bool {
         match self.fd {
             None => false,
-            Some(fd) => {
-                if buf.len() < len {
+            Some(ref fd) => {
+                if buf.len() != len {
                     buf.resize(len, 0);
                 }
-                let res = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, len) };
-                if res >= 0 {
-                    buf.truncate(res as usize);
-                    true
-                } else {
-                    false
+                match fd.read(buf) {
+                    Ok(res) => {
+                        buf.truncate(res);
+                        true
+                    },
+                    Err(_) => false
                 }
             }
         }
@@ -302,15 +310,16 @@ impl driver::Driver for TunDev {
             }
         }
     }
-    fn io_fd(&self) -> i32 {
+    fn io_fd(&self) -> Option<&FileDes> {
         match self.fd {
-            Some(fd) => fd,
-            None => -1
+            Some(ref fd) => Some(fd),
+            None => None
         }
     }
-    fn detach(&mut self) -> i32 {
-        let fd = self.fd.unwrap_or_else(|| -1);
-        self.fd = None;
-        fd
+    fn detach(&mut self) -> FileDes {
+        match self.fd {
+            Some(ref mut fd) => fd.move_out(),
+            None => FileDes::new()
+        }
     }
 }

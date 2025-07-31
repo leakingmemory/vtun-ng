@@ -17,13 +17,11 @@
     GNU General Public License for more details.
  */
 
-#[cfg(target_os = "linux")]
-use std::ffi::CStr;
-
 use crate::driver;
+use crate::filedes::FileDes;
 
 pub(crate) struct PtyDev{
-    pub fd: i32,
+    pub fd: FileDes,
     pub ptyname: Box<String>
 }
 
@@ -45,9 +43,10 @@ impl PtyDev {
             for m in 0..digit.len() {
                 ptyname[8 as usize] = ch[l];
                 ptyname[9 as usize] = digit[m];
+                let nm = String::from_utf8(ptyname.to_vec()).unwrap();
                 /* Open the master */
-                let mr_fd= unsafe { libc::open(ptyname.as_ptr() as *const i8, libc::O_RDWR) };
-                if mr_fd < 0 {
+                let mr_fd= FileDes::open(nm.as_str(), libc::O_RDWR);
+                if !mr_fd.ok() {
                     continue;
                 }
                 /* Check the slave */
@@ -73,16 +72,16 @@ impl PtyDev {
          * first, and if it breaks we'll add new implementations using
          * #cfg-annotations.
          */
-        let fd = unsafe { libc::getpt() };
-        if fd < 0 {
+        let mut fd = FileDes::getpt();
+        if !fd.ok() {
             return None;
         }
-        if unsafe { libc::grantpt(fd) } < 0 {
-            unsafe { libc::close(fd); }
+        if !fd.grantpt() {
+            fd.close();
             return None;
         }
-        if unsafe { libc::unlockpt(fd) } < 0 {
-            unsafe { libc::close(fd); }
+        if !fd.unlockpt() {
+            fd.close();
             return None;
         }
         /*
@@ -91,23 +90,24 @@ impl PtyDev {
          * because subsequent calls will overwrite the buffer.
          * But it's not really a problem in a single threaded app.
          */
-        let ptyname = unsafe {CStr::from_ptr(libc::ptsname(fd))}.to_str().unwrap();
+        let ptyname = match fd.ptsname() {
+            Some(s) => s,
+            None => {
+                fd.close();
+                return None;
+            }
+        };
         Some(PtyDev {
-            fd, ptyname: Box::new(ptyname.to_string())
+            fd, ptyname: Box::new(ptyname)
         })
     }
-    pub fn new_from_fd(fd: i32, ptyname: &str) -> Self {
+    pub fn new_from_fd(fd: FileDes, ptyname: &str) -> Self {
         PtyDev {
             fd, ptyname: Box::new(ptyname.to_string())
         }
     }
     pub fn close(&mut self) {
-        if self.fd >= 0 {
-            unsafe {
-                libc::close(self.fd);
-            }
-            self.fd = -1;
-        }
+        self.fd.close();
     }
 }
 
@@ -119,32 +119,26 @@ impl Drop for PtyDev {
 
 impl driver::Driver for PtyDev {
     fn write(&self, buf: &[u8]) -> Option<usize> {
-        let res = unsafe {
-            libc::write(self.fd, buf.as_ptr() as *mut libc::c_void, buf.len())
-        };
-        if res < 0 {
-            return None;
+        match self.fd.write(buf) {
+            Ok(n) => Some(n),
+            Err(_) => None
         }
-        Some(res as usize)
     }
     fn read(&self, buf: &mut Vec<u8>, len: usize) -> bool {
         buf.resize(len, 0);
-        let res = unsafe {
-            libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len())
-        };
-        if res < 0 {
-            return false;
+        match self.fd.read(buf) {
+            Ok(res) => {
+                buf.truncate(res as usize);
+                true
+            },
+            Err(_) => false
         }
-        buf.truncate(res as usize);
-        true
     }
-    fn io_fd(&self) -> i32 {
-        self.fd
+    fn io_fd(&self) -> Option<&FileDes> {
+        Some(&self.fd)
     }
-    fn detach(&mut self) -> i32 {
-        let fd = self.fd;
-        self.fd = -1;
-        fd
+    fn detach(&mut self) -> FileDes {
+        self.fd.move_out()
     }
     fn close_first_pipe_fd(&mut self) {
         self.close();

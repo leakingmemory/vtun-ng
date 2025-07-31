@@ -18,6 +18,7 @@
  */
 use std::sync::Arc;
 use crate::{driver, lfd_mod, linkfd, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
+use crate::filedes::FileDes;
 use crate::setproctitle::set_title;
 
 /// Substitutes opt in place off '%X'.
@@ -259,12 +260,12 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
         if !interface_already_open {
             let typeflags = host.flags & linkfd::VTUN_TYPE_MASK;
             if typeflags == linkfd::VTUN_TTY || typeflags == linkfd::VTUN_PIPE {
-                let fd2: i32;
+                let mut fd2: FileDes;
                 let mut owns_fd2: bool = false;
                 if typeflags == linkfd::VTUN_TTY {
                     /* Open pty slave (becomes controlling terminal) */
-                    fd2 = unsafe { libc::open(dev.as_ptr() as *const libc::c_char, libc::O_RDWR) };
-                    if fd2 < 0 {
+                    fd2 = FileDes::open_m(dev, libc::O_RDWR);
+                    if !fd2.ok() {
                         syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't open slave pty");
                         unsafe {
                             libc::exit(0);
@@ -272,28 +273,20 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
                     }
                     owns_fd2 = true;
                 } else {
-                    fd2 = driver.second_pipe_fd();
+                    fd2 = driver.clone_second_pipe_fd();
                 }
                 /* Fall through */
-                let null_fd = unsafe { libc::open("/dev/null\0".as_ptr() as *const libc::c_char, libc::O_RDWR) };
+                let null_fd = FileDes::open_m("/dev/null", libc::O_RDWR);
                 driver.close_first_pipe_fd();
-                unsafe {
-                    libc::close(0);
-                    libc::dup(fd2);
-                    libc::close(1);
-                    libc::dup(fd2);
-                }
+                fd2.replace_stdin();
+                fd2.replace_stdout();
                 driver.close_second_pipe_fd();
                 if owns_fd2 {
-                    unsafe { libc::close(fd2); }
+                    fd2.close();
                 }
 
                 /* Route stderr to /dev/null */
-                unsafe {
-                    libc::close(2);
-                    libc::dup(null_fd);
-                    libc::close(null_fd);
-                }
+                null_fd.replace_stderr();
             }
         }
         let msg = format!("{} running up commands", match host.host { Some(ref host) => host.as_str(), None => "<none>"});
@@ -334,7 +327,6 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
         let ttle = format!("{} tun {}", match host.host {Some(ref host) => host.as_str(), None => "<none>"}, dev);
         set_title(ttle.as_str());
     }
-    host.loc_fd = driver.io_fd();
     let linkfd_result = linkfd::linkfd(ctx, linkfdctx, host, driver, proto);
 
     {
@@ -347,7 +339,7 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
 
     // TODO - Not to close with 'keep'. (closing is automatic by destructors)
     if host.persist == lfd_mod::VTUN_PERSIST_KEEPIF {
-        driver.detach();
+        host.loc_fd = driver.detach();
     }
 
     /* Close all other fds */
@@ -404,7 +396,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
     let mut interface_already_open: bool = false;
 
     if host.persist == lfd_mod::VTUN_PERSIST_KEEPIF &&
-        host.loc_fd >= 0 {
+        host.loc_fd.ok() {
         interface_already_open = true;
     }
 
@@ -504,24 +496,24 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
                 Some(ref d) => d.clone(),
                 None => "".to_string()
             };
-            let mut driver = pty_dev::PtyDev::new_from_fd(host.loc_fd, dev.as_str());
+            let mut driver = pty_dev::PtyDev::new_from_fd(host.loc_fd.move_out(), dev.as_str());
             tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, dev.as_str(), interface_already_open)
         } else if typeflag == linkfd::VTUN_PIPE {
-            let mut driver = pipe_dev::PipeDev::new_from_fd(host.loc_fd);
+            let mut driver = pipe_dev::PipeDev::new_from_fd(host.loc_fd.move_out());
             tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, "", interface_already_open)
         } else if typeflag == linkfd::VTUN_ETHER {
             let dev: String = match host.sopt.dev {
                 Some(ref d) => d.clone(),
                 None => "".to_string()
             };
-            let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
+            let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd.move_out(), dev.as_str());
             tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, dev.as_str(), interface_already_open)
         } else if typeflag == linkfd::VTUN_TUN {
             let dev: String = match host.sopt.dev {
                 Some(ref d) => d.clone(),
                 None => "".to_string()
             };
-            let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd, dev.as_str());
+            let mut driver = tun_dev::TunDev::new_from_fd(host.loc_fd.move_out(), dev.as_str());
             tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, dev.as_str(), interface_already_open)
         }  else {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.");

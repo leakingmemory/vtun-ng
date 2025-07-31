@@ -25,8 +25,8 @@ use std::ffi::CStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
-use signal_hook::low_level;
-use crate::{auth, lfd_mod, libfuncs, linkfd, main, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
+use signal_hook::{low_level, SigId};
+use crate::{auth, lfd_mod, libfuncs, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
 
 struct ClientCtx {
     client_term: Arc<AtomicI32>
@@ -47,6 +47,16 @@ impl ClientCtx {
     }
 }
 
+fn register_signal(client_ctx: &Arc<ClientCtx>, signal_id: libc::c_int) -> Option<SigId>{
+    let client_ctx = Arc::clone(&client_ctx);
+    match unsafe { low_level::register(signal_id, move || {
+        client_ctx.sig_term()
+    }) } {
+        Ok(id) => Some(id),
+        Err(_) => None
+    }
+}
+
 pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost)
 {
     {
@@ -64,24 +74,8 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         libc::sigaction(libc::SIGPIPE, &sa, ptr::null_mut());
         libc::sigaction(libc::SIGCHLD, &sa, ptr::null_mut());
     }
-    let sigterm_restore = {
-        let client_ctx = Arc::clone(&client_ctx);
-        match unsafe { low_level::register(libc::SIGTERM, move || {
-            client_ctx.sig_term()
-        }) } {
-            Ok(id) => Some(id),
-            Err(_) => None
-        }
-    };
-    let sigint_restore = {
-        let client_ctx = Arc::clone(&client_ctx);
-        match unsafe { low_level::register(libc::SIGINT, move || {
-            client_ctx.sig_term()
-        }) } {
-            Ok(id) => Some(id),
-            Err(_) => None
-        }
-    };
+    let sigterm_restore = register_signal(&client_ctx, libc::SIGTERM);
+    let sigint_restore = register_signal(&client_ctx, libc::SIGINT);
 
 
     let mut reconnect = false;

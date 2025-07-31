@@ -82,9 +82,6 @@ use getopts::Options;
 const VTUN_PORT: libc::c_int = 5000;
 const VTUN_TIMEOUT: libc::c_int = 30;
 
-const OPTSTRING: &'static str = "mif:P:L:t:npq";
-const SERVOPT_STRING: &'static str = "s";
-
 const VTUN_CONFIG_FILE: &'static str = env!("VTUN_CONFIG_FILE");
 const VTUN_PID_FILE: &'static str = env!("VTUN_PID_FILE");
 
@@ -139,7 +136,7 @@ fn main()
     opts.optflag("q", "quiet", "quiet mode");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => {
+        Err(_) => {
             print_usage(&program, opts);
             unsafe { libc::exit(1); }
         }
@@ -150,7 +147,7 @@ fn main()
     }
     if matches.opt_present("m") {
         unsafe {
-            if (libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) < 0) {
+            if libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) < 0 {
                 libc::perror("Unable to mlockall()\0".as_ptr() as *mut libc::c_char);
                 libc::exit(-1);
             }
@@ -202,7 +199,7 @@ fn main()
     }
     mainvtun::reread_config(&mut ctx);
 
-    if (ctx.vtun.syslog != libc::LOG_DAEMON) {
+    if ctx.vtun.syslog != libc::LOG_DAEMON {
         /* Restart logging to syslog using specified facility  */
         unsafe {
             libc::closelog();
@@ -213,8 +210,8 @@ fn main()
     cfg_file::clear_nat_hack_flags(if svr {1} else {0});
 
     let mut host = ptr::null_mut();
-    if(!svr){
-        if( matches.free.len() < 2 ) {
+    if !svr {
+        if matches.free.len() < 2 {
             print_usage(&program, opts);
             unsafe { libc::exit(1); }
         }
@@ -257,8 +254,8 @@ fn main()
         }
     }
 
-    if( daemon ) {
-        if (dofork && unsafe { libc::fork() } != 0) {
+    if daemon {
+        if dofork && unsafe { libc::fork() } != 0 {
             unsafe { libc::exit(0); }
         }
 

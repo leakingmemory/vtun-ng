@@ -103,7 +103,7 @@ pub const VTUN_INETD: libc::c_int =		1;
 
 pub const VTUN_NAT_HACK_CLIENT: libc::c_int =	0x4000;
 pub const VTUN_NAT_HACK_SERVER: libc::c_int =	0x8000;
-pub const VTUN_NAT_HACK_MASK: libc::c_int =	(VTUN_NAT_HACK_CLIENT | VTUN_NAT_HACK_SERVER);
+pub const VTUN_NAT_HACK_MASK: libc::c_int =	VTUN_NAT_HACK_CLIENT | VTUN_NAT_HACK_SERVER;
 
 pub const VTUN_CONNECT_TIMEOUT: libc::c_int = 30;
 

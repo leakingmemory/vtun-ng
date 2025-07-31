@@ -30,7 +30,7 @@ fn free_non_null(ptr: *mut libc::c_char) {
 
 fn strdup(str: *mut libc::c_char) -> *mut libc::c_char {
     if str.is_null() {
-        return std::ptr::null_mut();
+        return ptr::null_mut();
     }
     unsafe { libc::strdup(str) }
 }
@@ -97,7 +97,7 @@ impl VtunStat {
             byte_out: 0,
             comp_in: 0,
             comp_out: 0,
-            file: std::ptr::null_mut(),
+            file: ptr::null_mut(),
         }
     }
 }

@@ -17,7 +17,7 @@
     GNU General Public License for more details.
  */
 use std::ffi::CStr;
-use crate::{driver, lfd_mod, linkfd, llist, main, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
+use crate::{driver, lfd_mod, linkfd, llist, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
 use crate::setproctitle::set_title;
 /* Travel list from head to tail */
 fn llist_trav(l: &mut llist::LList, f: extern "C" fn(*mut libc::c_void, *mut libc::c_void) -> libc::c_int, u: *mut libc::c_void) -> *mut libc::c_void {
@@ -214,13 +214,11 @@ extern "C" fn run_cmd_rs(d: *mut libc::c_void, opt: *mut libc::c_void) -> libc::
             /* Wait for termination */
             let mut st: libc::c_int = 0;
             if unsafe { libc::waitpid(forkres, &mut st, 0) } > 0 && (libc::WIFEXITED(st) && libc::WEXITSTATUS(st) != 0) {
-                unsafe {
-                    let msg = format!("Command [{} {:.20}] error {}\n\0",
-                                      prog.unwrap_or_else(|| "<unknown>".to_string()),
-                                      args.unwrap_or_else(|| "<unknown>".to_string()),
-                                      libc::WEXITSTATUS(st));
-                    syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
-                }
+                let msg = format!("Command [{} {:.20}] error {}\n\0",
+                                  prog.unwrap_or_else(|| "<unknown>".to_string()),
+                                  args.unwrap_or_else(|| "<unknown>".to_string()),
+                                  libc::WEXITSTATUS(st));
+                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
         }
         if (flags & linkfd::VTUN_CMD_DELAY ) != 0 {

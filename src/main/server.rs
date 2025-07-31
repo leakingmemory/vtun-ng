@@ -21,7 +21,7 @@ use std::ffi::CStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use signal_hook::low_level;
-use crate::{lfd_mod, linkfd, lock, main, mainvtun, netlib, setproctitle, syslog, tunnel};
+use crate::{lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, syslog, tunnel};
 use crate::auth::auth_server;
 
 struct ServerCtx {

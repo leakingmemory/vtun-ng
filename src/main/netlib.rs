@@ -18,10 +18,9 @@
  */
 
 use std::ffi::CStr;
-use std::ptr;
 use std::ptr::null_mut;
-use libc::{in_port_t, timeval};
-use crate::{lfd_mod, libfuncs, main, mainvtun, syslog, vtun_host};
+use libc::{timeval};
+use crate::{lfd_mod, libfuncs, mainvtun, syslog, vtun_host};
 use crate::lfd_mod::VTUN_ADDR_NAME;
 
 /* Connect with timeout */
@@ -44,7 +43,7 @@ pub fn connect_t(s: i32, svr: *const libc::sockaddr, timeout: libc::time_t) -> b
         libc::FD_SET(s, &mut fdset);
     }
     let mut errno: libc::c_int;
-    if unsafe { libc::select(s+1,ptr::null_mut(),&mut fdset,ptr::null_mut(),if timeout > 0 { &mut tv } else { ptr::null_mut() }) } > 0 {
+    if unsafe { libc::select(s+1,null_mut(),&mut fdset,null_mut(),if timeout > 0 { &mut tv } else { null_mut() }) } > 0 {
         let mut l: libc::socklen_t = size_of::<libc::c_int>() as libc::socklen_t;
         errno=0;
         unsafe { libc::getsockopt(s,libc::SOL_SOCKET,libc::SO_ERROR,&mut errno as *mut libc::c_int as *mut libc::c_void,&mut l); }
@@ -146,7 +145,7 @@ pub fn server_addr(ctx: &mainvtun::VtunContext, addr: &mut libc::sockaddr_in, ho
     }
     straddr.push_str("\0");
 
-    if host.sopt.raddr != ptr::null_mut() {
+    if host.sopt.raddr != null_mut() {
         unsafe { libc::free(host.sopt.raddr as *mut libc::c_void) };
     }
     host.sopt.raddr = unsafe { libc::strdup(straddr.as_ptr() as *const libc::c_char) };
@@ -245,7 +244,7 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHo
     }
 
     /* Write port of the new UDP socket */
-    let mut port: libc::c_short = saddr.sin_port as libc::c_short;
+    let port: libc::c_short = saddr.sin_port as libc::c_short;
     {
         let buf = u16::from_be(port as libc::in_port_t).to_be_bytes();
         if libfuncs::write_n(host.rmt_fd, &buf).is_none() {
@@ -288,7 +287,7 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHo
         ctx.is_rmt_fd_connected = true;
     }
 
-    host.sopt.rport = u16::from_be(port as u16) as libc::c_int;
+    host.sopt.rport = u16::from_be(port) as libc::c_int;
 
     /* Close TCP socket and replace with UDP socket */
     unsafe { libc::close(host.rmt_fd) };

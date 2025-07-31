@@ -34,8 +34,8 @@ pub struct LList {
 impl LList {
     pub fn new() -> LList {
         LList {
-            head: std::ptr::null_mut(),
-            tail: std::ptr::null_mut()
+            head: ptr::null_mut(),
+            tail: ptr::null_mut()
         }
     }
 }
@@ -64,7 +64,7 @@ impl Clone for LList {
             let item = unsafe { &mut *item };
             item.data = unsafe { &*walk }.data;
         }
-        if (self.tail != ptr::null_mut()) {
+        if self.tail != ptr::null_mut() {
             tail = item;
         }
         Self {

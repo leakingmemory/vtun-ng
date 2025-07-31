@@ -105,7 +105,7 @@ fn unescape_dblq_string(str: &str) -> String {
     for ch in str.chars() {
         if !escape {
             match ch {
-                '\\' => escape = true,
+                '\\' => { escape = true; continue; },
                 _ => output.push(ch)
             }
         } else {
@@ -122,7 +122,7 @@ fn unescape_dblq_string(str: &str) -> String {
 }
 
 fn parse_ipv4(str: &str) -> u32 {
-    let mut parts = str.split('.');
+    let parts = str.split('.');
     let mut ip = 0;
     for part in parts {
         ip = ip << 8;

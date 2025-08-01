@@ -73,6 +73,8 @@ mod mainvtun;
 mod syslog;
 #[path = "main/filedes.rs"]
 mod filedes;
+#[path = "main/fdselect.rs"]
+mod fdselect;
 
 use std::io::Write;
 use std::{env};

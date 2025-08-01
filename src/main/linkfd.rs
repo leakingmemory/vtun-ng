@@ -1,6 +1,5 @@
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::{mem, ptr};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU64};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -8,7 +7,7 @@ use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
+use crate::{driver, fdselect, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -436,10 +435,8 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
 {
     let fd1 = proto.io_fd().i_absolutely_need_the_raw_value();
     let fd2 = driver.io_fd().unwrap().i_absolutely_need_the_raw_value();
-    let mut tv: libc::timeval;
-    let fdset = mem::MaybeUninit::<libc::fd_set>::uninit();
-    unsafe { libc::FD_ZERO(&mut (fdset.assume_init())); }
-    let mut fdset = unsafe { fdset.assume_init() };
+    let mut fdset: Vec<libc::c_int> = Vec::new();
+    fdset.reserve(2);
     let mut idle: i32 = 0;
 
     let mut buf: Vec<u8> = Vec::new();
@@ -453,27 +450,12 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
         proto.write(&mut buf, VTUN_ECHO_REQ as u16);
     }
 
-    let maxfd =  (if fd1 > fd2 { fd1 } else { fd2 }) + 1;
-
     linkfdctx.linker_term.store(0, std::sync::atomic::Ordering::SeqCst);
     while linkfdctx.linker_term.load(std::sync::atomic::Ordering::SeqCst) == 0 {
-        //errno = 0;
-
-        /* Wait for data */
-        unsafe {
-            libc::FD_ZERO(&mut fdset);
-            libc::FD_SET(fd1, &mut fdset);
-            libc::FD_SET(fd2, &mut fdset);
-        }
-
-        tv = libc::timeval {
-            tv_sec: host.ka_interval as libc::time_t,
-            tv_usec: 0,
-        };
-
         set_errno(errno::Errno(0));
-        let nullfds: *mut libc::fd_set = ptr::null_mut();
-        let len = unsafe { libc::select(maxfd, &mut fdset, nullfds, nullfds, &mut tv) };
+        fdset.push(fd1);
+        fdset.push(fd2);
+        let len = fdselect::select_read_timeout(&mut fdset, host.ka_interval as libc::time_t);
         if len < 0 {
             let errno = errno();
             if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
@@ -531,7 +513,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
 
         /* Read frames from network(fd1), decode and pass them to
          * the local device (fd2) */
-        if unsafe { libc::FD_ISSET(fd1, &fdset) } && lfd_stack.avail_decode() {
+        if fdset.contains(&fd1) && lfd_stack.avail_decode() {
             idle = 0;
             linkfdctx.ka_need_verify.store(false, std::sync::atomic::Ordering::SeqCst);
             buf.clear();
@@ -603,7 +585,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
 
         /* Read data from the local device(fd2), encode and pass it to
          * the network (fd1) */
-        if unsafe { libc::FD_ISSET(fd2, &fdset) } && lfd_stack.avail_encode() {
+        if fdset.contains(&fd2) && lfd_stack.avail_encode() {
             buf.clear();
             let success = driver.read(&mut buf, VTUN_FRAME_SIZE);
 

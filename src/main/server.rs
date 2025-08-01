@@ -182,20 +182,14 @@ fn listener(ctx: &mut mainvtun::VtunContext) {
                 mainvtun::reread_config(ctx);
             }
         }
-        let mut fdset: libc::fd_set = unsafe { mem::zeroed() };
-        let mut tv: libc::timeval = libc::timeval {
-            tv_sec: 10,
-            tv_usec: 0
+        match s.wait_for_read_with_timeout(10) {
+            Ok(res) => {
+                if !res {
+                    continue;
+                }
+            },
+            Err(_) => continue
         };
-        let selres;
-        unsafe {
-            libc::FD_ZERO(&mut fdset);
-            libc::FD_SET(s.i_absolutely_need_the_raw_value(), &mut fdset);
-            selres = libc::select(s.i_absolutely_need_the_raw_value()+1, &mut fdset, ptr::null_mut(), ptr::null_mut(), &mut tv);
-        }
-        if selres <= 0 {
-            continue;
-        }
         let mut cl_addr: libc::sockaddr_in = unsafe { mem::zeroed() };
         let mut s1 = match s.accept_sockaddr_in(&mut cl_addr) {
             Ok(s1) => s1,

@@ -17,16 +17,12 @@
     GNU General Public License for more details.
  */
 
-use std::ptr::null_mut;
-use libc::{timeval};
 use crate::{lfd_mod, libfuncs, mainvtun, syslog, vtun_host};
 use crate::filedes::FileDes;
 use crate::lfd_mod::VTUN_ADDR_NAME;
 use crate::linkfd::LinkfdCtx;
 /* Connect with timeout */
 pub fn connect_t(s: &FileDes, svr: &libc::sockaddr_in, timeout: libc::time_t) -> bool {
-    let mut tv: timeval = timeval { tv_sec: timeout, tv_usec: 0 };
-
     let sock_flags= match s.fcntl_getfl() {
         Ok(f) => f,
         Err(_) => return false
@@ -46,13 +42,18 @@ pub fn connect_t(s: &FileDes, svr: &libc::sockaddr_in, timeout: libc::time_t) ->
         libc::FD_SET(s.i_absolutely_need_the_raw_value(), &mut fdset);
     }
     let errno: libc::c_int;
-    if unsafe { libc::select(s.i_absolutely_need_the_raw_value()+1,null_mut(),&mut fdset,null_mut(),if timeout > 0 { &mut tv } else { null_mut() }) } > 0 {
-        match s.get_so_error() {
-            Ok(e) => errno = e,
-            Err(_) => return false
-        }
-    } else {
-        errno = libc::ETIMEDOUT;
+    match s.wait_for_write_with_timeout(timeout) {
+        Ok(selres) => {
+            if selres {
+                match s.get_so_error() {
+                    Ok(e) => errno = e,
+                    Err(_) => return false
+                }
+            } else {
+                errno = libc::ETIMEDOUT;
+            }
+        },
+        Err(_) => return false
     }
 
     s.fcntl_setfl(sock_flags);

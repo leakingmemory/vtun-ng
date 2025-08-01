@@ -15,6 +15,7 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
+use crate::fdselect;
 
 pub struct FileDes {
     fd: libc::c_int
@@ -105,7 +106,7 @@ impl FileDes {
     pub fn i_absolutely_need_the_raw_value(&self) -> libc::c_int {
         self.fd
     }
-    
+
     pub fn clone_stdin() -> FileDes {
         FileDes { fd: unsafe { libc::dup(libc::STDIN_FILENO) } }
     }
@@ -221,11 +222,11 @@ impl FileDes {
     pub fn fcntl_setfl(&self, flags: libc::c_int) -> bool {
         unsafe { libc::fcntl(self.fd, libc::F_SETFL, flags) == 0 }
     }
-    
+
     pub fn connect_sockaddr_in(&self, addr: &libc::sockaddr_in) -> bool {
         unsafe { libc::connect(self.fd, (addr as *const libc::sockaddr_in).cast(), size_of::<libc::sockaddr_in>() as libc::socklen_t) == 0 }
     }
-    
+
     pub fn get_so_error(&self) -> Result<libc::c_int, libc::c_int> {
         let mut errno: libc::c_int = 0;
         let mut l: libc::socklen_t = size_of::<libc::c_int>() as libc::socklen_t;
@@ -235,17 +236,17 @@ impl FileDes {
             Err(-1)
         }
     }
-    
+
     pub fn getsockname_sockaddr_in(&self, addr: &mut libc::sockaddr_in) -> bool {
         let mut len = size_of::<libc::sockaddr_in>() as libc::socklen_t;
         unsafe { libc::getsockname(self.fd, (addr as *mut libc::sockaddr_in).cast(), &mut len) == 0 }
     }
-    
+
     pub fn set_so_keepalive(&self, val: bool) -> bool {
         let val: libc::c_int = if val { 1 } else { 0 };
         unsafe { libc::setsockopt(self.fd, libc::SOL_SOCKET, libc::SO_KEEPALIVE, &val as *const libc::c_int as *const libc::c_void, size_of::<libc::c_int>() as libc::socklen_t) == 0 }
     }
-    
+
     pub fn set_tcp_nodelay(&self, val: bool) -> bool {
         let val: libc::c_int = if val { 1 } else { 0 };
         unsafe { libc::setsockopt(self.fd, libc::IPPROTO_TCP, libc::TCP_NODELAY, &val as *const libc::c_int as *const libc::c_void, size_of::<libc::c_int>() as libc::socklen_t) == 0 }
@@ -255,11 +256,11 @@ impl FileDes {
         let mut len = size_of::<libc::sockaddr_in>() as libc::socklen_t;
         unsafe { libc::getpeername(self.fd, (addr as *mut libc::sockaddr_in).cast(), &mut len) == 0 }
     }
-    
+
     pub fn listen(&self, backlog: libc::c_int) -> bool {
         unsafe { libc::listen(self.fd, backlog) == 0 }
     }
-    
+
     pub fn accept_sockaddr_in(&self, addr: &mut libc::sockaddr_in) -> Result<FileDes, libc::c_int> {
         let mut len = size_of::<libc::sockaddr_in>() as libc::socklen_t;
         let s = unsafe { libc::accept(self.fd, (addr as *mut libc::sockaddr_in).cast(), &mut len) };
@@ -267,6 +268,27 @@ impl FileDes {
             Ok(FileDes { fd: s })
         } else {
             Err(s)
+        }
+    }
+
+    pub fn wait_for_read_with_timeout(&self, timeout: libc::time_t) -> Result<bool, libc::c_int> {
+        let mut fds: Vec<libc::c_int> = Vec::new();
+        fds.push(self.fd);
+        let res = fdselect::select_read_timeout(&mut fds, timeout);
+        if res >= 0 {
+            Ok(res > 0)
+        } else {
+            Err(res)
+        }
+    }
+    pub fn wait_for_write_with_timeout(&self, timeout: libc::time_t) -> Result<bool, libc::c_int> {
+        let mut fds: Vec<libc::c_int> = Vec::new();
+        fds.push(self.fd);
+        let res = fdselect::select_write_timeout(&mut fds, timeout);
+        if res >= 0 {
+            Ok(res > 0)
+        } else {
+            Err(res)
         }
     }
 }

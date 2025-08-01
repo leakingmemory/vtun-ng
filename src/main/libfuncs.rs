@@ -18,7 +18,6 @@
  */
 
 /* Read N bytes with timeout */
-use std::ptr::null_mut;
 use crate::{auth};
 use crate::filedes::FileDes;
 use crate::linkfd::LinkfdCtx;
@@ -48,19 +47,13 @@ pub fn read_n(linkfdctx: &LinkfdCtx, fd: &FileDes, buf: &mut [u8]) -> Option<usi
 
 pub fn readn_t(linkfdctx: &LinkfdCtx, fd: &FileDes, buf: &mut [u8], timeout: libc::time_t) -> libc::c_int
 {
-    let mut fdset: libc::fd_set = unsafe { std::mem::zeroed() };
-    unsafe {
-        libc::FD_ZERO(&mut fdset);
-        libc::FD_SET(fd.i_absolutely_need_the_raw_value(), &mut fdset);
-    }
-    let mut tv: libc::timeval = libc::timeval {
-        tv_usec: 0, tv_sec: timeout
-    };
-
-    unsafe {
-        if libc::select(fd.i_absolutely_need_the_raw_value()+1,&mut fdset, null_mut(), null_mut(), &mut tv) <= 0 {
-            return -1;
+    match fd.wait_for_read_with_timeout(timeout) {
+        Ok(res) => {
+            if !res {
+                return -1;
+            }
         }
+        Err(_) => return -1
     }
 
     match read_n(linkfdctx, fd, buf) {

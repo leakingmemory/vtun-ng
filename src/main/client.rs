@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 use signal_hook::{low_level, SigId};
-use crate::{auth, lfd_mod, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
+use crate::{auth, exitcode, lfd_mod, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
 use crate::filedes::FileDes;
 use crate::vtun_host::VtunSopt;
 
@@ -58,7 +58,7 @@ fn register_signal(client_ctx: &Arc<ClientCtx>, signal_id: libc::c_int) -> Optio
     }
 }
 
-pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost)
+pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -> Result<(), exitcode::ExitCode>
 {
     {
         let msg = format!("VTun client ver {} started", lfd_mod::VTUN_VER);
@@ -174,7 +174,10 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
 
                 /* Start the tunnel */
                 let linkfdctx = Arc::new(linkfdctx);
-                client_ctx.set_client_term(tunnel::tunnel(ctx, &linkfdctx, host, s));
+                client_ctx.set_client_term(match tunnel::tunnel(ctx, &linkfdctx, host, s) {
+                    Ok(client_term) => client_term,
+                    Err(exitcode) => return Err(exitcode)
+                });
 
                 let msg = format!("Session {}[{}] closed",
                                   match &host.host { Some(host) => host.as_str(), None => "<none>" },
@@ -198,5 +201,5 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
     };
 
     syslog::vtun_syslog(lfd_mod::LOG_INFO, "Exit");
-    return;
+    Ok(())
 }

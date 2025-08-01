@@ -75,6 +75,8 @@ mod syslog;
 mod filedes;
 #[path = "main/fdselect.rs"]
 mod fdselect;
+#[path = "main/exitcode.rs"]
+mod exitcode;
 
 use std::io::Write;
 use std::{env};
@@ -87,7 +89,7 @@ const VTUN_TIMEOUT: libc::c_int = 30;
 const VTUN_CONFIG_FILE: &'static str = env!("VTUN_CONFIG_FILE");
 const VTUN_PID_FILE: &'static str = env!("VTUN_PID_FILE");
 
-fn main()
+fn main() -> Result<(), exitcode::ErrorCode>
 {
     setproctitle::init_title();
 
@@ -138,18 +140,18 @@ fn main()
         Ok(m) => m,
         Err(_) => {
             print_usage(&program, opts);
-            unsafe { libc::exit(1); }
+            return exitcode::ExitCode::from_code(1).get_exit_code();
         }
     };
     if matches.opt_present("h") {
         print_usage(&program, opts);
-        return;
+        return Ok(());
     }
     if matches.opt_present("m") {
         unsafe {
             if libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) < 0 {
                 libc::perror("Unable to mlockall()\0".as_ptr() as *mut libc::c_char);
-                libc::exit(-1);
+                return exitcode::ExitCode::from_code(1).get_exit_code();
             }
         }
     }
@@ -195,7 +197,10 @@ fn main()
     if matches.opt_present("q") {
         ctx.vtun.quiet = 1;
     }
-    mainvtun::reread_config(&mut ctx);
+    match mainvtun::reread_config(&mut ctx) {
+        Ok(_) => {},
+        Err(e) => return Err(e)
+    };
 
     if ctx.vtun.syslog != libc::LOG_DAEMON {
         /* Restart logging to syslog using specified facility  */
@@ -214,7 +219,7 @@ fn main()
     if !svr {
         if matches.free.len() < 2 {
             print_usage(&program, opts);
-            unsafe { libc::exit(1); }
+            return exitcode::ExitCode::from_code(1).get_exit_code();
         }
         let hst = matches.free[0].clone();
 
@@ -230,9 +235,7 @@ fn main()
                               hst.as_str(),
                               match ctx.vtun.cfg_file {Some(ref s) => s.as_str(), None => "<none>"});
             syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-            unsafe {
-                libc::exit(1);
-            }
+            return exitcode::ExitCode::from_code(1).get_exit_code();
         }
 
         ctx.vtun.svr_name = Some(matches.free[1].to_string());
@@ -264,7 +267,7 @@ fn main()
 
     if daemon {
         if dofork && unsafe { libc::fork() } != 0 {
-            unsafe { libc::exit(0); }
+            return Ok(())
         }
 
         /* Direct stdin,stdout,stderr to '/dev/null' */
@@ -284,7 +287,7 @@ fn main()
         unsafe { libc::chdir("/\0".as_ptr() as *mut libc::c_char); }
     }
 
-    if svr {
+    let result = if svr {
 
         setproctitle::set_title("vtunngd[s]: ");
 
@@ -292,16 +295,21 @@ fn main()
             write_pid();
         }
 
-        server::server_rs(&mut ctx, sock);
+        server::server_rs(&mut ctx, sock)
     } else {
         setproctitle::set_title("vtunngd[c]: ");
-        match host {
+        match match host {
             Some(ref mut host) => client::client_rs(&mut ctx, host),
-            None => {}
-        };
-    }
+            None => Ok(())
+        } {
+            Ok(_) => Ok(()),
+            Err(exitcode) => exitcode.get_exit_code()
+        }
+    };
 
     unsafe { libc::closelog(); }
+
+    result
 }
 
 /*

@@ -17,7 +17,7 @@
     GNU General Public License for more details.
  */
 use std::sync::Arc;
-use crate::{driver, lfd_mod, linkfd, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
+use crate::{driver, exitcode, lfd_mod, linkfd, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
 use crate::filedes::FileDes;
 use crate::setproctitle::set_title;
 
@@ -170,7 +170,7 @@ pub(crate) struct VtunCmd {
     pub(crate) args: Option<String>,
     pub(crate) flags: libc::c_int,
 }
-extern "C" fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> libc::c_int {
+fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> Result<(),exitcode::ErrorCode> {
     let prog = match cmd.prog {
         Some(ref prog) => Some(prog.clone()),
         None => None
@@ -184,7 +184,7 @@ extern "C" fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> l
     let forkres = unsafe { libc::fork() };
     if forkres < 0 {
         syslog::vtun_syslog(lfd_mod::LOG_ERR,"Couldn't fork()");
-        return 0;
+        return exitcode::ExitCode::from_code(1).get_exit_code();
     }
     if forkres > 0 {
         if (flags & linkfd::VTUN_CMD_WAIT) != 0 {
@@ -204,7 +204,7 @@ extern "C" fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> l
              * PPP + route problem  */
             std::thread::sleep(std::time::Duration::from_secs(linkfd::VTUN_DELAY_SEC));
         }
-        return 0;
+        return Ok(());
     }
 
     let args_string =
@@ -240,12 +240,10 @@ extern "C" fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> l
     unsafe { libc::execv(run_prog.as_ptr() as *const libc::c_char, argv.as_ptr() as *const *const libc::c_char) };
     let msg = format!("Couldn't exec program {}", run_prog);
     syslog::vtun_syslog(lfd_mod::LOG_ERR,msg.as_str());
-    unsafe {
-        libc::exit(1);
-    }
+    exitcode::ExitCode::from_code(1).get_exit_code()
 }
 
-fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver, dev: &str, interface_already_open: bool) -> libc::c_int {
+fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver, dev: &str, interface_already_open: bool) -> Result<libc::c_int,exitcode::ExitCode> {
     /* TODO - Which platforms do not have fork? */
     unsafe {
         libc::signal(libc::SIGCHLD, libc::SIG_DFL);
@@ -253,7 +251,7 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
     let retv = unsafe { libc::fork() };
     if retv < 0 {
         syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't fork()");
-        return 0;
+        return Err(exitcode::ExitCode::from_code(1));
     }
     if retv == 0 {
         /* do this only the first time when in persist = keep mode */
@@ -267,9 +265,7 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
                     fd2 = FileDes::open_m(dev, libc::O_RDWR);
                     if !fd2.ok() {
                         syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't open slave pty");
-                        unsafe {
-                            libc::exit(0);
-                        }
+                        return Err(exitcode::ExitCode::from_code(1));
                     }
                     owns_fd2 = true;
                 } else {
@@ -292,17 +288,18 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
         let msg = format!("{} running up commands", match host.host { Some(ref host) => host.as_str(), None => "<none>"});
         set_title(msg.as_str());
         for cmd in &host.up {
-            run_cmd_rs(cmd, Some(&host.sopt));
+            match run_cmd_rs(cmd, Some(&host.sopt)) {
+                Ok(_) => {},
+                Err(ref e) => return Err(exitcode::ExitCode::from_error_code(e))
+            }
         }
-        unsafe {
-            libc::exit(0);
-        }
+        return Err(exitcode::ExitCode::ok());
     }
     {
         let mut st: libc::c_int = 0;
         if unsafe { libc::waitpid(retv, &mut st, 0) } <= 0 {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't wait for child process");
-            return 0;
+            return Err(exitcode::ExitCode::from_code(1));
         }
     }
     unsafe {
@@ -334,7 +331,12 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
         set_title(ttle.as_str());
     }
     for cmd in &host.down {
-        run_cmd_rs(cmd, Some(&host.sopt));
+        match run_cmd_rs(cmd, Some(&host.sopt)) {
+            Ok(_) => {},
+            Err(ref e) => {
+                return Err(exitcode::ExitCode::from_error_code(e));
+            }
+        }
     }
 
     // TODO - Not to close with 'keep'. (closing is automatic by destructors)
@@ -342,10 +344,10 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
         host.loc_fd = driver.detach();
     }
 
-    linkfd_result
+    Ok(linkfd_result)
 }
 
-fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, dev: &str, interface_already_open: bool, rmt_fd_in: FileDes) -> libc::c_int {
+fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, dev: &str, interface_already_open: bool, rmt_fd_in: FileDes) -> Result<libc::c_int,exitcode::ExitCode> {
     let mut rmt_fd = rmt_fd_in;
     host.sopt.host = match host.host {
         Some(ref host) => Some(host.clone()),
@@ -369,7 +371,7 @@ fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::L
         let opt = netlib::udp_session(ctx, linkfdctx, host, &mut rmt_fd);
         if opt == false {
             syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't establish UDP session");
-            return 0;
+            return Ok(0);
         }
 
         let mut proto = udp_proto::UdpProto {
@@ -378,10 +380,10 @@ fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::L
         return tunnel_lfd(ctx, linkfdctx, host, driver, &mut proto, dev, interface_already_open)
     }
     syslog::vtun_syslog(lfd_mod::LOG_ERR,"Unknown network transport protocol");
-    0
+    Err(exitcode::ExitCode::from_code(1))
 }
 
-pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, rmt_fd: FileDes) -> libc::c_int
+pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, rmt_fd: FileDes) -> Result<libc::c_int,exitcode::ExitCode>
 {
     let mut dev_specified: bool = false;
     let mut dev: &str = "";
@@ -410,7 +412,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
                 },
                 None => {
                     syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't allocate pseudo tty.");
-                    -1
+                    Err(exitcode::ExitCode::from_code(1))
                 }
             }
         } else if typeflag == linkfd::VTUN_PIPE {
@@ -420,7 +422,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
                 },
                 None => {
                     syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't allocate pipe.");
-                    -1
+                    Err(exitcode::ExitCode::from_code(1))
                 }
             }
         } else if typeflag == linkfd::VTUN_ETHER {
@@ -447,7 +449,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
                         msg = "Can't allocate tap device.".to_string();
                     }
                     syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                    -1
+                    Err(exitcode::ExitCode::from_code(1))
                 }
             }
         } else if typeflag == linkfd::VTUN_TUN {
@@ -474,12 +476,12 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
                         msg = "Can't allocate tun device.".to_string();
                     }
                     syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                    -1
+                    Err(exitcode::ExitCode::from_code(1))
                 }
             }
         }  else {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.");
-            -1
+            Err(exitcode::ExitCode::from_code(1))
         }
     } else {
         let typeflag = host.flags & linkfd::VTUN_TYPE_MASK;
@@ -509,7 +511,7 @@ pub fn tunnel(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
             tunnel_setup_proto(ctx, linkfdctx, host, &mut driver, dev.as_str(), interface_already_open, rmt_fd)
         }  else {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unknown tunnel type.");
-            -1
+            Err(exitcode::ExitCode::from_code(1))
         }
     }
 }

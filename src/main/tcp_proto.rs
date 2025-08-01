@@ -17,12 +17,16 @@
     GNU General Public License for more details.
  */
 use crate::{driver, linkfd, mainvtun};
+use crate::filedes::FileDes;
 
 pub(crate) struct TcpProto {
-    pub fd: i32
+    pub fd: FileDes
 }
 
 impl driver::NetworkDriver for TcpProto {
+    fn io_fd(&self) -> &FileDes {
+        &self.fd
+    }
     fn write(&self, buf: &mut Vec<u8>, flags: u16) -> Option<usize> {
         let payloadlen = buf.len();
         if (payloadlen & linkfd::VTUN_FSIZE_MASK as usize) != payloadlen || (flags & linkfd::VTUN_FSIZE_MASK as u16) != 0 {
@@ -36,11 +40,10 @@ impl driver::NetworkDriver for TcpProto {
         buf[0] = ((prefix & 0xff00) >> 8) as u8;
         buf[1] = (prefix & 0xff) as u8;
 
-        let wres = unsafe { libc::write(self.fd, buf.as_ptr() as *const libc::c_void, buf.len()) };
-        if wres < 0 {
-            return None;
+        match self.fd.write(buf) {
+            Ok(wres) => Some(wres),
+            Err(_) => None
         }
-        Some(wres as usize)
     }
     fn read(&mut self, _ctx: &mut mainvtun::VtunContext, buf: &mut Vec<u8>) -> Option<u16> {
         let mut len: usize;
@@ -51,35 +54,40 @@ impl driver::NetworkDriver for TcpProto {
             let mut prefix: u16;
             let mut prefixbuf: [u8; 2] = [0u8; 2];
             loop {
-                let rlen = unsafe { libc::read(self.fd, &mut prefixbuf as *mut u8 as *mut libc::c_void, 2) };
-                if rlen == 2 {
-                    break;
-                }
-                if rlen == 1 {
-                    let mut tmpbuf: [u8; 1] = [0u8; 1];
-                    loop {
-                        let rlen = unsafe { libc::read(self.fd, &mut tmpbuf as *mut u8 as *mut libc::c_void, 1) };
-                        if rlen == 1 {
+                match self.fd.read(&mut prefixbuf) {
+                    Ok(rlen) => {
+                        if rlen == 2 {
                             break;
                         }
-                        if rlen < 0 {
-                            let errno = errno::errno();
-                            if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
-                                continue;
+                        if rlen == 1 {
+                            let mut tmpbuf: [u8; 1] = [0u8; 1];
+                            loop {
+                                match self.fd.read(&mut tmpbuf) {
+                                    Ok(rlen) => {
+                                        if rlen == 1 {
+                                            break;
+                                        }
+                                    },
+                                    Err(_) => {
+                                        let errno = errno::errno();
+                                        if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                                            continue;
+                                        }
+                                    }
+                                };
+                                return None;
                             }
-                            return None;
+                            prefixbuf[1] = tmpbuf[0];
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        let errno = errno::errno();
+                        if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                            continue;
                         }
                         return None;
                     }
-                    prefixbuf[1] = tmpbuf[0];
-                    break;
-                }
-                if rlen < 0 {
-                    let errno = errno::errno();
-                    if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
-                        continue;
-                    }
-                    return None;
                 }
                 return None;
             }
@@ -99,15 +107,18 @@ impl driver::NetworkDriver for TcpProto {
                     rdlen = len;
                 }
                 buf.resize(rdlen, 0u8);
-                let rlen = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, rdlen) };
-                if rlen < 0 {
-                    let errno = errno::errno();
-                    if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
-                        continue;
+                match self.fd.read(buf) {
+                    Ok(rlen) => {
+                        len = len - rlen;
+                    },
+                    Err(_) => {
+                        let errno = errno::errno();
+                        if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                            continue;
+                        }
+                        break;
                     }
-                    break;
-                }
-                len = len - rlen as usize;
+                };
             }
             buf.clear();
             return Some(0);
@@ -130,25 +141,27 @@ impl driver::NetworkDriver for TcpProto {
         /* Read frame */
         buf.resize(len, 0u8);
         let mut offset: usize = 0;
-        let mut rlen;
+        let mut err: bool = false;
         loop {
-            let reqlen = len - offset;
-            rlen = unsafe { libc::read(self.fd, buf.as_mut_ptr().add(offset) as *mut libc::c_void, reqlen) };
-            if rlen < 0 {
-                let errno = errno::errno();
-                if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
-                    continue;
+            match self.fd.read(&mut buf[offset..]) {
+                Ok(rlen) => {
+                    offset = offset + rlen;
+                    if rlen > 0 && offset < len {
+                        continue;
+                    }
+                    break;
+                },
+                Err(_) => {
+                    let errno = errno::errno();
+                    if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                        continue;
+                    }
+                    err = true;
+                    break;
                 }
-                break;
-            } else if rlen < reqlen as isize {
-                offset = offset + rlen as usize;
-                continue;
-            } else {
-                offset = offset + rlen as usize;
-                break;
-            }
+            };
         }
-        if rlen < 0 || offset < len {
+        if err || offset < len {
             buf.clear();
             return None;
         }

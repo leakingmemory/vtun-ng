@@ -18,9 +18,10 @@
  */
 use std::ptr::null_mut;
 use crate::{driver, lfd_mod, linkfd, mainvtun, syslog};
+use crate::filedes::FileDes;
 
 pub(crate) struct UdpProto {
-    pub fd: i32
+    pub fd: FileDes
 }
 
 impl UdpProto {
@@ -46,6 +47,9 @@ impl UdpProto {
 }
 
 impl driver::NetworkDriver for UdpProto {
+    fn io_fd(&self) -> &FileDes {
+        &self.fd
+    }
     fn write(&self, buf: &mut Vec<u8>, flags: u16) -> Option<usize> {
         let payloadlen = buf.len();
         if (payloadlen & linkfd::VTUN_FSIZE_MASK as usize) != payloadlen || (flags & linkfd::VTUN_FSIZE_MASK as u16) != 0 {
@@ -59,46 +63,38 @@ impl driver::NetworkDriver for UdpProto {
         buf[0] = ((prefix & 0xff00) >> 8) as u8;
         buf[1] = (prefix & 0xff) as u8;
 
-        let mut wlen: libc::ssize_t;
         loop {
-            wlen = unsafe { libc::write(self.fd, buf.as_ptr() as *const libc::c_void, buf.len()) };
-            if wlen < 0 {
-                let errno = errno::errno();
-                if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
-                    continue;
+            return match self.fd.write(buf) {
+                Ok(wlen) => Some(wlen),
+                Err(_) => {
+                    let errno = errno::errno();
+                    if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                        continue;
+                    }
+                    None
                 }
-                if errno == errno::Errno(libc::ENOBUFS)  {
-                    return None;
-                }
-            }
-            /* Even if we wrote only part of the frame
-                 * we can't use second write since it will produce
-                 * another UDP frame */
-            return Some(wlen as usize);
+            };
         }
     }
 
     fn read(&mut self, ctx: &mut mainvtun::VtunContext, buf: &mut Vec<u8>) -> Option<u16> {
-        //unsigned short hdr, flen;
         let mut hdrbuf: [u8; 2] = [0u8; 2];
         let mut iv: [libc::iovec; 2] = [libc::iovec { iov_base: null_mut(), iov_len: 0 }; 2];
-        //register int rlen;
-        //struct sockaddr_in from;
         let mut from: libc::sockaddr_in = UdpProto::create_sockaddr_in();
-        let mut fromlen: libc::socklen_t = size_of::<libc::sockaddr_in>() as libc::socklen_t;
 
         /* Late connect (NAT hack enabled) */
         if !ctx.is_rmt_fd_connected {
             loop {
-                let rlen = unsafe { libc::recvfrom(self.fd, buf.as_mut_ptr() as *mut libc::c_void, 2, libc::MSG_PEEK, &mut from as *mut libc::sockaddr_in as *mut libc::sockaddr, &mut fromlen) };
-                if rlen < 0 {
-                    let errno = errno::errno();
-                    if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) { continue; }
-                    else { return None; }
+                match self.fd.recvfrom_sockaddr_in(&mut hdrbuf, &mut from, libc::MSG_PEEK) {
+                    Ok(_) => break,
+                    Err(_) => {
+                        let errno = errno::errno();
+                        if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) { continue; }
+                        else { return None; }
+                    }
                 }
-                else { break; }
             }
-            if unsafe {libc::connect(self.fd,&mut from as *mut libc::sockaddr_in as *mut libc::sockaddr,fromlen)} != 0 {
+            if !self.fd.connect_sockaddr_in(&from) {
                 syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't connect socket");
                 return None;
             }
@@ -114,22 +110,24 @@ impl driver::NetworkDriver for UdpProto {
 
         let mut hdr: u16;
         loop {
-            let rlen = unsafe { libc::readv(self.fd, &iv as *const libc::iovec, 2) };
-            if rlen < 0 {
-                let errno = errno::errno();
-                if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
-                    continue;
-                } else {
-                    return None;
+            let rlen = match self.fd.read_both(&mut hdrbuf, buf) {
+                Ok(rlen) => rlen,
+                Err(_) => {
+                    let errno = errno::errno();
+                    if errno == errno::Errno(libc::EAGAIN) || errno == errno::Errno(libc::EINTR) {
+                        continue;
+                    } else {
+                        return None;
+                    }
                 }
-            }
+            };
             hdr = hdrbuf[0] as u16;
             hdr = hdr << 8;
             hdr = hdr | hdrbuf[1] as u16;
             let flen = hdr & linkfd::VTUN_FSIZE_MASK as u16;
             let flags = hdr & !(linkfd::VTUN_FSIZE_MASK as u16);
 
-            if rlen < 2 || (rlen - 2) != flen as libc::ssize_t {
+            if rlen < 2 || (rlen - 2) != flen as usize {
                 buf.clear();
                 return None;
             }

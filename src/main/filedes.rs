@@ -33,6 +33,12 @@ impl FileDes {
             fd: unsafe { libc::open(name.as_ptr() as *const libc::c_char, flags, mode) }
         }
     }
+    pub fn socket(domain: libc::c_int, type_: libc::c_int, protocol: libc::c_int) -> FileDes {
+        FileDes {
+            fd: unsafe { libc::socket(domain, type_, protocol) }
+        }
+    }
+
     #[cfg(target_os = "linux")]
     pub fn getpt() -> FileDes {
         FileDes { fd: unsafe { libc::getpt() } }
@@ -99,6 +105,10 @@ impl FileDes {
     pub fn i_absolutely_need_the_raw_value(&self) -> libc::c_int {
         self.fd
     }
+    
+    pub fn clone_stdin() -> FileDes {
+        FileDes { fd: unsafe { libc::dup(libc::STDIN_FILENO) } }
+    }
 
     pub fn replace_stdin(&self) -> bool {
         self.replace_fd(libc::STDIN_FILENO).detach() == libc::STDIN_FILENO
@@ -110,6 +120,16 @@ impl FileDes {
         self.replace_fd(libc::STDERR_FILENO).detach() == libc::STDERR_FILENO
     }
 
+    pub fn recvfrom_sockaddr_in(&self, buf: &mut [u8], addr: &mut libc::sockaddr_in, flags: libc::c_int) -> Result<usize, libc::ssize_t> {
+        let len = buf.len();
+        let mut addrlen = size_of::<libc::sockaddr_in>() as libc::socklen_t;
+        let res = unsafe { libc::recvfrom(self.fd, buf.as_mut_ptr() as *mut libc::c_void, len, flags, (addr as *mut libc::sockaddr_in).cast(), &mut addrlen) };
+        if res >= 0 {
+            Ok(res as usize)
+        } else {
+            Err(res)
+        }
+    }
     pub fn read(&self, buf: &mut [u8]) -> Result<usize, libc::ssize_t> {
         let r = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len() as libc::size_t) };
         if r >= 0 {
@@ -119,8 +139,6 @@ impl FileDes {
             Err(r)
         }
     }
-    // open for more when needed
-    #[cfg(target_os = "openbsd")]
     pub fn read_both(&self, buf1: &mut [u8], buf2: &mut [u8]) -> Result<usize, libc::ssize_t> {
         let len1 = buf1.len();
         let len2 = buf2.len();
@@ -180,6 +198,75 @@ impl FileDes {
             Ok(r)
         } else {
             Err(r)
+        }
+    }
+
+    pub fn set_so_reuseaddr(&self, val: bool) -> bool {
+        let val: libc::c_int = if val { 1 } else { 0 };
+        unsafe { libc::setsockopt(self.fd, libc::SOL_SOCKET, libc::SO_REUSEADDR, &val as *const libc::c_int as *const libc::c_void, size_of::<libc::c_int>() as libc::socklen_t) == 0 }
+    }
+
+    pub fn bind_sockaddr_in(&self, addr: &libc::sockaddr_in) -> bool {
+        unsafe { libc::bind(self.fd, (addr as *const libc::sockaddr_in).cast(), size_of::<libc::sockaddr_in>() as libc::socklen_t) == 0 }
+    }
+
+    pub fn fcntl_getfl(&self) -> Result<libc::c_int, libc::c_int> {
+        let r = unsafe { libc::fcntl(self.fd, libc::F_GETFL) };
+        if r >= 0 {
+            Ok(r)
+        } else {
+            Err(r)
+        }
+    }
+    pub fn fcntl_setfl(&self, flags: libc::c_int) -> bool {
+        unsafe { libc::fcntl(self.fd, libc::F_SETFL, flags) == 0 }
+    }
+    
+    pub fn connect_sockaddr_in(&self, addr: &libc::sockaddr_in) -> bool {
+        unsafe { libc::connect(self.fd, (addr as *const libc::sockaddr_in).cast(), size_of::<libc::sockaddr_in>() as libc::socklen_t) == 0 }
+    }
+    
+    pub fn get_so_error(&self) -> Result<libc::c_int, libc::c_int> {
+        let mut errno: libc::c_int = 0;
+        let mut l: libc::socklen_t = size_of::<libc::c_int>() as libc::socklen_t;
+        if unsafe { libc::getsockopt(self.fd,libc::SOL_SOCKET,libc::SO_ERROR,&mut errno as *mut libc::c_int as *mut libc::c_void,&mut l) == 0 } {
+            Ok(errno)
+        } else {
+            Err(-1)
+        }
+    }
+    
+    pub fn getsockname_sockaddr_in(&self, addr: &mut libc::sockaddr_in) -> bool {
+        let mut len = size_of::<libc::sockaddr_in>() as libc::socklen_t;
+        unsafe { libc::getsockname(self.fd, (addr as *mut libc::sockaddr_in).cast(), &mut len) == 0 }
+    }
+    
+    pub fn set_so_keepalive(&self, val: bool) -> bool {
+        let val: libc::c_int = if val { 1 } else { 0 };
+        unsafe { libc::setsockopt(self.fd, libc::SOL_SOCKET, libc::SO_KEEPALIVE, &val as *const libc::c_int as *const libc::c_void, size_of::<libc::c_int>() as libc::socklen_t) == 0 }
+    }
+    
+    pub fn set_tcp_nodelay(&self, val: bool) -> bool {
+        let val: libc::c_int = if val { 1 } else { 0 };
+        unsafe { libc::setsockopt(self.fd, libc::IPPROTO_TCP, libc::TCP_NODELAY, &val as *const libc::c_int as *const libc::c_void, size_of::<libc::c_int>() as libc::socklen_t) == 0 }
+    }
+
+    pub fn getpeername_sockaddr_in(&self, addr: &mut libc::sockaddr_in) -> bool {
+        let mut len = size_of::<libc::sockaddr_in>() as libc::socklen_t;
+        unsafe { libc::getpeername(self.fd, (addr as *mut libc::sockaddr_in).cast(), &mut len) == 0 }
+    }
+    
+    pub fn listen(&self, backlog: libc::c_int) -> bool {
+        unsafe { libc::listen(self.fd, backlog) == 0 }
+    }
+    
+    pub fn accept_sockaddr_in(&self, addr: &mut libc::sockaddr_in) -> Result<FileDes, libc::c_int> {
+        let mut len = size_of::<libc::sockaddr_in>() as libc::socklen_t;
+        let s = unsafe { libc::accept(self.fd, (addr as *mut libc::sockaddr_in).cast(), &mut len) };
+        if s >= 0 {
+            Ok(FileDes { fd: s })
+        } else {
+            Err(s)
         }
     }
 }

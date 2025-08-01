@@ -24,6 +24,7 @@
  */
 use crate::challenge::VTUN_CHAL_SIZE;
 use crate::{challenge, lfd_mod, libfuncs, linkfd, lock, setproctitle, syslog, vtun_host};
+use crate::filedes::FileDes;
 use crate::libfuncs::print_p;
 use crate::linkfd::LinkfdCtx;
 use crate::mainvtun::VtunContext;
@@ -249,7 +250,7 @@ fn get_tokenize_length(slice: &mut [u8]) -> usize {
     len
 }
 /* Authentication (Server side) */
-pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: i32) -> Option<vtun_host::VtunHost> {
+pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Option<vtun_host::VtunHost> {
     setproctitle::set_title("authentication");
 
     let fmt = format!("VTUN server ver {}\n", lfd_mod::VTUN_VER);
@@ -407,7 +408,7 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: i32) -> Option<
 }
 
 /* Authentication (Client side) */
-pub(crate) fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: libc::c_int, host: &mut vtun_host::VtunHost) -> bool {
+pub(crate) fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host: &mut vtun_host::VtunHost) -> bool {
     let mut success = false;
     let mut stage = ST_INIT;
 

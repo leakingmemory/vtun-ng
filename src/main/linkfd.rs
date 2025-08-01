@@ -434,7 +434,7 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
 
 fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
-    let fd1 = host.rmt_fd;
+    let fd1 = proto.io_fd().i_absolutely_need_the_raw_value();
     let fd2 = driver.io_fd().unwrap().i_absolutely_need_the_raw_value();
     let mut tv: libc::timeval;
     let fdset = mem::MaybeUninit::<libc::fd_set>::uninit();

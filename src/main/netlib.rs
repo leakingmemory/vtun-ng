@@ -20,18 +20,22 @@
 use std::ptr::null_mut;
 use libc::{timeval};
 use crate::{lfd_mod, libfuncs, mainvtun, syslog, vtun_host};
+use crate::filedes::FileDes;
 use crate::lfd_mod::VTUN_ADDR_NAME;
 use crate::linkfd::LinkfdCtx;
 /* Connect with timeout */
-pub fn connect_t(s: i32, svr: *const libc::sockaddr, timeout: libc::time_t) -> bool {
+pub fn connect_t(s: &FileDes, svr: &libc::sockaddr_in, timeout: libc::time_t) -> bool {
     let mut tv: timeval = timeval { tv_sec: timeout, tv_usec: 0 };
 
-    let sock_flags= unsafe { libc::fcntl(s,libc::F_GETFL) };
-    if unsafe { libc::fcntl(s,libc::F_SETFL,libc::O_NONBLOCK) } < 0 {
+    let sock_flags= match s.fcntl_getfl() {
+        Ok(f) => f,
+        Err(_) => return false
+    };
+    if !s.fcntl_setfl(libc::O_NONBLOCK) {
         return false;
     }
 
-    if unsafe { libc::connect(s,svr,size_of::<libc::sockaddr>() as libc::socklen_t) } < 0 && errno::errno() != errno::Errno(libc::EINPROGRESS)
+    if !s.connect_sockaddr_in(svr) && errno::errno() != errno::Errno(libc::EINPROGRESS)
     {
         return false;
     }
@@ -39,18 +43,19 @@ pub fn connect_t(s: i32, svr: *const libc::sockaddr, timeout: libc::time_t) -> b
     let mut fdset: libc::fd_set = unsafe { std::mem::zeroed() };
     unsafe {
         libc::FD_ZERO(&mut fdset);
-        libc::FD_SET(s, &mut fdset);
+        libc::FD_SET(s.i_absolutely_need_the_raw_value(), &mut fdset);
     }
-    let mut errno: libc::c_int;
-    if unsafe { libc::select(s+1,null_mut(),&mut fdset,null_mut(),if timeout > 0 { &mut tv } else { null_mut() }) } > 0 {
-        let mut l: libc::socklen_t = size_of::<libc::c_int>() as libc::socklen_t;
-        errno=0;
-        unsafe { libc::getsockopt(s,libc::SOL_SOCKET,libc::SO_ERROR,&mut errno as *mut libc::c_int as *mut libc::c_void,&mut l); }
+    let errno: libc::c_int;
+    if unsafe { libc::select(s.i_absolutely_need_the_raw_value()+1,null_mut(),&mut fdset,null_mut(),if timeout > 0 { &mut tv } else { null_mut() }) } > 0 {
+        match s.get_so_error() {
+            Ok(e) => errno = e,
+            Err(_) => return false
+        }
     } else {
         errno = libc::ETIMEDOUT;
     }
 
-    unsafe { libc::fcntl(s,libc::F_SETFL,sock_flags); }
+    s.fcntl_setfl(sock_flags);
 
     if errno == 0 {
         true
@@ -62,8 +67,8 @@ pub fn connect_t(s: i32, svr: *const libc::sockaddr, timeout: libc::time_t) -> b
 /* Get interface address */
 fn getifaddr(ifname: &str) -> Option<u32>
 {
-    let s = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
-    if s == -1 {
+    let mut s = FileDes::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
+    if !s.ok() {
         return None;
     }
 
@@ -73,11 +78,11 @@ fn getifaddr(ifname: &str) -> Option<u32>
         ifr.ifr_name[i] = if ifname[i] < 128 { ifname[i] as libc::c_char } else { (ifname[i] - 128u8) as libc::c_char - (127 as libc::c_char)};
     }
 
-    if unsafe { libc::ioctl(s, libc::SIOCGIFADDR, &ifr) } < 0 {
-        unsafe { libc::close(s); }
+    if unsafe { libc::ioctl(s.i_absolutely_need_the_raw_value(), libc::SIOCGIFADDR, &ifr) } < 0 {
+        s.close();
         return None;
     }
-    unsafe { libc::close(s); }
+    s.close();
 
     let addr: *const libc::sockaddr_in = unsafe { &(ifr.ifr_ifru.ifru_addr) as *const libc::sockaddr }.cast();
 
@@ -87,18 +92,20 @@ fn getifaddr(ifname: &str) -> Option<u32>
 }
 
 /* Set local address */
-pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost, con: bool) -> bool
+pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost, con: Option<&FileDes>) -> bool
 {
-    if con {
-        /* Use address of the already connected socket. */
-        let mut opt: libc::socklen_t = size_of::<libc::sockaddr_in>() as libc::socklen_t;
-        if unsafe { libc::getsockname(host.rmt_fd, (addr as *mut libc::sockaddr_in).cast(), &mut opt) } < 0 {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't get local socket address");
-            return false;
-        }
-    } else {
-        if !generic_addr_rs(addr, &host.src_addr) {
-            return false;
+    match con {
+        Some(rmt_fd) => {
+            /* Use address of the already connected socket. */
+            if !rmt_fd.getsockname_sockaddr_in(addr) {
+                syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't get local socket address");
+                return false;
+            }
+        },
+        None => {
+            if !generic_addr_rs(addr, &host.src_addr) {
+                return false;
+            }
         }
     }
 
@@ -229,28 +236,26 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
  * Establish UDP session with host connected to fd(socket).
  * Returns connected UDP socket or -1 on error.
  */
-pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host: &mut vtun_host::VtunHost) -> bool
+pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host: &mut vtun_host::VtunHost, rmt_fd: &mut FileDes) -> bool
 {
     let mut saddr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
 
-    let s = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
-    if s == -1 {
+    let s = FileDes::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
+    if !s.ok() {
         syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't create socket");
         return false;
     }
 
-    let opt: libc::socklen_t = 1;
-    unsafe { libc::setsockopt(s, libc::SOL_SOCKET, libc::SO_REUSEADDR, &opt as *const libc::socklen_t as *const libc::c_void, size_of::<libc::socklen_t>() as libc::socklen_t); }
+    s.set_so_reuseaddr(true);
 
     /* Set local address and port */
-    local_addr_rs(&mut saddr, host, true);
-    if unsafe { libc::bind(s,(&mut saddr as *mut libc::sockaddr_in).cast(),size_of::<libc::sockaddr_in>() as libc::socklen_t) } != 0 {
+    local_addr_rs(&mut saddr, host, Some(rmt_fd));
+    if !s.bind_sockaddr_in(&saddr) {
         syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't bind to the socket");
         return false;
     }
 
-    let mut opt = size_of::<libc::sockaddr_in>() as libc::socklen_t;
-    if unsafe { libc::getsockname(s,(&mut saddr as *mut libc::sockaddr_in).cast(),&mut opt as *mut libc::socklen_t) } != 0 {
+    if !s.getsockname_sockaddr_in(&mut saddr) {
         syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't get socket name");
         return false;
     }
@@ -259,7 +264,7 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host:
     let port: libc::c_short = saddr.sin_port as libc::c_short;
     {
         let buf = u16::from_be(port as libc::in_port_t).to_be_bytes();
-        if libfuncs::write_n(linkfdctx, host.rmt_fd, &buf).is_none() {
+        if libfuncs::write_n(linkfdctx, rmt_fd, &buf).is_none() {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't write port number");
             return false;
         }
@@ -268,14 +273,13 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host:
 
     /* Read port of the other's end UDP socket */
     let mut port = [0u8; 2];
-    if libfuncs::readn_t(linkfdctx, host.rmt_fd,&mut port,host.timeout as libc::time_t) < 0 {
+    if libfuncs::readn_t(linkfdctx, rmt_fd,&mut port,host.timeout as libc::time_t) < 0 {
         let msg = format!("Can't read port number {}", errno::errno().to_string());
         syslog::vtun_syslog(lfd_mod::LOG_ERR,msg.as_str());
         return false;
     }
 
-    let mut opt = size_of::<libc::sockaddr_in>() as libc::socklen_t;
-    if unsafe { libc::getpeername(host.rmt_fd,(&mut saddr as *mut libc::sockaddr_in).cast(),&mut opt as *mut libc::socklen_t) } != 0 {
+    if !rmt_fd.getpeername_sockaddr_in(&mut saddr) {
         syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't get peer name");
         return false;
     }
@@ -292,7 +296,7 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host:
     if (host.flags & lfd_mod::VTUN_NAT_HACK_MASK) != 0 {
         ctx.is_rmt_fd_connected = false;
     } else {
-        if unsafe { libc::connect(s,(&mut saddr as *mut libc::sockaddr_in).cast(),size_of::<libc::sockaddr_in>() as libc::socklen_t) } != 0 {
+        if !s.connect_sockaddr_in(&saddr) {
             syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't connect socket");
             return false;
         }
@@ -302,31 +306,9 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host:
     host.sopt.rport = u16::from_be(port) as libc::c_int;
 
     /* Close TCP socket and replace with UDP socket */
-    unsafe { libc::close(host.rmt_fd) };
-    host.rmt_fd = s;
+    rmt_fd.close();
+    *rmt_fd = s;
 
     syslog::vtun_syslog(lfd_mod::LOG_INFO,"UDP connection initialized");
     true
-}
-
-#[no_mangle]
-pub extern "C" fn local_addr(addr: *mut libc::sockaddr_in, host: *mut vtun_host::VtunHost, con: libc::c_int) -> libc::c_int {
-    let host_ = unsafe { &mut *host };
-    let addr_ = unsafe { &mut *addr };
-    if local_addr_rs(addr_, host_, con != 0) {
-        0
-    } else {
-        -1
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn generic_addr(addr: *mut libc::sockaddr_in, vaddr: *const vtun_host::VtunAddr) -> libc::c_int {
-    let addr_ = unsafe { &mut *addr };
-    let vaddr_ = unsafe { &*vaddr };
-    if generic_addr_rs(addr_, vaddr_) {
-        0
-    } else {
-        -1
-    }
 }

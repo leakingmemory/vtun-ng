@@ -20,42 +20,45 @@
 /* Read N bytes with timeout */
 use std::ptr::null_mut;
 use crate::{auth};
+use crate::filedes::FileDes;
 use crate::linkfd::LinkfdCtx;
 /* Read exactly len bytes (Signal safe)*/
-pub fn read_n(linkfdctx: &LinkfdCtx, fd: libc::c_int, buf: &mut [u8]) -> Option<usize>
+pub fn read_n(linkfdctx: &LinkfdCtx, fd: &FileDes, buf: &mut [u8]) -> Option<usize>
 {
     let mut off = 0;
 
     while !linkfdctx.is_io_cancelled() && off < buf.len() {
-        let w = unsafe { libc::read(fd, buf.as_ptr().add(off) as *mut libc::c_void, buf.len() - off) };
-        if w < 0 {
-            let errno = errno::errno();
-            if errno == errno::Errno(libc::EINTR) || errno == errno::Errno(libc::EAGAIN) {
-                continue;
+        let w = match fd.read(&mut buf[off..]) {
+            Ok(w) => w,
+            Err(_) => {
+                let errno = errno::errno();
+                if errno == errno::Errno(libc::EINTR) || errno == errno::Errno(libc::EAGAIN) {
+                    continue;
+                }
+                return None;
             }
-            return None;
-        }
+        };
         if w == 0 {
             return Some(off);
         }
-        off = off + w as usize;
+        off = off + w;
     }
     Some(off)
 }
 
-pub fn readn_t(linkfdctx: &LinkfdCtx, fd: libc::c_int, buf: &mut [u8], timeout: libc::time_t) -> libc::c_int
+pub fn readn_t(linkfdctx: &LinkfdCtx, fd: &FileDes, buf: &mut [u8], timeout: libc::time_t) -> libc::c_int
 {
     let mut fdset: libc::fd_set = unsafe { std::mem::zeroed() };
     unsafe {
         libc::FD_ZERO(&mut fdset);
-        libc::FD_SET(fd, &mut fdset);
+        libc::FD_SET(fd.i_absolutely_need_the_raw_value(), &mut fdset);
     }
     let mut tv: libc::timeval = libc::timeval {
         tv_usec: 0, tv_sec: timeout
     };
 
     unsafe {
-        if libc::select(fd+1,&mut fdset, null_mut(), null_mut(), &mut tv) <= 0 {
+        if libc::select(fd.i_absolutely_need_the_raw_value()+1,&mut fdset, null_mut(), null_mut(), &mut tv) <= 0 {
             return -1;
         }
     }
@@ -67,28 +70,31 @@ pub fn readn_t(linkfdctx: &LinkfdCtx, fd: libc::c_int, buf: &mut [u8], timeout: 
 }
 
 /* Write exactly len bytes (Signal safe)*/
-pub fn write_n(linkfdctx: &LinkfdCtx, fd: libc::c_int, buf: &[u8]) -> Option<usize>
+pub fn write_n(linkfdctx: &LinkfdCtx, fd: &FileDes, buf: &[u8]) -> Option<usize>
 {
     let mut t: usize = 0;
 
     while !linkfdctx.is_io_cancelled() && t < buf.len() {
-        let w = unsafe { libc::write(fd, buf[t..buf.len()].as_ptr() as *const libc::c_void, buf.len() - t) };
-        if w < 0 {
-            let errno = errno::errno();
-            if errno == errno::Errno(libc::EINTR) || errno == errno::Errno(libc::EAGAIN) {
-                continue;
+        match fd.write(&buf[t..buf.len()]) {
+            Ok(w) => {
+                if w == 0 {
+                    return Some(t);
+                }
+                t = t + w;
+            },
+            Err(_) => {
+                let errno = errno::errno();
+                if errno == errno::Errno(libc::EINTR) || errno == errno::Errno(libc::EAGAIN) {
+                    continue;
+                }
+                return None;
             }
-            return None;
-        }
-        if w == 0 {
-            return Some(t);
-        }
-        t = t + w as usize;
+        };
     }
     Some(t)
 }
 
-pub fn print_p(fd: libc::c_int, buf: &[u8]) -> bool {
+pub fn print_p(fd: &FileDes, buf: &[u8]) -> bool {
     let mut padded = [0u8; auth::VTUN_MESG_SIZE];
     for i in 0..buf.len() {
         if i >= auth::VTUN_MESG_SIZE {
@@ -96,6 +102,8 @@ pub fn print_p(fd: libc::c_int, buf: &[u8]) -> bool {
         }
         padded[i] = buf[i];
     }
-    let res = unsafe { libc::write(fd, padded.as_ptr() as *const libc::c_void, auth::VTUN_MESG_SIZE) };
-    res == auth::VTUN_MESG_SIZE as libc::ssize_t
+    match fd.write(&padded) {
+        Ok(res) => res == auth::VTUN_MESG_SIZE,
+        Err(_) => false
+    }
 }

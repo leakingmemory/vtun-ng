@@ -77,6 +77,7 @@ mod filedes;
 use std::io::Write;
 use std::{env};
 use getopts::Options;
+use crate::filedes::FileDes;
 
 const VTUN_PORT: libc::c_int = 5000;
 const VTUN_TIMEOUT: libc::c_int = 30;
@@ -91,7 +92,7 @@ fn main()
     /* Configure default settings */
     let mut svr = false;
     let mut daemon = true;
-    let mut sock: libc::c_int = 0;
+    let mut sock: FileDes = FileDes::new();
     let mut dofork = true;
 
     let mut ctx: mainvtun::VtunContext = mainvtun::VtunContext {
@@ -251,7 +252,7 @@ fn main()
 
     match ctx.vtun.svr_type {
         lfd_mod::VTUN_INETD => {
-            sock = unsafe { libc::dup(0) };
+            sock = FileDes::clone_stdin();
             dofork = false;
         },
         _ => {

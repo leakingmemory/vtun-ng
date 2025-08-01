@@ -22,6 +22,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use signal_hook::low_level;
 use crate::{lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, syslog, tunnel};
 use crate::auth::auth_server;
+use crate::filedes::FileDes;
 use crate::linkfd::LinkfdCtx;
 
 struct ServerCtx {
@@ -42,18 +43,16 @@ impl ServerCtx {
         self.set_server_term(linkfd::VTUN_SIG_TERM);
     }
 }
-fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
+fn connection(ctx: &mut mainvtun::VtunContext, sock: FileDes) {
     let mut cl_addr : libc::sockaddr_in = unsafe { mem::zeroed() };
-    let mut opt: libc::socklen_t = size_of::<libc::sockaddr_in>() as libc::socklen_t;
-    if unsafe { libc::getpeername(sock, (&mut cl_addr as *mut libc::sockaddr_in).cast(), &mut opt as *mut libc::socklen_t) } != 0 {
+    if !sock.getpeername_sockaddr_in(&mut cl_addr) {
         syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get peer name");
         unsafe {
             libc::exit(1);
         }
     }
     let mut my_addr : libc::sockaddr_in = unsafe { mem::zeroed() };
-    let mut opt = size_of::<libc::sockaddr_in>() as libc::socklen_t;
-    if unsafe { libc::getsockname(sock, (&mut my_addr as *mut libc::sockaddr_in).cast(), &mut opt) } < 0 {
+    if !sock.getsockname_sockaddr_in(&mut my_addr) {
         syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get local socket address");
         unsafe {
             libc::exit(1);
@@ -65,7 +64,7 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
     let linkfdctx = LinkfdCtx::new();
     linkfdctx.io_init();
 
-    match auth_server(ctx, &linkfdctx, sock) {
+    match auth_server(ctx, &linkfdctx, &sock) {
         Some(mut host) => {
             let mut sa: libc::sigaction = unsafe { mem::zeroed() };
             sa.sa_sigaction = libc::SIG_IGN;
@@ -79,7 +78,6 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
                                   u16::from_be(cl_addr.sin_port));
                 syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
-            host.rmt_fd = sock;
 
             let l_ip = std::net::Ipv4Addr::from(cl_addr.sin_addr.s_addr).to_string();
             {
@@ -95,7 +93,7 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
 
             /* Start tunnel */
             let linkfdctx = Arc::new(linkfdctx);
-            tunnel::tunnel(ctx, &linkfdctx, &mut host);
+            tunnel::tunnel(ctx, &linkfdctx, &mut host, sock);
 
             {
                 let msg = format!("Session {} closed", match host.host {Some(ref h) => h.as_str(), None => "<none>"});
@@ -111,7 +109,6 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: i32) {
         }
     }
     unsafe {
-        libc::close(sock);
         libc::exit(0);
     }
 }
@@ -128,25 +125,24 @@ fn listener(ctx: &mut mainvtun::VtunContext) {
         }
     }
 
-    let s= unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM,0) };
-    if s == -1 {
+    let mut s= FileDes::socket(libc::AF_INET, libc::SOCK_STREAM,0);
+    if !s.ok() {
         syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't create socket");
         unsafe {
             libc::exit(1);
         }
     }
 
-    let opt: i32=1;
-    unsafe { libc::setsockopt(s, libc::SOL_SOCKET, libc::SO_REUSEADDR, &opt as *const i32 as *const libc::c_void, size_of::<i32>() as libc::socklen_t); }
+    s.set_so_reuseaddr(true);
 
-    if unsafe { libc::bind(s,(&my_addr as *const libc::sockaddr_in).cast(),size_of::<libc::sockaddr_in>() as libc::socklen_t) } != 0 {
+    if !s.bind_sockaddr_in(&my_addr) {
         syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't bind to the socket");
         unsafe {
             libc::exit(1);
         }
     }
 
-    if unsafe { libc::listen(s, 10) } != 0 {
+    if !s.listen(10) {
         syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't listen on the socket");
         unsafe {
             libc::exit(1);
@@ -194,28 +190,27 @@ fn listener(ctx: &mut mainvtun::VtunContext) {
         let selres;
         unsafe {
             libc::FD_ZERO(&mut fdset);
-            libc::FD_SET(s, &mut fdset);
-            selres = libc::select(s+1, &mut fdset, ptr::null_mut(), ptr::null_mut(), &mut tv);
+            libc::FD_SET(s.i_absolutely_need_the_raw_value(), &mut fdset);
+            selres = libc::select(s.i_absolutely_need_the_raw_value()+1, &mut fdset, ptr::null_mut(), ptr::null_mut(), &mut tv);
         }
         if selres <= 0 {
             continue;
         }
         let mut cl_addr: libc::sockaddr_in = unsafe { mem::zeroed() };
-        let mut opt: libc::socklen_t =size_of::<libc::sockaddr_in>() as libc::socklen_t;
-        let s1 = unsafe { libc::accept(s,(&mut cl_addr as *mut libc::sockaddr_in).cast(),&mut opt) };
-        if s1 < 0 {
-            continue;
-        }
+        let mut s1 = match s.accept_sockaddr_in(&mut cl_addr) {
+            Ok(s1) => s1,
+            Err(_) => continue,
+        };
 
         let f = unsafe { libc::fork() };
         if f == 0 {
-            unsafe { libc::close(s); }
+            s.close();
             connection(ctx, s1);
-        } else if f == -1 {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't fork()");
-        }
-        if f != 0 {
-            unsafe { libc::close(s1); }
+        } else {
+            if f == -1 {
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't fork()");
+            }
+            s1.close();
         }
     }
 
@@ -229,7 +224,7 @@ fn listener(ctx: &mut mainvtun::VtunContext) {
     };
 }
 
-pub fn server_rs(ctx: &mut mainvtun::VtunContext, sock: i32) {
+pub fn server_rs(ctx: &mut mainvtun::VtunContext, sock: FileDes) {
     let mut sa: libc::sigaction = unsafe { mem::zeroed() };
     sa.sa_sigaction=libc::SIG_IGN;
     sa.sa_flags=libc::SA_NOCLDWAIT;

@@ -26,6 +26,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 use signal_hook::{low_level, SigId};
 use crate::{auth, lfd_mod, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
+use crate::filedes::FileDes;
 use crate::vtun_host::VtunSopt;
 
 struct ClientCtx {
@@ -109,7 +110,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
 
         /* Set local address */
         let mut my_addr: libc::sockaddr_in = unsafe { mem::zeroed() };
-        if !netlib::local_addr_rs(&mut my_addr, host, false) {
+        if !netlib::local_addr_rs(&mut my_addr, host, None) {
             continue;
         }
 
@@ -117,8 +118,8 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
          * we want to connect, since STREAM sockets
          * can be successfully connected only once.
          */
-        let s = unsafe { libc::socket(libc::AF_INET,libc::SOCK_STREAM,0) };
-        if s==-1 {
+        let s = FileDes::socket(libc::AF_INET,libc::SOCK_STREAM,0);
+        if !s.ok() {
             let errno = errno::errno();
             let msg = format!("Can't create socket. {}", errno.to_string());
             syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
@@ -126,10 +127,9 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         }
 
         /* Required when client is forced to bind to specific port */
-        let opt: i32=1;
-        unsafe { libc::setsockopt(s, libc::SOL_SOCKET, libc::SO_REUSEADDR, &opt as *const i32 as *const libc::c_void, size_of::<i32>() as libc::socklen_t); }
+        s.set_so_reuseaddr(true);
 
-        if unsafe { libc::bind(s,(&my_addr as *const libc::sockaddr_in).cast(),size_of::<libc::sockaddr_in>() as libc::socklen_t) } != 0 {
+        if !s.bind_sockaddr_in(&my_addr) {
             let errno = errno::errno();
             let msg = format!("Can't bind socket. {}", errno.to_string());
             syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
@@ -157,7 +157,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
             syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
         }
 
-        if !netlib::connect_t(s, (&svr_addr as *const libc::sockaddr_in).cast(), host.timeout as libc::time_t) {
+        if !netlib::connect_t(&s, &svr_addr, host.timeout as libc::time_t) {
             let errno = errno::errno();
             if ctx.vtun.quiet == 0 || errno != errno::Errno(libc::ETIMEDOUT) {
                 let msg = format!("Connect to {} failed. {}",
@@ -166,17 +166,15 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
         } else {
-            if auth::auth_client_rs(ctx, &linkfdctx, s, host) {
+            if auth::auth_client_rs(ctx, &linkfdctx, &s, host) {
                 let msg = format!("Session {}[{}] opened",
                                   match host.host { Some(ref host) => host.as_str(), None => "<none>" },
                                   match ctx.vtun.svr_name { Some(ref svr_name) => svr_name.as_str(), None => "<none>" });
                 syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
 
-                host.rmt_fd = s;
-
                 /* Start the tunnel */
                 let linkfdctx = Arc::new(linkfdctx);
-                client_ctx.set_client_term(tunnel::tunnel(ctx, &linkfdctx, host));
+                client_ctx.set_client_term(tunnel::tunnel(ctx, &linkfdctx, host, s));
 
                 let msg = format!("Session {}[{}] closed",
                                   match &host.host { Some(host) => host.as_str(), None => "<none>" },
@@ -187,7 +185,6 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
             }
         }
-        unsafe { libc::close(s); }
         host.sopt = VtunSopt::new();
     }
 

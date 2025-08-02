@@ -1,0 +1,16 @@
+[Unit]
+Description=Simple network tunneling service (vtunngd)
+After=network.target
+Requires=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vtunngd -n -s
+Restart=always
+RestartSec=5
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+

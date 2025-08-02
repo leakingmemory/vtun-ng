@@ -1,4 +1,14 @@
 
+Vtun originally had this notice about OpenSSL-licensing. I do
+not really believe the licensing of OpenSSL is an issue with
+regular use, since openssl is pulled in as a shared library.
+Also vtunngd is licensed under GPL-2, which is the more restrictive
+license, and pulling BSD, MIT, apache, and similar as dependencies
+should be ok to my understanding.
+- Jan-Espen Oversand 2025-08-02
+
+Original VTun OpenSSL licensing note:
+
 The dual-license on OpenSSL clashes with the more restrictive GPL
 licensing on VTun.  In most cases, an exemption on the GPL-licensed
 product is ultimately required to ensure no barrier exists to using it

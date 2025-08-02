@@ -29,7 +29,7 @@ pub const VTUN_ENCRYPT: libc::c_int = 0x0008;
 
 pub const VTUN_CMD_WAIT: libc::c_int =	0x01;
 pub const VTUN_CMD_DELAY: libc::c_int =  0x02;
-pub const _VTUN_CMD_SHELL: libc::c_int =  0x04;
+pub const VTUN_CMD_SHELL: libc::c_int =  0x04;
 
 /* Number of seconds for delay after pppd startup*/
 pub const VTUN_DELAY_SEC: u64 =  10;

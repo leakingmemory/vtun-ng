@@ -25,7 +25,7 @@ pub struct VtunOpts {
 
     pub cfg_file: Option<String>,
 
-    pub _shell: Option<String>, /* Shell */
+    pub shell: Option<String>, /* Shell */
     pub ppp: Option<String>, /* Command to configure ppp devices */
     pub ifcfg: Option<String>, /* Command to configure net devices */
     pub route: Option<String>, /* Command to configure routing */
@@ -46,7 +46,7 @@ impl VtunOpts {
             timeout: -1,
             persist: -1,
             cfg_file: None,
-            _shell: None,
+            shell: None,
             ppp: None,
             ifcfg: None,
             route: None,

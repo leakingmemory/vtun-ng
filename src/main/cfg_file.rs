@@ -1021,6 +1021,7 @@ struct OptionsConfigParsingContext {
     route_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     firewall_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     ip_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
+    shell_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     bindaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>,
     persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     syslog_ctx: Option<Rc<Mutex<SyslogOptionParsingContext>>>
@@ -1037,6 +1038,7 @@ impl OptionsConfigParsingContext {
             route_ctx: None,
             firewall_ctx: None,
             ip_ctx: None,
+            shell_ctx: None,
             bindaddr_ctx: None,
             persist_ctx: None,
             syslog_ctx: None
@@ -1084,6 +1086,13 @@ impl OptionsConfigParsingContext {
             Some(ref ip_ctx) => {
                 let ip_ctx = ip_ctx.lock().unwrap();
                 opts.iproute = Some(ip_ctx.value.clone());
+            }
+        }
+        match self.shell_ctx {
+            None => {},
+            Some(ref shell_ctx) => {
+                let shell_ctx = shell_ctx.lock().unwrap();
+                opts.shell = Some(shell_ctx.value.clone());
             }
         }
         match self.bindaddr_ctx {
@@ -1150,6 +1159,11 @@ impl ParsingContext for OptionsConfigParsingContext {
                 let ip_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "ip")));
                 self.ip_ctx = Some(ip_ctx.clone());
                 Some(ip_ctx)
+            },
+            Token::KwShell => {
+                let shell_ctx = Rc::new(Mutex::new(StringOptionParsingContext::new(Rc::clone(&ctx), "shell")));
+                self.shell_ctx = Some(shell_ctx.clone());
+                Some(shell_ctx)
             },
             Token::KwBindaddr => {
                 let bindaddr_ctx = Rc::new(Mutex::new(KwBindaddrConfigParsingContext::new(Rc::clone(&ctx), "bindaddr")));
@@ -1546,12 +1560,19 @@ impl UpDownParsingContext {
                     Some(perhaps_cmd) => Some(perhaps_cmd.clone()),
                     None => None
                 };
+                let mut use_shell = false;
                 final_cmd = match perhaps_cmd {
-                    Some(cmd) => cmd,
+                    Some(cmd) => Some(cmd),
                     None => {
-                        let msg = format!("No valid command specified for {}", match cmd.args { Some(ref args) => args.as_str(), None => "<none>" });
-                        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                        continue;
+                        use_shell = true;
+                        match ctx.vtun.shell {
+                            Some(ref shell) => {
+                                Some(shell.clone())
+                            },
+                            None => {
+                                None
+                            }
+                        }
                     }
                 };
                 final_args = match cmd.args {
@@ -1564,13 +1585,12 @@ impl UpDownParsingContext {
                 if cmd.delay {
                     flags = flags | linkfd::VTUN_CMD_DELAY;
                 }
-                // Not in use in the old code
-                /*if (cmd.use_shell) {
+                if use_shell {
                     flags = flags | linkfd::VTUN_CMD_SHELL;
-                }*/
+                }
             }
             let cmdobj = VtunCmd {
-                prog: Some(final_cmd),
+                prog: final_cmd,
                 args: Some(final_args),
                 flags,
             };
@@ -1641,9 +1661,7 @@ struct CommandConfigParsingContext {
     pub path: Option<String>,
     pub args: Option<String>,
     pub wait: bool,
-    pub delay: bool,
-    // Not in use in the old code
-    //pub use_shell: bool
+    pub delay: bool
 }
 
 impl CommandConfigParsingContext {
@@ -1655,16 +1673,10 @@ impl CommandConfigParsingContext {
             path: None,
             args: None,
             wait: false,
-            delay: false,
-            // Not in use in the old code
-            //use_shell: false
+            delay: false
         }
     }
     fn handle_string(&mut self, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        if matches!(self.token, Token::KwProgram) && self.path.is_none() {
-            self.path = Some(str.to_string());
-            return None;
-        }
         match &self.args {
             Some(_) => match str {
                 "wait" => {
@@ -1681,15 +1693,14 @@ impl CommandConfigParsingContext {
                     self.delay = true;
                     None
                 },
-                // Not in use in the old code
-                /*"shell" => {
-                    if self.use_shell {
-                        return self.unexpected_token();
+                _ => {
+                    if matches!(self.token, Token::KwProgram) && self.path.is_none() {
+                        self.path = self.args.clone();
+                        self.args = Some(str.to_string());
+                        return None;
                     }
-                    self.use_shell = true;
-                    None
-                },*/
-                _ => self.unexpected_token()
+                    self.unexpected_token()
+                }
             },
             None => {
                 self.args = Some(str.to_string());
@@ -1720,9 +1731,6 @@ impl ParsingContext for CommandConfigParsingContext {
             Token::Ident(ident) => self.handle_string(ident.as_str()),
             Token::Quoted(quoted) => self.handle_string(quoted.as_str()),
             Token::Semicolon => {
-                if matches!(self.token, Token::KwProgram) && self.path.is_none() {
-                    return self.unexpected_token();
-                }
                 match &self.args {
                     None => self.unexpected_token(),
                     Some(_) => self.parent.upgrade()

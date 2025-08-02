@@ -73,6 +73,7 @@ pub enum Token {
     #[token("program")]   KwProgram,
     #[token("route")]     KwRoute,
     #[token("ifconfig")]  KwIfconfig,
+    #[token("shell")]     KwShell,
     #[token("ip")]        KwIp,
     #[token("firewall")]  KwFirewall,
     #[token("shaper")]    KwShaper,

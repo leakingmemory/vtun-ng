@@ -338,6 +338,6 @@ fn write_pid()
 }
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} FILE [options]", program);
+    let brief = format!("Usage:\n server: {} -s [options]\n client: {} [options] CONFIGNAME REMOTEADDR\n", program, program);
     print!("{}", opts.usage(&brief));
 }

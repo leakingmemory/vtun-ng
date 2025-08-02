@@ -171,7 +171,7 @@ pub(crate) struct VtunCmd {
     pub(crate) flags: libc::c_int,
 }
 fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> Result<(),exitcode::ErrorCode> {
-    let prog = match cmd.prog {
+    let mut prog = match cmd.prog {
         Some(ref prog) => Some(prog.clone()),
         None => None
     };
@@ -213,11 +213,21 @@ fn run_cmd_rs(cmd: &VtunCmd, sopt: Option<&vtun_host::VtunSopt>) -> Result<(),ex
     let mut argv: [*mut libc::c_char; 50] = [std::ptr::null_mut(); 50];
 
     let run_prog;
+    let mut shell: String = "/bin/sh".to_string();
     let mut split: Vec<String> = Vec::new();
+    if (flags & linkfd::VTUN_CMD_SHELL) != 0 {
+        prog = match prog {
+            None => None,
+            Some(ref prog) => {
+                shell = prog.clone();
+                None
+            }
+        }
+    }
     match prog {
         None => {
             // Run using shell
-            run_prog = "/bin/sh".to_string();
+            run_prog = shell;
             argv[0] = "sh\0".as_ptr() as *mut libc::c_char;
             argv[1] = "-c\0".as_ptr() as *mut libc::c_char;
             argv[2] = args_string.as_ptr() as *mut libc::c_char;

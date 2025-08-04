@@ -3,11 +3,13 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU64};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use blowfish::Blowfish;
+use ecb::{Decryptor, Encryptor};
 use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, fdselect, lfd_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
+use crate::{driver, fdselect, lfd_encrypt, lfd_generic_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -308,6 +310,10 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
         let cipher = (*host).cipher;
         if cipher == lfd_mod::VTUN_LEGACY_ENCRYPT {
             factory.add(Box::new(lfd_legacy_encrypt::LfdLegacyEncryptFactory::new()));
+        } else if cipher == lfd_mod::VTUN_ENC_BF128ECB {
+            factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, 16, 8>::new()));
+        } else if cipher == lfd_mod::VTUN_ENC_BF256ECB {
+            factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, 32, 8>::new()));
         } else {
             factory.add(Box::new(lfd_encrypt::LfdEncryptFactory::new()));
         }

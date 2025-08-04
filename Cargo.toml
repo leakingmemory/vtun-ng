@@ -1,6 +1,6 @@
 [package]
 name = "vtun-ng"
-version = "3.0.16"
+version = "3.0.19"
 edition = "2021"
 
 [[bin]]
@@ -23,3 +23,4 @@ dns-lookup = "2.0.4"
 logos = "0.15.0"
 proctitle = "0.1.1"
 getopts = "0.2.23"
+rand = "0.9.2"

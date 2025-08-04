@@ -3,6 +3,7 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU64};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use aes::{Aes128, Aes256};
 use blowfish::Blowfish;
 use ecb::{Decryptor, Encryptor};
 use errno::{errno, set_errno};
@@ -314,6 +315,10 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
             factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, 16, 8>::new()));
         } else if cipher == lfd_mod::VTUN_ENC_BF256ECB {
             factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, 32, 8>::new()));
+        } else if cipher == lfd_mod::VTUN_ENC_AES128ECB {
+            factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, 16, 16>::new()));
+        } else if cipher == lfd_mod::VTUN_ENC_AES256ECB {
+            factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, 32, 16>::new()));
         } else {
             factory.add(Box::new(lfd_encrypt::LfdEncryptFactory::new()));
         }

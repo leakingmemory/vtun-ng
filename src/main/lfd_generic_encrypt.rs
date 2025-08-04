@@ -1,3 +1,17 @@
+/*
+    Copyright (C) 2025 Jan-Espen Oversand <sigsegv@radiotube.org>
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ */
+
 use std::any::type_name;
 use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 use rand::RngCore;
@@ -56,7 +70,6 @@ impl<Encryptor: KeyInit,Decryptor: KeyInit,const KEY_SIZE: usize,const BLOCK_SIZ
             Some(ref passwd) => Self::prep_key(passwd.as_str()),
             None => return Err(0)
         };
-        println!("Key: {:?}", key);
         let lfd_generic_encryptor = Self {
             random: rand::rng(),
             encryptor: Encryptor::new_from_slice(&key).unwrap(),
@@ -79,7 +92,6 @@ impl<Encryptor: BlockEncryptMut,Decryptor: BlockDecryptMut,const KEY_SIZE: usize
         buf.resize(len, 0);
         self.random.fill_bytes(&mut buf[len - pad..len - 1]);
         buf[len - 1] = pad as u8;
-        println!("encode: {:?}", buf);
         for i in 0..len/BLOCK_SIZE {
             let mut data: [u8; BLOCK_SIZE] = [0u8; BLOCK_SIZE];
             for j in 0..BLOCK_SIZE {
@@ -91,16 +103,13 @@ impl<Encryptor: BlockEncryptMut,Decryptor: BlockDecryptMut,const KEY_SIZE: usize
                 buf[i*BLOCK_SIZE + j] = block[j];
             }
         }
-        println!("encoded: {:?}", buf);
         true
     }
     fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
-        println!("decode: {:?}", buf);
         for i in 0..buf.len()/BLOCK_SIZE {
             let block = Block::<Decryptor>::from_mut_slice(&mut buf[i*BLOCK_SIZE..(i+1)*BLOCK_SIZE]);
             self.decryptor.decrypt_block_mut(block);
         }
-        println!("decoded: {:?}", buf);
         let mut pad = buf[buf.len() - 1] as usize;
         if pad > buf.len() {
             pad = buf.len();

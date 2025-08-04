@@ -102,8 +102,8 @@ impl LfdShaperFactory {
 }
 
 impl linkfd::LfdModFactory for LfdShaperFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>> {
-        Some(Box::new(LfdShaper::new(host)))
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        Ok(Box::new(LfdShaper::new(host)))
     }
 }
 

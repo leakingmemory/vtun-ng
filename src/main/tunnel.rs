@@ -18,6 +18,7 @@
  */
 use std::sync::Arc;
 use crate::{driver, exitcode, lfd_mod, linkfd, mainvtun, netlib, pipe_dev, pty_dev, syslog, tcp_proto, tun_dev, udp_proto, vtun_host};
+use crate::exitcode::ExitCode;
 use crate::filedes::FileDes;
 use crate::setproctitle::set_title;
 
@@ -354,7 +355,10 @@ fn tunnel_lfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx
         host.loc_fd = driver.detach();
     }
 
-    Ok(linkfd_result)
+    match linkfd_result {
+        Ok(linkfd_result) => Ok(linkfd_result),
+        Err(_) => Err(ExitCode::from_code(1))
+    }
 }
 
 fn tunnel_setup_proto(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, dev: &str, interface_already_open: bool, rmt_fd_in: FileDes) -> Result<libc::c_int,exitcode::ExitCode> {

@@ -79,7 +79,7 @@ pub trait LfdMod {
 }
 
 pub trait LfdModFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>>;
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32>;
 }
 
 pub struct LinkfdFactory {
@@ -102,18 +102,22 @@ pub struct Linkfd {
 }
 
 impl Linkfd {
-    pub fn new(factory: &LinkfdFactory, host: &mut vtun_host::VtunHost) -> Linkfd {
+    pub fn new(factory: &LinkfdFactory, host: &mut vtun_host::VtunHost) -> Result<Linkfd,i32> {
         let mut linkfd = Linkfd {
             mods: Vec::new()
         };
         linkfd.mods.reserve(factory.mod_factories.len());
         for mod_factory in factory.mod_factories.iter() {
             match mod_factory.create(host) {
-                Some(m) => linkfd.mods.push(m),
-                None => ()
+                Ok(m) => linkfd.mods.push(m),
+                Err(err) => {
+                    let msg = format!("Failed to set up connection encode/decode chain (code {})", err);
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                    return Err(0)
+                }
             }
         }
-        linkfd
+        Ok(linkfd)
     }
     fn avail_encode(&mut self) -> bool {
         for m in self.mods.iter_mut() {
@@ -282,7 +286,7 @@ fn sig_usr1(ctx: &LinkfdCtx) {
 
 
 /* Link remote and local file descriptors */
-pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> Result<libc::c_int,()>
 {
     let old_prio = unsafe { libc::getpriority(libc::PRIO_PROCESS,0) };
     unsafe {libc::setpriority(libc::PRIO_PROCESS,0, LINKFD_PRIO); }
@@ -389,7 +393,10 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
         };
     }
 
-    let mut lfd_stack: Linkfd = Linkfd::new(& mut factory, host);
+    let mut lfd_stack: Linkfd = match Linkfd::new(& mut factory, host) {
+        Ok(lfd) => lfd,
+        Err(_) => return Err(())
+    };
 
     linkfdctx.io_init();
 
@@ -427,7 +434,7 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
     unsafe {
         libc::setpriority(libc::PRIO_PROCESS,0,old_prio);
         let term: i32 = linkfdctx.linker_term.load(std::sync::atomic::Ordering::SeqCst);
-        term
+        Ok(term)
     }
 }
 

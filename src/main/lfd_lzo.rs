@@ -48,8 +48,8 @@ impl LfdLzoFactory {
 }
 
 impl linkfd::LfdModFactory for LfdLzoFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>> {
-        Some(Box::new(LfdLzo::new(host)))
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        Ok(Box::new(LfdLzo::new(host)))
     }
 }
 

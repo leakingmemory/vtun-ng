@@ -52,10 +52,10 @@ type BlowfishEcbEnc = Encryptor<Blowfish>;
 type BlowfishEcbDec = Decryptor<Blowfish>;
 
 impl LfdLegacyEncrypt {
-    pub fn new(host: &mut vtun_host::VtunHost) -> Option<LfdLegacyEncrypt> {
+    pub fn new(host: &mut vtun_host::VtunHost) -> Result<LfdLegacyEncrypt,i32> {
         let passwd = match host.passwd {
             Some(ref passwd) => passwd.as_str(),
-            None => return None
+            None => return Err(0)
         };
         let k = md5::compute(passwd.as_bytes());
         let mut key: [u8; 16] = [0u8; 16];
@@ -69,7 +69,7 @@ impl LfdLegacyEncrypt {
         
         syslog::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized");
 
-        Some(lfd_legacy_encrypt)
+        Ok(lfd_legacy_encrypt)
     }
 }
 
@@ -84,10 +84,13 @@ impl LfdLegacyEncryptFactory {
 }
 
 impl LfdModFactory for LfdLegacyEncryptFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn linkfd::LfdMod>> {
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn linkfd::LfdMod>,i32> {
         match LfdLegacyEncrypt::new(host) {
-            None => None,
-            Some(lfd_encrypt_mod) => Some(Box::new(lfd_encrypt_mod))
+            Err(_) => {
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Failed to initialize encyption");
+                Err(0)
+            },
+            Ok(lfd_encrypt_mod) => Ok(Box::new(lfd_encrypt_mod))
         }
     }
 }

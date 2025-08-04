@@ -109,7 +109,7 @@ impl LfdEncrypt {
         }
         Some(pkey)
     }
-    pub fn new(host: &mut vtun_host::VtunHost) -> Option<LfdEncrypt> {
+    pub fn new(host: &mut vtun_host::VtunHost) -> Result<LfdEncrypt,i32> {
         let mut lfd_encrypt: LfdEncrypt = LfdEncrypt {
             sequence_num: 0,
             gibberish: 0,
@@ -210,27 +210,24 @@ impl LfdEncrypt {
             cipher_name = "BF-ECB";
         }
         if cipher_type.is_none() {
-            return None;
-        }
-        if cipher_type.unwrap().key_length() != lfd_encrypt.keysize as usize {
-            return None;
+            return Err(0);
         }
         if lfd_encrypt.keysize == 32 {
             match Self::prep_key(32, host) {
-                None => return None,
+                None => return Err(3),
                 Some(pkey) => {
                     lfd_encrypt.pkey = pkey;
                 }
             }
         } else if lfd_encrypt.keysize == 16 {
             match Self::prep_key(16, host) {
-                None => return None,
+                None => return Err(4),
                 Some(pkey) => {
                     lfd_encrypt.pkey = pkey;
                 }
             }
         } else {
-            return None;
+            return Err(5);
         }
         if sb_init {
             lfd_encrypt.ctx_enc_ecb.encrypt_init(cipher_type, Some(&*lfd_encrypt.pkey), None).unwrap();
@@ -249,7 +246,7 @@ impl LfdEncrypt {
             let tmpstr = format!("{} encryption initialized", cipher_name);
             syslog::vtun_syslog(lfd_mod::LOG_INFO, tmpstr.as_str());
         }
-        Some(lfd_encrypt)
+        Ok(lfd_encrypt)
     }
 
     fn cipher_enc_init(&mut self, iv: &[u8]) -> bool
@@ -605,10 +602,14 @@ impl LfdEncryptFactory {
 }
 
 impl linkfd::LfdModFactory for LfdEncryptFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Option<Box<dyn LfdMod>> {
+    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
         match LfdEncrypt::new(host) {
-            None => None,
-            Some(e) => Some(Box::new(e))
+            Err(err) => {
+                let msg = format!("Failed to initialize encryption (code {})", err);
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                Err(0)
+            },
+            Ok(e) => Ok(Box::new(e))
         }
     }
 }

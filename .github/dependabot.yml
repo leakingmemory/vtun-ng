@@ -9,3 +9,5 @@ updates:
     directory: "/rust/linkfd/"
     schedule:
       interval: "weekly"
+    permissions:
+      contents: write

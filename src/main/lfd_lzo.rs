@@ -54,7 +54,7 @@ impl linkfd::LfdModFactory for LfdLzoFactory {
 }
 
 impl LfdMod for LfdLzo {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         let mut compressed: Vec<u8> = Vec::new();
         compressed.reserve(worst_compress(buf.len()));
         let err = self.compress_ctx.compress(buf, &mut compressed);
@@ -63,13 +63,13 @@ impl LfdMod for LfdLzo {
             for i in 0..compressed.len() {
                 buf[i] = compressed[i];
             }
-            true
+            Ok(())
         } else {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "LZO compression failed");
-            false
+            Err(())
         }
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         let mut decompressed: Vec<u8> = Vec::new();
         decompressed.resize(buf.len() * 4, 0u8);
         let (result, err) = LZOContext::decompress_to_slice(&buf, &mut decompressed);
@@ -78,10 +78,14 @@ impl LfdMod for LfdLzo {
             for i in 0..result.len() {
                 buf[i] = result[i];
             }
-            true
+            Ok(())
         } else {
             syslog::vtun_syslog(lfd_mod::LOG_ERR, "LZO decompression failed");
-            false
+            Err(())
         }
+    }
+
+    fn request_send(&mut self) -> bool {
+        false
     }
 }

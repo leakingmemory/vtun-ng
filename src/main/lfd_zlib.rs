@@ -53,42 +53,52 @@ impl LfdModFactory for LfdZlibFactory {
 }
 
 impl LfdMod for LfdZlib {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         match self.encoder.write_all(buf) {
             Ok(_) => (),
             Err(_) => {
                 syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB compression error");
-                return false
+                return Err(())
             }
         };
         match self.encoder.flush() {
             Ok(()) => {},
-            Err(_) => return false,
+            Err(_) => {
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB compression error (flush failed)");
+                return Err(())
+            },
         };
         buf.resize(self.encoder.get_ref().len(), 0u8);
         for i in 0..buf.len() {
             buf[i] = self.encoder.get_ref()[i];
         }
         self.encoder.get_mut().clear();
-        true
+        Ok(())
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         match self.decoder.write_all(buf) {
             Ok(_) => (),
             Err(_) => {
                 syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB decompression error");
-                return false;
+                return Err(());
             }
         };
         match self.decoder.flush() {
             Ok(()) => {},
-            Err(_) => return false,
+            Err(_) => {
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB decompression error (flush failed)");
+                return Err(())
+            },
         };
         buf.resize(self.decoder.get_ref().len(), 0u8);
         for i in 0..buf.len() {
             buf[i] = self.decoder.get_ref()[i];       
         }
         self.decoder.get_mut().clear();
-        true
+        Ok(())
+    }
+
+    fn request_send(&mut self) -> bool {
+        false
     }
 }

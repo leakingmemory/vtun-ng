@@ -79,6 +79,8 @@ mod fdselect;
 mod exitcode;
 #[path = "main/lfd_generic_encrypt.rs"]
 mod lfd_generic_encrypt;
+#[path = "main/lfd_iv_encrypt.rs"]
+mod lfd_iv_encrypt;
 
 use std::io::Write;
 use std::{env};

@@ -96,7 +96,7 @@ impl LfdModFactory for LfdLegacyEncryptFactory {
 }
 
 impl linkfd::LfdMod for LfdLegacyEncrypt {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         let pad = ((!buf.len()) & 0x07) + 1;
 
         let inputlen = buf.len();
@@ -120,10 +120,10 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
                 buf[i* BLOCKSIZE +j] = block[j];
             }
         }
-        true
+        Ok(())
     }
 
-    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         const BLOCKSIZE: usize = 8;
         for i in 0..buf.len()/ BLOCKSIZE {
             let mut data: [u8; BLOCKSIZE] = [0u8; BLOCKSIZE];
@@ -139,13 +139,17 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
         let p = buf[0];
         if p < 1 || p > 8 {
             syslog::vtun_syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length");
-            return false;
+            return Err(());
         }
 
         for i in 0..(buf.len() - (p as usize)) {
             buf[i] = buf[i + (p as usize)];
         }
         buf.resize(buf.len() - p as usize, 0u8);
-        true
+        Ok(())
+    }
+
+    fn request_send(&mut self) -> bool {
+        false
     }
 }

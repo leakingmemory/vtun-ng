@@ -10,7 +10,7 @@ use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, fdselect, lfd_encrypt, lfd_generic_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
+use crate::{driver, fdselect, lfd_encrypt, lfd_generic_encrypt, lfd_iv_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -73,12 +73,9 @@ pub trait LfdMod {
     fn avail_encode(&mut self) -> bool {
         true
     }
-    fn encode(&mut self, _buf: &mut Vec<u8>) -> bool {
-        true
-    }
-    fn decode(&mut self, _buf: &mut Vec<u8>) -> bool {
-        true
-    }
+    fn encode(&mut self, _buf: &mut Vec<u8>) -> Result<(),()>;
+    fn decode(&mut self, _buf: &mut Vec<u8>) -> Result<(),()>;
+    fn request_send(&mut self) -> bool;
 }
 
 pub trait LfdModFactory {
@@ -130,13 +127,14 @@ impl Linkfd {
         }
         true
     }
-    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         for m in self.mods.iter_mut() {
-            if !m.encode(buf) {
-                return false;
+            match m.encode(buf) {
+                Ok(()) => {},
+                Err(()) => return Err(())
             }
         }
-        true
+        Ok(())
     }
     fn avail_decode(&mut self) -> bool {
         for m in self.mods.iter_mut() {
@@ -146,13 +144,24 @@ impl Linkfd {
         }
         true
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         for m in self.mods.iter_mut().rev() {
-            if !m.decode(buf) {
-                return false;
+            match m.decode(buf) {
+                Ok(()) => {},
+                Err(()) => return Err(())
             }
         }
-        true
+        Ok(())
+    }
+
+    fn request_send(&mut self) -> bool {
+        let mut req = false;
+        for m in self.mods.iter_mut().rev() {
+            if m.request_send() {
+                req = true;
+            }
+        }
+        req
     }
 }
 
@@ -319,6 +328,14 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
             factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, 16, 16>::new()));
         } else if cipher == lfd_mod::VTUN_ENC_AES256ECB {
             factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, 32, 16>::new()));
+        }  else if cipher == lfd_mod::VTUN_ENC_BF128CBC {
+            factory.add(Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, cbc::Encryptor<Blowfish>, cbc::Decryptor<Blowfish>, 16, 8>::new()))
+        } else if cipher == lfd_mod::VTUN_ENC_BF256CBC {
+            factory.add(Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, cbc::Encryptor<Blowfish>, cbc::Decryptor<Blowfish>, 32, 8>::new()))
+        } else if cipher == lfd_mod::VTUN_ENC_AES128CBC {
+            factory.add(Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, cbc::Encryptor<Aes128>, cbc::Decryptor<Aes128>, 16, 16>::new()))
+        } else if cipher == lfd_mod::VTUN_ENC_AES256CBC {
+            factory.add(Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, cbc::Encryptor<Aes256>, cbc::Decryptor<Aes256>, 32, 16>::new()))
         } else {
             factory.add(Box::new(lfd_encrypt::LfdEncryptFactory::new()));
         }
@@ -511,9 +528,12 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
                 linkfdctx.stat_byte_out.store(tmplen, std::sync::atomic::Ordering::SeqCst);
             }
             buf.resize(1, 0u8);
-            if !lfd_stack.encode(&mut buf) {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure");
-                break;
+            match lfd_stack.encode(&mut buf) {
+                Ok(()) => {},
+                Err(()) => {
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure");
+                    break;
+                }
             }
             let encoded = buf.len();
             if encoded > 0 {
@@ -537,7 +557,8 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
             buf.clear();
             let fl = proto.read(ctx, &mut buf);
             if fl.is_none() {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Network read failure");
+                let msg = format!("Network read failure: {}", errno::errno().to_string());
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
                 break;
             }
             let fl = fl.unwrap();
@@ -572,9 +593,15 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
                 let tmplen = linkfdctx.stat_comp_in.load(std::sync::atomic::Ordering::SeqCst) + len as u64;
                 linkfdctx.stat_comp_in.store(tmplen, std::sync::atomic::Ordering::SeqCst);
             }
-            if !lfd_stack.decode(&mut buf) {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Decoding failure");
-                break;
+            match lfd_stack.decode(&mut buf) {
+                Ok(()) => {},
+                Err(()) => {
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Decoding failure");
+                    break;
+                }
+            }
+            if lfd_stack.request_send() {
+                linkfdctx.send_a_packet.store(true, std::sync::atomic::Ordering::SeqCst);
             }
             let decoded = buf.len();
             if decoded > 0 {
@@ -627,8 +654,12 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
             }
 
 
-            if !lfd_stack.encode(&mut buf) {
-                break;
+            match lfd_stack.encode(&mut buf) {
+                Ok(()) => {},
+                Err(()) => {
+                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure");
+                    break;
+                }
             }
             let encoded = buf.len();
             if encoded > 0 {

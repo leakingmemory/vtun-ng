@@ -72,8 +72,14 @@ impl<Encryptor: KeyInit,Decryptor: KeyInit,const KEY_SIZE: usize,const BLOCK_SIZ
         };
         let lfd_generic_encryptor = Self {
             random: rand::rng(),
-            encryptor: Encryptor::new_from_slice(&key).unwrap(),
-            decryptor: Decryptor::new_from_slice(&key).unwrap()
+            encryptor: match Encryptor::new_from_slice(&key) {
+                Ok(encryptor) => encryptor,
+                Err(_) => return Err(1)
+            },
+            decryptor: match Decryptor::new_from_slice(&key) {
+                Ok(decryptor) => decryptor,
+                Err(_) => return Err(2)
+            }
         };
         let msg = format!("Generic encryptor for {} initialized", type_name::<Encryptor>());
         vtun_syslog(lfd_mod::LOG_INFO, &msg);
@@ -86,7 +92,7 @@ impl<Encryptor: BlockEncryptMut,Decryptor: BlockDecryptMut,const KEY_SIZE: usize
     Assert<{KEY_SIZE == 16 || KEY_SIZE == 32}>: IsTrue,
     Assert<{BLOCK_SIZE >= 8 && BLOCK_SIZE < 256 && (1 << log2_for_powers_of_two(BLOCK_SIZE)) == BLOCK_SIZE}>: IsTrue*/
 {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         let pad = BLOCK_SIZE - (buf.len() & (BLOCK_SIZE - 1));
         let len = buf.len() + pad;
         buf.resize(len, 0);
@@ -103,9 +109,9 @@ impl<Encryptor: BlockEncryptMut,Decryptor: BlockDecryptMut,const KEY_SIZE: usize
                 buf[i*BLOCK_SIZE + j] = block[j];
             }
         }
-        true
+        Ok(())
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         for i in 0..buf.len()/BLOCK_SIZE {
             let block = Block::<Decryptor>::from_mut_slice(&mut buf[i*BLOCK_SIZE..(i+1)*BLOCK_SIZE]);
             self.decryptor.decrypt_block_mut(block);
@@ -115,7 +121,11 @@ impl<Encryptor: BlockEncryptMut,Decryptor: BlockDecryptMut,const KEY_SIZE: usize
             pad = buf.len();
         }
         buf.truncate(buf.len() - pad);
-        true
+        Ok(())
+    }
+
+    fn request_send(&mut self) -> bool {
+        false
     }
 }
 

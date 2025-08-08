@@ -111,8 +111,15 @@ impl LfdMod for LfdShaper {
     fn avail_encode(&mut self) -> bool {
         self.avail()
     }
-    fn encode(&mut self, buf: &mut Vec<u8>) -> bool {
+    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
         self.count(buf.len());
-        true
+        Ok(())
+    }
+    fn decode(&mut self, _buf: &mut Vec<u8>) -> Result<(), ()> {
+        Ok(())
+    }
+
+    fn request_send(&mut self) -> bool {
+        false
     }
 }

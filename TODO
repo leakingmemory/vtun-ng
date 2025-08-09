@@ -1,6 +1,7 @@
 
  - Legacy crypto algorithms should be moved off openssl
  - New bidirectional auth
+ - Maybe drop privileges after setting up a tunnel
  - Add new crypto algorithms
 
 General plan is to remain completely backwards compatible with

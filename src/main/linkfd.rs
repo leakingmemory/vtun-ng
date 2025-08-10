@@ -5,12 +5,13 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use aes::{Aes128, Aes256};
 use blowfish::Blowfish;
+use cipher::consts::{U16, U32};
 use ecb::{Decryptor, Encryptor};
 use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, fdselect, lfd_encrypt, lfd_generic_encrypt, lfd_iv_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
+use crate::{driver, fdselect, lfd_generic_encrypt, lfd_iv_encrypt, lfd_iv_stream_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -318,27 +319,29 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
 
     if (flags & VTUN_ENCRYPT) != 0 {
         let cipher = (*host).cipher;
-        if cipher == lfd_mod::VTUN_LEGACY_ENCRYPT {
-            factory.add(Box::new(lfd_legacy_encrypt::LfdLegacyEncryptFactory::new()));
-        } else if cipher == lfd_mod::VTUN_ENC_BF128ECB {
-            factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, 16, 8>::new()));
-        } else if cipher == lfd_mod::VTUN_ENC_BF256ECB {
-            factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, 32, 8>::new()));
-        } else if cipher == lfd_mod::VTUN_ENC_AES128ECB {
-            factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, 16, 16>::new()));
-        } else if cipher == lfd_mod::VTUN_ENC_AES256ECB {
-            factory.add(Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, 32, 16>::new()));
-        }  else if cipher == lfd_mod::VTUN_ENC_BF128CBC {
-            factory.add(Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, cbc::Encryptor<Blowfish>, cbc::Decryptor<Blowfish>, 16, 8>::new()))
-        } else if cipher == lfd_mod::VTUN_ENC_BF256CBC {
-            factory.add(Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, cbc::Encryptor<Blowfish>, cbc::Decryptor<Blowfish>, 32, 8>::new()))
-        } else if cipher == lfd_mod::VTUN_ENC_AES128CBC {
-            factory.add(Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, cbc::Encryptor<Aes128>, cbc::Decryptor<Aes128>, 16, 16>::new()))
-        } else if cipher == lfd_mod::VTUN_ENC_AES256CBC {
-            factory.add(Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, cbc::Encryptor<Aes256>, cbc::Decryptor<Aes256>, 32, 16>::new()))
-        } else {
-            factory.add(Box::new(lfd_encrypt::LfdEncryptFactory::new()));
-        }
+        factory.add(match cipher {
+            lfd_mod::VTUN_LEGACY_ENCRYPT => Box::new(lfd_legacy_encrypt::LfdLegacyEncryptFactory::new()),
+            lfd_mod::VTUN_ENC_BF128ECB => Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, 16, 8>::new()),
+            lfd_mod::VTUN_ENC_BF256ECB => Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, 32, 8>::new()),
+            lfd_mod::VTUN_ENC_AES128ECB => Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, 16, 16>::new()),
+            lfd_mod::VTUN_ENC_AES256ECB => Box::new(lfd_generic_encrypt::LfdGenericEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, 32, 16>::new()),
+            lfd_mod::VTUN_ENC_BF128CBC => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, cbc::Encryptor<Blowfish>, cbc::Decryptor<Blowfish>, 16, 8>::new()),
+            lfd_mod::VTUN_ENC_BF256CBC => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, cbc::Encryptor<Blowfish>, cbc::Decryptor<Blowfish>, 32, 8>::new()),
+            lfd_mod::VTUN_ENC_AES128CBC => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, cbc::Encryptor<Aes128>, cbc::Decryptor<Aes128>, 16, 16>::new()),
+            lfd_mod::VTUN_ENC_AES256CBC => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, cbc::Encryptor<Aes256>, cbc::Decryptor<Aes256>, 32, 16>::new()),
+            lfd_mod::VTUN_ENC_BF128CFB => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, cfb_mode::Encryptor<Blowfish>, cfb_mode::Decryptor<Blowfish>, 16, 8>::new()),
+            lfd_mod::VTUN_ENC_BF256CFB => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, cfb_mode::Encryptor<Blowfish>, cfb_mode::Decryptor<Blowfish>, 32, 8>::new()),
+            lfd_mod::VTUN_ENC_AES128CFB => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, cfb_mode::Encryptor<Aes128>, cfb_mode::Decryptor<Aes128>, 16, 16>::new()),
+            lfd_mod::VTUN_ENC_AES256CFB => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, cfb_mode::Encryptor<Aes256>, cfb_mode::Decryptor<Aes256>, 32, 16>::new()),
+            lfd_mod::VTUN_ENC_BF128OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, ofb::Ofb<lfd_iv_stream_encrypt::FixedSizeForVariableKeySizeWrapper<Blowfish,U16>>, 16, 8>::new()),
+            lfd_mod::VTUN_ENC_BF256OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, ofb::Ofb<lfd_iv_stream_encrypt::FixedSizeForVariableKeySizeWrapper<Blowfish,U32>>, 32, 8>::new()),
+            lfd_mod::VTUN_ENC_AES128OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, ofb::Ofb<Aes128>, 16, 16>::new()),
+            lfd_mod::VTUN_ENC_AES256OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, ofb::Ofb<Aes256>, 32, 16>::new()),
+            _ => {
+                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unknown encryption algorithm");
+                return Err(());
+            }
+        });
     }
 
     if(flags & VTUN_SHAPE) != 0 {

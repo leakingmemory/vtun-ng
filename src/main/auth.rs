@@ -323,7 +323,13 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Op
             if str1.len() == 4 && str1[0] == b'H' && str1[1] == b'O' && str1[2] == b'S' && str1[3] == b'T' {
                 host = str::from_utf8(&str2).unwrap().to_string();
 
-                challenge::gen_chal(&mut chal_req);
+                match challenge::gen_chal(&mut chal_req) {
+                    Ok(_) => {},
+                    Err(_) => {
+                        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Failed to generate challenge for authentication");
+                        return None;
+                    }
+                };
                 let mut msg: Vec<u8> = Vec::new();
                 msg.reserve(32);
                 {

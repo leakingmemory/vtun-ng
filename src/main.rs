@@ -31,8 +31,6 @@ mod auth;
 mod lfd_mod;
 #[path = "main/setproctitle.rs"]
 mod setproctitle;
-#[path = "main/lfd_encrypt.rs"]
-mod lfd_encrypt;
 #[path = "main/lfd_legacy_encrypt.rs"]
 mod lfd_legacy_encrypt;
 #[path = "main/lfd_lzo.rs"]
@@ -81,6 +79,8 @@ mod exitcode;
 mod lfd_generic_encrypt;
 #[path = "main/lfd_iv_encrypt.rs"]
 mod lfd_iv_encrypt;
+#[path = "main/lfd_iv_stream_encrypt.rs"]
+mod lfd_iv_stream_encrypt;
 
 use std::io::Write;
 use std::{env};

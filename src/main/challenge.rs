@@ -3,8 +3,11 @@ use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 
 pub const VTUN_CHAL_SIZE: usize = 16;
 
-pub fn gen_chal(buf: &mut [u8]) {
-    openssl::rand::rand_bytes(buf).expect("");
+pub fn gen_chal(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+    match getrandom::fill(buf) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e)
+    }
 }
 
 type BlowfishEcbEnc = ecb::Encryptor<Blowfish>;

@@ -6,7 +6,6 @@
 version: 2
 updates:
   - package-ecosystem: "cargo"
-    directory: "/rust/linkfd/"
     schedule:
       interval: "weekly"
     permissions:

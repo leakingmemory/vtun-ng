@@ -13,7 +13,7 @@ apps:
     plugs:
       - network
       - network-bind
-      - tun-control
+      - network-control
       - system-observe
       - process-control
 

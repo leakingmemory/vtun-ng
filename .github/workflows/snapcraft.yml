@@ -13,9 +13,6 @@ jobs:
       - name: Set up Snapcraft
         uses: snapcore/action-build@v1     # sets up LXD + snapcraft
 
-      - name: Build snap
-        run: snapcraft
-
       - name: Upload to Snap Store
         env:
           SNAPCRAFT_LOGIN: ${{ secrets.SNAPCRAFT_LOGIN }}

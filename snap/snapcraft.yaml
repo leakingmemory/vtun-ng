@@ -1,0 +1,27 @@
+name: vtun-ng
+base: core22
+version: '3.0.19'
+summary: vtun-ng simple IP-tunneling solution
+description: vtun-ng is a simple IP-tunneling solution compatible with vtun
+
+grade: devel
+confinement: strict
+
+apps:
+  vtunngd:
+    command: bin/vtunngd
+    plugs:
+      - network
+      - network-bind
+      - tun-control
+      - system-observe
+      - process-control
+
+parts:
+  vtun-ng:
+    plugin: rust
+    source: .
+    rust-channel: "1.88.0"
+    stage-packages:
+      - net-tools
+      - iproute2

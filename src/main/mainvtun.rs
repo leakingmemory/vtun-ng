@@ -17,7 +17,8 @@
     GNU General Public License for more details.
  */
 
-use crate::{cfg_file, exitcode, lfd_mod, syslog};
+use crate::{cfg_file, exitcode, lfd_mod};
+use crate::syslog::SyslogObject;
 
 pub struct VtunContext {
     pub config: Option<cfg_file::VtunConfigRoot>,
@@ -30,14 +31,14 @@ pub fn reread_config(ctx: &mut VtunContext) -> Result<(), exitcode::ErrorCode>
     let cfg_file = match ctx.vtun.cfg_file {
         Some(ref cfg_file) => cfg_file.clone(),
         None => {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR,"No config file specified");
+            ctx.syslog(lfd_mod::LOG_ERR,"No config file specified");
             return exitcode::ExitCode::from_code(1).get_exit_code();
         }
     };
     ctx.config = match cfg_file::VtunConfigRoot::new(ctx, cfg_file.as_str()) {
         Some(config) => Some(config),
         None => {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR,"No hosts defined");
+            ctx.syslog(lfd_mod::LOG_ERR,"No hosts defined");
             return exitcode::ExitCode::from_code(1).get_exit_code();
         }
     };

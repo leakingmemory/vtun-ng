@@ -86,6 +86,8 @@ use std::io::Write;
 use std::{env};
 use getopts::Options;
 use crate::filedes::FileDes;
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 const VTUN_PORT: libc::c_int = 5000;
 const VTUN_TIMEOUT: libc::c_int = 30;
@@ -103,7 +105,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
     let mut sock: FileDes = FileDes::new();
     let mut dofork = true;
 
-    let mut ctx: mainvtun::VtunContext = mainvtun::VtunContext {
+    let mut ctx: VtunContext = VtunContext {
         config: None,
         vtun: lfd_mod::VtunOpts::new(),
         is_rmt_fd_connected: true
@@ -123,7 +125,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
     ctx.vtun.syslog   = libc::LOG_DAEMON;
 
     /* Start logging to syslog and stderr */
-    unsafe { libc::openlog("vtund\0".as_ptr() as *mut libc::c_char, libc::LOG_PID | libc::LOG_NDELAY | libc::LOG_PERROR, libc::LOG_DAEMON); }
+    unsafe { libc::openlog("vtunngd\0".as_ptr() as *mut libc::c_char, libc::LOG_PID | libc::LOG_NDELAY | libc::LOG_PERROR, libc::LOG_DAEMON); }
 
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
@@ -194,6 +196,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
     }
     if matches.opt_present("n") {
         daemon = false;
+        ctx.vtun.log_to_syslog = false;
     }
     if matches.opt_present("p") {
         ctx.vtun.persist = 1;
@@ -210,7 +213,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
         /* Restart logging to syslog using specified facility  */
         unsafe {
             libc::closelog();
-            libc::openlog("vtund".as_ptr() as *mut libc::c_char, libc::LOG_PID | libc::LOG_NDELAY | libc::LOG_PERROR, ctx.vtun.syslog);
+            libc::openlog("vtunngd\0".as_ptr() as *mut libc::c_char, libc::LOG_PID | libc::LOG_NDELAY | libc::LOG_PERROR, ctx.vtun.syslog);
         }
     }
 
@@ -238,7 +241,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
             let msg = format!("Host {} not found in {}",
                               hst.as_str(),
                               match ctx.vtun.cfg_file {Some(ref s) => s.as_str(), None => "<none>"});
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
             return exitcode::ExitCode::from_code(1).get_exit_code();
         }
 
@@ -296,7 +299,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
         setproctitle::set_title("vtunngd[s]: ");
 
         if ctx.vtun.svr_type == lfd_mod::VTUN_STAND_ALONE {
-            write_pid();
+            write_pid(&ctx);
         }
 
         server::server_rs(&mut ctx, sock)
@@ -320,12 +323,12 @@ fn main() -> Result<(), exitcode::ErrorCode>
  * Very simple PID file creation function. Used by server.
  * Overrides existing file.
  */
-fn write_pid()
+fn write_pid(ctx: &VtunContext)
 {
     let mut f = match std::fs::File::create(VTUN_PID_FILE) {
         Ok(f) => f,
         Err(_) => {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't write PID file");
+            ctx.syslog(lfd_mod::LOG_ERR,"Can't write PID file");
             return;
         },
     };
@@ -335,7 +338,7 @@ fn write_pid()
     match f.write_all(pid.as_bytes()) {
         Ok(_) => {},
         Err(_) => {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't write to PID file");
+            ctx.syslog(lfd_mod::LOG_ERR,"Can't write to PID file");
             return;
         }
     };

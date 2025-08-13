@@ -24,14 +24,18 @@ use crate::{exitcode, lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, sys
 use crate::auth::auth_server;
 use crate::filedes::FileDes;
 use crate::linkfd::LinkfdCtx;
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 struct ServerCtx {
+    log_to_syslog: bool,
     server_term: Arc<AtomicI32>
 }
 
 impl ServerCtx {
-    fn new() -> Self {
+    fn new(ctx: &VtunContext) -> Self {
         Self {
+            log_to_syslog: ctx.vtun.log_to_syslog,
             server_term: Arc::new(AtomicI32::new(0))
         }
     }
@@ -39,25 +43,25 @@ impl ServerCtx {
         self.server_term.store(server_term, Ordering::Relaxed);
     }
     fn sig_term(&self) {
-        syslog::vtun_syslog(lfd_mod::LOG_INFO,"Terminated");
+        syslog::vtun_syslog(self.log_to_syslog, lfd_mod::LOG_INFO,"Terminated");
         self.set_server_term(linkfd::VTUN_SIG_TERM);
     }
 }
-fn connection(ctx: &mut mainvtun::VtunContext, sock: FileDes) -> Result<(),exitcode::ErrorCode> {
+fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::ErrorCode> {
     let mut cl_addr : libc::sockaddr_in = unsafe { mem::zeroed() };
     if !sock.getpeername_sockaddr_in(&mut cl_addr) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get peer name");
+        ctx.syslog(lfd_mod::LOG_ERR, "Can't get peer name");
         return exitcode::ExitCode::from_code(1).get_exit_code();
     }
     let mut my_addr : libc::sockaddr_in = unsafe { mem::zeroed() };
     if !sock.getsockname_sockaddr_in(&mut my_addr) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get local socket address");
+        ctx.syslog(lfd_mod::LOG_ERR, "Can't get local socket address");
         return exitcode::ExitCode::from_code(1).get_exit_code();
     }
 
     let ip = std::net::Ipv4Addr::from(u32::from_be(cl_addr.sin_addr.s_addr)).to_string();
 
-    let linkfdctx = LinkfdCtx::new();
+    let linkfdctx = LinkfdCtx::new(ctx);
     linkfdctx.io_init();
 
     match auth_server(ctx, &linkfdctx, &sock) {
@@ -72,7 +76,7 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: FileDes) -> Result<(),exitc
                                   match host.host {Some(ref h) => h.as_str(), None => "<none>"},
                                   ip,
                                   u16::from_be(cl_addr.sin_port));
-                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
 
             let l_ip = std::net::Ipv4Addr::from(cl_addr.sin_addr.s_addr).to_string();
@@ -93,11 +97,11 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: FileDes) -> Result<(),exitc
 
             {
                 let msg = format!("Session {} closed", match host.host {Some(ref h) => h.as_str(), None => "<none>"});
-                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
 
             /* Unlock host. (locked in auth_server) */
-            lock::unlock_host(&host);
+            lock::unlock_host(ctx, &host);
 
             match result {
                 Ok(_) => {},
@@ -106,41 +110,41 @@ fn connection(ctx: &mut mainvtun::VtunContext, sock: FileDes) -> Result<(),exitc
         }
         None => {
             let msg = format!("Denied connection from {}:{}", ip, u16::from_be(cl_addr.sin_port));
-            syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
         }
     }
     Ok(())
 }
 
-fn listener(ctx: &mut mainvtun::VtunContext) -> Result<(), exitcode::ErrorCode> {
+fn listener(ctx: &mut VtunContext) -> Result<(), exitcode::ErrorCode> {
     let mut my_addr: libc::sockaddr_in = unsafe { mem::zeroed() };
     my_addr.sin_family = libc::AF_INET as libc::sa_family_t;
 
     /* Set listen address */
-    if !netlib::generic_addr_rs(&mut my_addr, & ctx.vtun.bind_addr) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't fill in listen socket");
+    if !netlib::generic_addr_rs(ctx, &mut my_addr, & ctx.vtun.bind_addr) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Can't fill in listen socket");
         return exitcode::ExitCode::from_code(1).get_exit_code();
     }
 
     let mut s= FileDes::socket(libc::AF_INET, libc::SOCK_STREAM,0);
     if !s.ok() {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't create socket");
+        ctx.syslog(lfd_mod::LOG_ERR, "Can't create socket");
         return exitcode::ExitCode::from_code(1).get_exit_code();
     }
 
     s.set_so_reuseaddr(true);
 
     if !s.bind_sockaddr_in(&my_addr) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't bind to the socket");
+        ctx.syslog(lfd_mod::LOG_ERR, "Can't bind to the socket");
         return exitcode::ExitCode::from_code(1).get_exit_code();
     }
 
     if !s.listen(10) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't listen on the socket");
+        ctx.syslog(lfd_mod::LOG_ERR, "Can't listen on the socket");
         return exitcode::ExitCode::from_code(1).get_exit_code();
     }
 
-    let server_ctx = Arc::new(ServerCtx::new());
+    let server_ctx = Arc::new(ServerCtx::new(ctx));
 
     let sigterm_restore = {
         let server_ctx = Arc::clone(&server_ctx);
@@ -207,7 +211,7 @@ fn listener(ctx: &mut mainvtun::VtunContext) -> Result<(), exitcode::ErrorCode> 
             return result;
         } else {
             if f == -1 {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Couldn't fork()");
+                ctx.syslog(lfd_mod::LOG_ERR, "Couldn't fork()");
             }
             s1.close();
         }
@@ -225,7 +229,7 @@ fn listener(ctx: &mut mainvtun::VtunContext) -> Result<(), exitcode::ErrorCode> 
     Ok(())
 }
 
-pub fn server_rs(ctx: &mut mainvtun::VtunContext, sock: FileDes) -> Result<(),exitcode::ErrorCode> {
+pub fn server_rs(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::ErrorCode> {
     let mut sa: libc::sigaction = unsafe { mem::zeroed() };
     sa.sa_sigaction=libc::SIG_IGN;
     sa.sa_flags=libc::SA_NOCLDWAIT;
@@ -240,7 +244,7 @@ pub fn server_rs(ctx: &mut mainvtun::VtunContext, sock: FileDes) -> Result<(),ex
     {
         let svr_type = if ctx.vtun.svr_type == lfd_mod::VTUN_INETD  { "inetd" } else { "stand" };
         let msg = format!("VTUN server ver {} ({})", lfd_mod::VTUN_VER, svr_type);
-        syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
+        ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
     }
 
     let svr_type = ctx.vtun.svr_type;

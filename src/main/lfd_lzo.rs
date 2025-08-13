@@ -21,16 +21,18 @@
 /* LZO compression module */
 
 use rust_lzo::{worst_compress, LZOContext, LZOError};
-use crate::{lfd_mod, linkfd, syslog, vtun_host};
+use crate::{lfd_mod, linkfd, vtun_host};
 use crate::linkfd::LfdMod;
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 struct LfdLzo {
     pub compress_ctx: LZOContext,
 }
 
 impl LfdLzo {
-    pub fn new(_host: &vtun_host::VtunHost) -> LfdLzo {
-        syslog::vtun_syslog(lfd_mod::LOG_INFO, "LZO compression initialized");
+    pub fn new(ctx: &VtunContext, _host: &vtun_host::VtunHost) -> LfdLzo {
+        ctx.syslog(lfd_mod::LOG_INFO, "LZO compression initialized");
         LfdLzo {
             compress_ctx: LZOContext::new()
         }
@@ -48,13 +50,13 @@ impl LfdLzoFactory {
 }
 
 impl linkfd::LfdModFactory for LfdLzoFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
-        Ok(Box::new(LfdLzo::new(host)))
+    fn create(&self, ctx: &VtunContext, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        Ok(Box::new(LfdLzo::new(ctx, host)))
     }
 }
 
 impl LfdMod for LfdLzo {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn encode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         let mut compressed: Vec<u8> = Vec::new();
         compressed.reserve(worst_compress(buf.len()));
         let err = self.compress_ctx.compress(buf, &mut compressed);
@@ -65,11 +67,11 @@ impl LfdMod for LfdLzo {
             }
             Ok(())
         } else {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, "LZO compression failed");
+            ctx.syslog(lfd_mod::LOG_ERR, "LZO compression failed");
             Err(())
         }
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn decode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         let mut decompressed: Vec<u8> = Vec::new();
         decompressed.resize(buf.len() * 4, 0u8);
         let (result, err) = LZOContext::decompress_to_slice(&buf, &mut decompressed);
@@ -80,7 +82,7 @@ impl LfdMod for LfdLzo {
             }
             Ok(())
         } else {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, "LZO decompression failed");
+            ctx.syslog(lfd_mod::LOG_ERR, "LZO decompression failed");
             Err(())
         }
     }

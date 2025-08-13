@@ -11,7 +11,9 @@ use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, fdselect, lfd_generic_encrypt, lfd_iv_encrypt, lfd_iv_stream_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, mainvtun, syslog, vtun_host};
+use crate::{driver, fdselect, lfd_generic_encrypt, lfd_iv_encrypt, lfd_iv_stream_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, syslog, vtun_host};
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 pub const LINKFD_PRIO: libc::c_int = -1;
 
@@ -74,13 +76,13 @@ pub trait LfdMod {
     fn avail_encode(&mut self) -> bool {
         true
     }
-    fn encode(&mut self, _buf: &mut Vec<u8>) -> Result<(),()>;
-    fn decode(&mut self, _buf: &mut Vec<u8>) -> Result<(),()>;
+    fn encode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()>;
+    fn decode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()>;
     fn request_send(&mut self) -> bool;
 }
 
 pub trait LfdModFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32>;
+    fn create(&self, ctx: &VtunContext, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32>;
 }
 
 pub struct LinkfdFactory {
@@ -103,17 +105,17 @@ pub struct Linkfd {
 }
 
 impl Linkfd {
-    pub fn new(factory: &LinkfdFactory, host: &mut vtun_host::VtunHost) -> Result<Linkfd,i32> {
+    pub fn new(ctx: &VtunContext, factory: &LinkfdFactory, host: &mut vtun_host::VtunHost) -> Result<Linkfd,i32> {
         let mut linkfd = Linkfd {
             mods: Vec::new()
         };
         linkfd.mods.reserve(factory.mod_factories.len());
         for mod_factory in factory.mod_factories.iter() {
-            match mod_factory.create(host) {
+            match mod_factory.create(ctx, host) {
                 Ok(m) => linkfd.mods.push(m),
                 Err(err) => {
                     let msg = format!("Failed to set up connection encode/decode chain (code {})", err);
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                    ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                     return Err(0)
                 }
             }
@@ -128,9 +130,9 @@ impl Linkfd {
         }
         true
     }
-    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn encode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         for m in self.mods.iter_mut() {
-            match m.encode(buf) {
+            match m.encode(ctx, buf) {
                 Ok(()) => {},
                 Err(()) => return Err(())
             }
@@ -145,9 +147,9 @@ impl Linkfd {
         }
         true
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn decode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         for m in self.mods.iter_mut().rev() {
-            match m.decode(buf) {
+            match m.decode(ctx, buf) {
                 Ok(()) => {},
                 Err(()) => return Err(())
             }
@@ -167,6 +169,7 @@ impl Linkfd {
 }
 
 pub(crate) struct LinkfdCtx {
+    log_to_syslog: bool,
     io_cancelled: AtomicBool,
     linker_term: AtomicI32,
     sig_alarm_tm_old: AtomicI64,
@@ -185,8 +188,9 @@ pub(crate) struct LinkfdCtx {
 }
 
 impl LinkfdCtx {
-    pub(crate) fn new() -> LinkfdCtx {
+    pub(crate) fn new(ctx: &VtunContext) -> LinkfdCtx {
         LinkfdCtx {
+            log_to_syslog: ctx.vtun.log_to_syslog,
             io_cancelled: AtomicBool::new(false),
             linker_term: AtomicI32::new(0),
             sig_alarm_tm_old: AtomicI64::new(0),
@@ -218,13 +222,13 @@ impl LinkfdCtx {
 }
 
 pub fn sig_term(ctx: &LinkfdCtx) {
-    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Closing connection");
+    syslog::vtun_syslog(ctx.log_to_syslog, lfd_mod::LOG_INFO, "Closing connection");
     ctx.io_cancel();
     ctx.linker_term.store(VTUN_SIG_TERM, std::sync::atomic::Ordering::SeqCst);
 }
 
 pub fn sig_hup(ctx: &LinkfdCtx) {
-    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Reestablishing connection");
+    syslog::vtun_syslog(ctx.log_to_syslog, lfd_mod::LOG_INFO, "Reestablishing connection");
     ctx.io_cancel();
     ctx.linker_term.store(VTUN_SIG_HUP, std::sync::atomic::Ordering::SeqCst);
 }
@@ -299,7 +303,7 @@ fn sig_usr1(ctx: &LinkfdCtx) {
 
 
 /* Link remote and local file descriptors */
-pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> Result<libc::c_int,()>
+pub fn linkfd(ctx: &mut VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> Result<libc::c_int,()>
 {
     let old_prio = unsafe { libc::getpriority(libc::PRIO_PROCESS,0) };
     unsafe {libc::setpriority(libc::PRIO_PROCESS,0, LINKFD_PRIO); }
@@ -338,7 +342,7 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
             lfd_mod::VTUN_ENC_AES128OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, ofb::Ofb<Aes128>, 16, 16>::new()),
             lfd_mod::VTUN_ENC_AES256OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, ofb::Ofb<Aes256>, 32, 16>::new()),
             _ => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unknown encryption algorithm");
+                ctx.syslog(lfd_mod::LOG_ERR, "Unknown encryption algorithm");
                 return Err(());
             }
         });
@@ -417,14 +421,14 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
             },
             Err(_) => {
                 let msg = format!("Can't open stats file {}", file);
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                 let mut l = linkfdctx.stat_file.lock().unwrap();
                 *l = None;
             }
         };
     }
 
-    let mut lfd_stack: Linkfd = match Linkfd::new(& mut factory, host) {
+    let mut lfd_stack: Linkfd = match Linkfd::new(ctx, & mut factory, host) {
         Ok(lfd) => lfd,
         Err(_) => return Err(())
     };
@@ -469,7 +473,7 @@ pub fn linkfd(ctx: &mut mainvtun::VtunContext, linkfdctx: &Arc<LinkfdCtx>, host:
     }
 }
 
-fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
+fn lfd_linker(ctx: &mut VtunContext, linkfdctx: & LinkfdCtx, lfd_stack: &mut Linkfd, host: &mut vtun_host::VtunHost, driver: &mut dyn driver::Driver, proto: &mut dyn driver::NetworkDriver) -> libc::c_int
 {
     let fd1 = proto.io_fd().i_absolutely_need_the_raw_value();
     let fd2 = driver.io_fd().unwrap().i_absolutely_need_the_raw_value();
@@ -497,7 +501,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
         if len < 0 {
             let errno = errno();
             if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Select error");
+                ctx.syslog(lfd_mod::LOG_ERR, "Select error");
                 break;
             } else {
                 continue;
@@ -507,7 +511,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
         if linkfdctx.ka_need_verify.load(std::sync::atomic::Ordering::SeqCst) {
             if idle > host.ka_maxfail {
                 let msg = format!("Session {} network timeout", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
-                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
                 break;
             }
             idle += 1;
@@ -516,7 +520,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
                 buf.clear();
                 let retv = proto.write(&mut buf, VTUN_ECHO_REQ as u16);
                 if retv.is_none() {
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Failed to send ECHO_REQ");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Failed to send ECHO_REQ");
                     break;
                 }
             }
@@ -531,10 +535,10 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
                 linkfdctx.stat_byte_out.store(tmplen, std::sync::atomic::Ordering::SeqCst);
             }
             buf.resize(1, 0u8);
-            match lfd_stack.encode(&mut buf) {
+            match lfd_stack.encode(ctx, &mut buf) {
                 Ok(()) => {},
                 Err(()) => {
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Encoding failure");
                     break;
                 }
             }
@@ -542,7 +546,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
             if encoded > 0 {
                 let retv = proto.write(&mut buf, 0);
                 if retv.is_none() {
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Network write failure");
                     break;
                 }
                 {
@@ -561,7 +565,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
             let fl = proto.read(ctx, &mut buf);
             if fl.is_none() {
                 let msg = format!("Network read failure: {}", errno::errno().to_string());
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                 break;
             }
             let fl = fl.unwrap();
@@ -569,7 +573,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
             /* Handle frame flags */
             if fl != 0 {
                 if fl == VTUN_BAD_FRAME as u16 {
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Received bad frame");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Received bad frame");
                     continue;
                 }
                 if fl == VTUN_ECHO_REQ as u16 {
@@ -577,7 +581,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
                     buf.clear();
                     let retv = proto.write(&mut buf, VTUN_ECHO_REP as u16);
                     if retv.is_none() {
-                        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Network write failure");
+                        ctx.syslog(lfd_mod::LOG_ERR, "Network write failure");
                         break;
                     }
                     continue;
@@ -587,7 +591,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
                     continue;
                 }
                 if fl == VTUN_CONN_CLOSE as u16 {
-                    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Connection closed by other side");
+                    ctx.syslog(lfd_mod::LOG_INFO, "Connection closed by other side");
                     break;
                 }
             }
@@ -596,10 +600,10 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
                 let tmplen = linkfdctx.stat_comp_in.load(std::sync::atomic::Ordering::SeqCst) + len as u64;
                 linkfdctx.stat_comp_in.store(tmplen, std::sync::atomic::Ordering::SeqCst);
             }
-            match lfd_stack.decode(&mut buf) {
+            match lfd_stack.decode(ctx, &mut buf) {
                 Ok(()) => {},
                 Err(()) => {
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Decoding failure");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Decoding failure");
                     break;
                 }
             }
@@ -618,7 +622,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
                     let errno = errno();
                     if errno != errno::Errno(libc::EAGAIN) && errno != errno::Errno(libc::EINTR) {
                         let msg = format!("Driver write failed: {}", errno.to_string());
-                        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                         break;
                     } else {
                         continue;
@@ -657,10 +661,10 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
             }
 
 
-            match lfd_stack.encode(&mut buf) {
+            match lfd_stack.encode(ctx, &mut buf) {
                 Ok(()) => {},
                 Err(()) => {
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, "Encoding failure");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Encoding failure");
                     break;
                 }
             }
@@ -678,7 +682,7 @@ fn lfd_linker(ctx: &mut mainvtun::VtunContext, linkfdctx: & LinkfdCtx, lfd_stack
     if linkfdctx.linker_term.load(std::sync::atomic::Ordering::SeqCst) != 0 && errno() != errno::Errno(0) {
         let errno = errno();
         let msg = format!("{}: {}\n\0", errno.to_string(), errno);
-        syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
 
     if linkfdctx.linker_term.load(std::sync::atomic::Ordering::SeqCst) == VTUN_SIG_TERM {

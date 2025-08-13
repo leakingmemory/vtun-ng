@@ -16,8 +16,10 @@ use std::{fs};
 use std::rc::{Rc, Weak};
 use std::sync::Mutex;
 use logos::Logos;
-use crate::{lfd_mod, linkfd, mainvtun, syslog, vtun_host};
+use crate::{lfd_mod, linkfd, vtun_host};
 use crate::lexer::Token;
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 use crate::tunnel::VtunCmd;
 use crate::vtun_host::VtunHost;
 
@@ -26,8 +28,8 @@ pub struct VtunConfigRoot {
 }
 
 trait ParsingContext {
-    fn set_failed(&mut self);
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>>;
+    fn set_failed(&mut self, ctx: &VtunContext);
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>>;
     fn end_of_file_ok(&self) -> bool {
         false
     }
@@ -49,13 +51,13 @@ impl RootParsingContext {
             options_ctx: Vec::new()
         }
     }
-    fn apply(&self, opts: &mut lfd_mod::VtunOpts) {
+    fn apply(&self, ctx: &mut VtunContext) {
         for options_ctx in &self.options_ctx {
             let options_ctx = options_ctx.lock().unwrap();
-            options_ctx.apply(opts);
+            options_ctx.apply(ctx);
         }
     }
-    fn get_hosts(&self, ctx: &mainvtun::VtunContext) -> Vec<VtunHost> {
+    fn get_hosts(&self, ctx: &VtunContext) -> Vec<VtunHost> {
         let mut vec: Vec<VtunHost> = Vec::new();
         vec.reserve(self.ident_ctx.len());
         for ident_ctx in &self.ident_ctx {
@@ -81,11 +83,11 @@ impl RootParsingContext {
     }
 }
 impl ParsingContext for RootParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in config file");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in config file");
         self.failed = true;
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwDefault => {
                 let default_ctx = Rc::new(Mutex::new(KwDefaultParsingContext::new(Rc::clone(ctx))));
@@ -104,8 +106,8 @@ impl ParsingContext for RootParsingContext {
             },
             Token::Semicolon => None,
             _ => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token in config");
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, "Unexpected token in config");
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -130,14 +132,14 @@ impl KwDefaultParsingContext {
 }
 
 impl ParsingContext for KwDefaultParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in default");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in default");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::LBrace => {
                 let parent = match self.parent.upgrade() {
@@ -150,8 +152,8 @@ impl ParsingContext for KwDefaultParsingContext {
             },
             _ => {
                 let msg = format!("Expected {{ afer default");
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -175,15 +177,15 @@ impl RootIdentParsingContext {
 }
 
 impl ParsingContext for RootIdentParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error after {}", self.identifier);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::LBrace => {
                 let parent = match self.parent.upgrade() {
@@ -196,8 +198,8 @@ impl ParsingContext for RootIdentParsingContext {
             },
             _ => {
                 let msg = format!("Expected {{ afer {}", self.identifier);
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -244,7 +246,7 @@ impl HostConfigParsingContext {
             stat_ctx: None
         }
     }
-    pub fn apply(&self, ctx: &mainvtun::VtunContext, host: &mut VtunHost) {
+    pub fn apply(&self, ctx: &VtunContext, host: &mut VtunHost) {
         match self.compress_ctx {
             None => {},
             Some(ref compress_ctx) => compress_ctx.lock().unwrap().apply(host)
@@ -301,7 +303,7 @@ impl HostConfigParsingContext {
         }
         match self.srcaddr_ctx {
             None => {},
-            Some(ref srcaddr_ctx) => srcaddr_ctx.lock().unwrap().apply(&mut host.src_addr)
+            Some(ref srcaddr_ctx) => srcaddr_ctx.lock().unwrap().apply(ctx, &mut host.src_addr)
         }
         match self.device_ctx {
             None => {},
@@ -350,14 +352,14 @@ impl HostConfigParsingContext {
 }
 
 impl ParsingContext for HostConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in config section");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in config section");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwCompress => {
                 let compress_ctx = Rc::new(Mutex::new(CompressConfigParsingContext::new(Rc::clone(&ctx))));
@@ -438,8 +440,8 @@ impl ParsingContext for HostConfigParsingContext {
                     },
                     _ => {
                         let msg = format!("Unexpected token '{}' in host configuration section", ident);
-                        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                        self.set_failed();
+                        vtunctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                        self.set_failed(vtunctx);
                         None
                     }
                 }
@@ -449,8 +451,8 @@ impl ParsingContext for HostConfigParsingContext {
                 self.parent.upgrade()
             },
             _ => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token in host configuration section");
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, "Unexpected token in host configuration section");
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -478,59 +480,59 @@ impl CompressConfigParsingContext {
         host.flags = host.flags | self.compress_type;
         host.zlevel = self.compress_level;
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token after compress");
-        self.set_failed();
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after compress");
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for CompressConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in compress");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in compress");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwNo => {
                 if self.compress_type != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.compress_type = 0;
                 None
             },
             Token::Ident(ident) => {
                 if self.compress_type != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.compress_type = match ident.as_str() {
                     "zlib" => linkfd::VTUN_ZLIB,
                     "lzo" => linkfd::VTUN_LZO,
-                    _ => return self.unexpected_token()
+                    _ => return self.unexpected_token(vtunctx)
                 };
                 None
             }
             Token::Colon => {
                 if self.compress_type == -1 || self.separator {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.separator = true;
                 None
             }
             Token::Number(num) => {
                 if self.compress_type == -1 || !self.separator || self.compress_level != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.compress_level = num as i32;
                 None
             }
             Token::Semicolon => {
                 if self.compress_type == -1 || (self.separator && self.compress_level == -1) {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 if self.compress_level == -1 {
                     self.compress_level = 1;
@@ -538,7 +540,7 @@ impl ParsingContext for CompressConfigParsingContext {
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(vtunctx)
             }
         }
     }
@@ -565,41 +567,41 @@ impl EncryptConfigParsingContext {
             host.cipher = 0;
         }
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token after encrypt");
-        self.set_failed();
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after encrypt");
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for EncryptConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in encrypt");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in encrypt");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, ctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwNo => {
                 if self.encrypt_type != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.encrypt_type = 0;
                 None
             },
             Token::KwYes => {
                 if self.encrypt_type != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.encrypt_type = lfd_mod::VTUN_ENC_BF128ECB;
                 None
             },
             Token::Ident(ident) => {
                 if self.encrypt_type != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.encrypt_type = match ident.as_str() {
                     "blowfish128ecb" => lfd_mod::VTUN_ENC_BF128ECB,
@@ -621,18 +623,18 @@ impl ParsingContext for EncryptConfigParsingContext {
 
                     "oldblowfish128ecb" => lfd_mod::VTUN_LEGACY_ENCRYPT,
 
-                    _ => return self.unexpected_token()
+                    _ => return self.unexpected_token(ctx)
                 };
                 None
             }
             Token::Semicolon => {
                 if self.encrypt_type == -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(ctx)
             }
         }
     }
@@ -654,60 +656,60 @@ impl TypeConfigParsingContext {
         host.flags = host.flags & !(linkfd::VTUN_TUN | linkfd::VTUN_ETHER | linkfd::VTUN_TTY | linkfd::VTUN_PIPE);
         host.flags = host.flags | self.type_value;
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token after type");
-        self.set_failed();
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after type");
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for TypeConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in type");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in type");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, ctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwTun => {
                 if self.type_value != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.type_value = linkfd::VTUN_TUN;
                 None
             },
             Token::KwEther => {
                 if self.type_value != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.type_value = linkfd::VTUN_ETHER;
                 None
             },
             Token::KwTty => {
                 if self.type_value != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.type_value = linkfd::VTUN_TTY;
                 None
             },
             Token::KwPipe => {
                 if self.type_value != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.type_value = linkfd::VTUN_PIPE;
                 None
             },
             Token::Semicolon => {
                 if self.type_value == -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(ctx)
             }
         }
     }
@@ -729,46 +731,46 @@ impl ProtoConfigParsingContext {
         host.flags = host.flags & !(linkfd::VTUN_TCP | linkfd::VTUN_UDP);
         host.flags = host.flags | self.proto_value;
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token after proto");
-        self.set_failed();
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after proto");
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for ProtoConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in proto");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in proto");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, ctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwTcp => {
                 if self.proto_value != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.proto_value = linkfd::VTUN_TCP;
                 None
             },
             Token::KwUdp => {
                 if self.proto_value != -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.proto_value = linkfd::VTUN_UDP;
                 None
             },
             Token::Semicolon => {
                 if self.proto_value == -1 {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(ctx)
             }
         }
     }
@@ -798,27 +800,27 @@ impl KeepaliveConfigParsingContext {
         host.ka_interval = self.keepalive_interval;
         host.ka_maxfail = self.keepalive_count;
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token after keepalive");
-        self.set_failed();
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after keepalive");
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for KeepaliveConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in keepalive");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in keepalive");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, ctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwNo => {
                 if self.interval_set || self.count_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.interval_set = true;
                 self.keepalive_interval = -1;
@@ -828,7 +830,7 @@ impl ParsingContext for KeepaliveConfigParsingContext {
             },
             Token::KwYes => {
                 if self.interval_set || self.count_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.keepalive_interval = 30;
                 self.keepalive_count = 4;
@@ -838,7 +840,7 @@ impl ParsingContext for KeepaliveConfigParsingContext {
             }
             Token::Number(num) => {
                 if self.count_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 if self.interval_set {
                     self.keepalive_count = num as i32;
@@ -851,19 +853,19 @@ impl ParsingContext for KeepaliveConfigParsingContext {
             },
             Token::Colon => {
                 if self.sep_once {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.sep_once = true;
                 None
             },
             Token::Semicolon => {
                 if !self.interval_set || !self.count_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(ctx)
             }
         }
     }
@@ -894,70 +896,70 @@ impl NatHackConfigParsingContext {
             host.flags = host.flags | lfd_mod::VTUN_NAT_HACK_SERVER;
         }
     }
-    fn server(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn server(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         if self.nat_hack_disabled || self.nat_hack_server || self.nat_hack_client {
-            return self.unexpected_token();
+            return self.unexpected_token(ctx);
         }
         self.nat_hack_server = true;
         None
     }
-    fn client(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn client(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         if self.nat_hack_disabled || self.nat_hack_server || self.nat_hack_client {
-            return self.unexpected_token();
+            return self.unexpected_token(ctx);
         }
         self.nat_hack_client = true;
         None
     }
-    fn str(&mut self, s: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn str(&mut self, ctx: &VtunContext, s: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match s {
-            "server" => self.server(),
-            "client" => self.client(),
+            "server" => self.server(ctx),
+            "client" => self.client(ctx),
             "no" => {
                 if self.nat_hack_disabled || self.nat_hack_server || self.nat_hack_client {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.nat_hack_disabled = true;
                 None
             },
-            _ => self.unexpected_token()
+            _ => self.unexpected_token(ctx)
         }
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token after nat_hack");
-        self.set_failed();
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after nat_hack");
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for NatHackConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in nat_hack");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in nat_hack");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwNo => {
                 if self.nat_hack_disabled || self.nat_hack_server || self.nat_hack_client {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.nat_hack_disabled = true;
                 None
             },
-            Token::KwServer => self.server(),
-            Token::Ident(ident) => self.str(ident.as_str()),
-            Token::Quoted(ident) => self.str(ident.as_str()),
+            Token::KwServer => self.server(vtunctx),
+            Token::Ident(ident) => self.str(vtunctx, ident.as_str()),
+            Token::Quoted(ident) => self.str(vtunctx, ident.as_str()),
             Token::Semicolon => {
                 if !self.nat_hack_disabled && !self.nat_hack_server && !self.nat_hack_client {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(vtunctx)
             }
         }
     }
@@ -975,23 +977,23 @@ impl KwOptionsParsingContext {
             options_ctx: None
         }
     }
-    fn apply(&self, opts: &mut lfd_mod::VtunOpts) {
+    fn apply(&self, ctx: &mut VtunContext) {
         match self.options_ctx {
             None => {},
-            Some(ref options_ctx) => options_ctx.lock().unwrap().apply(opts)
+            Some(ref options_ctx) => options_ctx.lock().unwrap().apply(ctx)
         }
     }
 }
 
 impl ParsingContext for KwOptionsParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in default");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in default");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::LBrace => {
                 let parent = match self.parent.upgrade() {
@@ -1004,8 +1006,8 @@ impl ParsingContext for KwOptionsParsingContext {
             },
             _ => {
                 let msg = format!("Expected {{ afer default");
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -1044,86 +1046,88 @@ impl OptionsConfigParsingContext {
             syslog_ctx: None
         }
     }
-    fn apply(&self, opts: &mut lfd_mod::VtunOpts) {
+    fn apply(&self, ctx: &mut VtunContext) {
         match self.port_ctx {
             None => {},
-            Some(ref port_ctx) => opts.bind_addr.port = port_ctx.lock().unwrap().value as libc::c_int
+            Some(ref port_ctx) => ctx.vtun.bind_addr.port = port_ctx.lock().unwrap().value as libc::c_int
         }
         match self.timeout_ctx {
             None => {},
-            Some(ref timeout_ctx) => opts.timeout = timeout_ctx.lock().unwrap().value as libc::c_int
+            Some(ref timeout_ctx) => ctx.vtun.timeout = timeout_ctx.lock().unwrap().value as libc::c_int
         }
         match self.ppp_ctx {
             None => {},
             Some(ref ppp_ctx) => {
                 let ppp_ctx = ppp_ctx.lock().unwrap();
-                opts.ppp = Some(ppp_ctx.value.clone());
+                ctx.vtun.ppp = Some(ppp_ctx.value.clone());
             }
         }
         match self.ifconfig_ctx {
             None => {},
             Some(ref ifconfig_ctx) => {
                 let ifconfig_ctx = ifconfig_ctx.lock().unwrap();
-                opts.ifcfg = Some(ifconfig_ctx.value.clone());
+                ctx.vtun.ifcfg = Some(ifconfig_ctx.value.clone());
             }
         }
         match self.route_ctx {
             None => {},
             Some(ref route_ctx) => {
                 let route_ctx = route_ctx.lock().unwrap();
-                opts.route = Some(route_ctx.value.clone());
+                ctx.vtun.route = Some(route_ctx.value.clone());
             }
         }
         match self.firewall_ctx {
             None => {},
             Some(ref firewall_ctx) => {
                 let firewall_ctx = firewall_ctx.lock().unwrap();
-                opts.fwall = Some(firewall_ctx.value.clone());
+                ctx.vtun.fwall = Some(firewall_ctx.value.clone());
             }
         }
         match self.ip_ctx {
             None => {},
             Some(ref ip_ctx) => {
                 let ip_ctx = ip_ctx.lock().unwrap();
-                opts.iproute = Some(ip_ctx.value.clone());
+                ctx.vtun.iproute = Some(ip_ctx.value.clone());
             }
         }
         match self.shell_ctx {
             None => {},
             Some(ref shell_ctx) => {
                 let shell_ctx = shell_ctx.lock().unwrap();
-                opts.shell = Some(shell_ctx.value.clone());
+                ctx.vtun.shell = Some(shell_ctx.value.clone());
             }
         }
         match self.bindaddr_ctx {
             None => {},
             Some(ref bindaddr_ctx) => {
                 let bindaddr_ctx = bindaddr_ctx.lock().unwrap();
-                bindaddr_ctx.apply(&mut opts.bind_addr);
+                let mut bind_addr = ctx.vtun.bind_addr.clone();
+                bindaddr_ctx.apply(ctx, &mut bind_addr);
+                ctx.vtun.bind_addr = bind_addr;
             }
         }
         match self.persist_ctx {
             None => {},
-            Some(ref persist_ctx) => opts.persist = if persist_ctx.lock().unwrap().value { 1 } else { 0 }
+            Some(ref persist_ctx) => ctx.vtun.persist = if persist_ctx.lock().unwrap().value { 1 } else { 0 }
         }
         match self.syslog_ctx {
             None => {},
             Some(ref syslog_ctx) => {
-                opts.syslog = syslog_ctx.lock().unwrap().value;
+                ctx.vtun.syslog = syslog_ctx.lock().unwrap().value;
             }
         }
     }
 }
 
 impl ParsingContext for OptionsConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error in options section");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in options section");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwPort => {
                 let port_ctx = Rc::new(Mutex::new(IntegerOptionParsingContext::new(Rc::clone(&ctx), "port")));
@@ -1185,8 +1189,8 @@ impl ParsingContext for OptionsConfigParsingContext {
                 self.parent.upgrade()
             },
             _ => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token in options section");
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, "Unexpected token in options section");
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -1206,25 +1210,24 @@ impl KwBindaddrConfigParsingContext {
             token_name,
             bindaddr_ctx: None
         }
-    }
-    pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
+    }pub fn apply(&self, ctx: &VtunContext, bindaddr: &mut vtun_host::VtunAddr) {
         match self.bindaddr_ctx {
             None => {},
-            Some(ref bindaddr_ctx) => bindaddr_ctx.lock().unwrap().apply(bindaddr)
+            Some(ref bindaddr_ctx) => bindaddr_ctx.lock().unwrap().apply(ctx, bindaddr)
         }
     }
 }
 
 impl ParsingContext for KwBindaddrConfigParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error in {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::LBrace => {
                 let parent = match self.parent.upgrade() {
@@ -1237,8 +1240,8 @@ impl ParsingContext for KwBindaddrConfigParsingContext {
             },
             _ => {
                 let msg = format!("Expected {{ afer bindaddr");
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -1261,13 +1264,13 @@ impl BindaddrConfigParsingContext {
             iface_ctx: None
         }
     }
-    pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
+    pub fn apply(&self, ctx: &VtunContext, bindaddr: &mut vtun_host::VtunAddr) {
         match self.iface_ctx {
             None => {},
             Some(ref iface_ctx) => {
                 if self.addr_ctx.is_some() {
                     let msg = format!("In '{}' iface overrides addr", self.token_name);
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                    ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                 }
                 bindaddr.name = Some(iface_ctx.lock().unwrap().value.clone());
                 bindaddr.type_ = lfd_mod::VTUN_ADDR_IFACE;
@@ -1282,24 +1285,24 @@ impl BindaddrConfigParsingContext {
             }
         }
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         let msg = format!("Unexpected token afer {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-        self.set_failed();
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for BindaddrConfigParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error in {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwAddr => {
                 let addr_ctx = Rc::new(Mutex::new(AddrConfigParsingContext::new(Rc::clone(&ctx))));
@@ -1312,7 +1315,7 @@ impl ParsingContext for BindaddrConfigParsingContext {
                 Some(iface_ctx)
             },
             Token::RBrace => self.parent.upgrade(),
-            _ => self.unexpected_token()
+            _ => self.unexpected_token(vtunctx)
         }
     }
 }
@@ -1348,46 +1351,46 @@ impl AddrConfigParsingContext {
             None => {}
         }
     }
-    fn hostname(&mut self, hostname: String) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn hostname(&mut self, ctx: &VtunContext, hostname: String) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         if self.hostname.is_some() || self.ipv4.is_some() {
-            return self.unexpected_token();
+            return self.unexpected_token(ctx);
         }
         self.hostname = Some(hostname);
         None
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token after addr");
-        self.set_failed();
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after addr");
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for AddrConfigParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error after addr");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error after addr");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, ctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::IPv4(ipv4) => {
                 if self.hostname.is_some() || self.ipv4.is_some() {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.ipv4 = Some(ipv4);
                 None
             },
-            Token::Ident(hostname) => self.hostname(hostname),
-            Token::Quoted(hostname) => self.hostname(hostname),
+            Token::Ident(hostname) => self.hostname(ctx, hostname),
+            Token::Quoted(hostname) => self.hostname(ctx, hostname),
             Token::Semicolon => {
                 if self.hostname.is_none() && self.ipv4.is_none() {
-                    return self.unexpected_token();
+                    return self.unexpected_token(ctx);
                 }
                 self.parent.upgrade()
             },
-            _ => self.unexpected_token()
+            _ => self.unexpected_token(ctx)
         }
     }
 }
@@ -1406,20 +1409,20 @@ impl SyslogOptionParsingContext {
             is_set: false
         }
     }
-    fn handle_token(&mut self, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn handle_token(&mut self, ctx: &VtunContext, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         if self.is_set {
-            return self.unexpected_token();
+            return self.unexpected_token(ctx);
         }
         self.value = match token {
             Token::KwSyslog => libc::LOG_SYSLOG,
-            _ => return self.unexpected_token()
+            _ => return self.unexpected_token(ctx)
         };
         self.is_set = true;
         None
     }
-    fn str(&mut self, s: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn str(&mut self, ctx: &VtunContext, s: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         if self.is_set {
-            return self.unexpected_token();
+            return self.unexpected_token(ctx);
         }
         self.value = match s {
             "auth" => libc::LOG_AUTH,
@@ -1440,37 +1443,37 @@ impl SyslogOptionParsingContext {
             "local5" => libc::LOG_LOCAL5,
             "local6" => libc::LOG_LOCAL6,
             "local7" => libc::LOG_LOCAL7,
-            _ => return self.unexpected_token()
+            _ => return self.unexpected_token(ctx)
         };
         self.is_set = true;
         None
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Unexpected token after syslog");
-        self.set_failed();
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after syslog");
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for SyslogOptionParsingContext {
-    fn set_failed(&mut self) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error after syslog");
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error after syslog");
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
-            Token::Ident(ident) => self.str(ident.as_str()),
-            Token::Quoted(quoted) => self.str(quoted.as_str()),
+            Token::Ident(ident) => self.str(vtunctx, ident.as_str()),
+            Token::Quoted(quoted) => self.str(vtunctx, quoted.as_str()),
             Token::Semicolon => {
                 if !self.is_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.parent.upgrade()
             },
-            _ => self.handle_token(token)
+            _ => self.handle_token(vtunctx, token)
         }
     }
 }
@@ -1489,7 +1492,7 @@ impl KwUpDownParsingContext {
             updown_ctx: None
         }
     }
-    pub fn apply(&self, vtun_ctx: &mainvtun::VtunContext, list: &mut Vec<VtunCmd>) {
+    pub fn apply(&self, vtun_ctx: &VtunContext, list: &mut Vec<VtunCmd>) {
         match self.updown_ctx {
             None => {},
             Some(ref ctx) => ctx.lock().unwrap().apply(vtun_ctx, list)
@@ -1498,15 +1501,15 @@ impl KwUpDownParsingContext {
 }
 
 impl ParsingContext for KwUpDownParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error in {}", self.ident);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::LBrace => {
                 let parent = match self.parent.upgrade() {
@@ -1519,8 +1522,8 @@ impl ParsingContext for KwUpDownParsingContext {
             },
             _ => {
                 let msg = format!("Expected {{ afer {}", self.ident);
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -1541,7 +1544,7 @@ impl UpDownParsingContext {
             cmds: Vec::new()
         }
     }
-    pub fn apply(&self, ctx: &mainvtun::VtunContext, list: &mut Vec<VtunCmd>) {
+    pub fn apply(&self, ctx: &VtunContext, list: &mut Vec<VtunCmd>) {
         for cmdmtx in self.cmds.iter() {
             let final_cmd;
             let final_args;
@@ -1600,15 +1603,15 @@ impl UpDownParsingContext {
 }
 
 impl ParsingContext for UpDownParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error in {}", self.ident);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
-    fn token(&mut self, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwProgram => {
                 let program_ctx = Rc::new(Mutex::new(CommandConfigParsingContext::new(Rc::clone(&ctx), "program", token)));
@@ -1646,8 +1649,8 @@ impl ParsingContext for UpDownParsingContext {
             },
             _ => {
                 let msg = format!("Unexpected token in {} section", self.ident);
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-                self.set_failed();
+                vtunctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                self.set_failed(vtunctx);
                 None
             }
         }
@@ -1676,19 +1679,19 @@ impl CommandConfigParsingContext {
             delay: false
         }
     }
-    fn handle_string(&mut self, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn handle_string(&mut self, ctx: &VtunContext, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match &self.args {
             Some(_) => match str {
                 "wait" => {
                     if self.wait {
-                        return self.unexpected_token();
+                        return self.unexpected_token(ctx);
                     }
                     self.wait = true;
                     None
                 },
                 "delay" => {
                     if self.delay {
-                        return self.unexpected_token();
+                        return self.unexpected_token(ctx);
                     }
                     self.delay = true;
                     None
@@ -1699,7 +1702,7 @@ impl CommandConfigParsingContext {
                         self.args = Some(str.to_string());
                         return None;
                     }
-                    self.unexpected_token()
+                    self.unexpected_token(ctx)
                 }
             },
             None => {
@@ -1708,36 +1711,36 @@ impl CommandConfigParsingContext {
             }
         }
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         let msg = format!("Unexpected token after {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-        self.set_failed();
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for CommandConfigParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error in {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
-            Token::Ident(ident) => self.handle_string(ident.as_str()),
-            Token::Quoted(quoted) => self.handle_string(quoted.as_str()),
+            Token::Ident(ident) => self.handle_string(vtunctx, ident.as_str()),
+            Token::Quoted(quoted) => self.handle_string(vtunctx, quoted.as_str()),
             Token::Semicolon => {
                 match &self.args {
-                    None => self.unexpected_token(),
+                    None => self.unexpected_token(vtunctx),
                     Some(_) => self.parent.upgrade()
                 }
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(vtunctx)
             }
         }
     }
@@ -1759,29 +1762,29 @@ impl IntegerOptionParsingContext {
             is_set: false
         }
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         let msg = format!("Unexpected token after {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-        self.set_failed();
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for IntegerOptionParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error in {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::Number(value) => {
                 if self.is_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.value = value as i32;
                 self.is_set = true;
@@ -1789,12 +1792,12 @@ impl ParsingContext for IntegerOptionParsingContext {
             },
             Token::Semicolon => {
                 if !self.is_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(vtunctx)
             }
         }
     }
@@ -1816,29 +1819,29 @@ impl StringOptionParsingContext {
             is_set: false
         }
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         let msg = format!("Unexpected token after {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-        self.set_failed();
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for StringOptionParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error in {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::Ident(value) => {
                 if self.is_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.value = value.to_string();
                 self.is_set = true;
@@ -1846,7 +1849,7 @@ impl ParsingContext for StringOptionParsingContext {
             },
             Token::Quoted(value) => {
                 if self.is_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.value = value;
                 self.is_set = true;
@@ -1854,12 +1857,12 @@ impl ParsingContext for StringOptionParsingContext {
             },
             Token::Semicolon => {
                 if !self.is_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(vtunctx)
             }
         }
     }
@@ -1891,25 +1894,25 @@ impl BoolOptionParsingContext {
         self.is_set = true;
         None
     }
-    fn unexpected_token(&mut self) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         let msg = format!("Unexpected token after {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
-        self.set_failed();
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        self.set_failed(ctx);
         None
     }
 }
 
 impl ParsingContext for BoolOptionParsingContext {
-    fn set_failed(&mut self) {
+    fn set_failed(&mut self, ctx: &VtunContext) {
         let msg = format!("Parse error in {}", self.token_name);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         match self.parent.upgrade() {
-            Some(parent) => parent.lock().unwrap().set_failed(),
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
             None => {}
         }
     }
 
-    fn token(&mut self, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::KwYes => self.yes(),
             Token::KwNo => self.no(),
@@ -1917,24 +1920,24 @@ impl ParsingContext for BoolOptionParsingContext {
                 match value.as_str() {
                     "yes" => self.yes(),
                     "no" => self.no(),
-                    _ => self.unexpected_token()
+                    _ => self.unexpected_token(vtunctx)
                 }
             },
             Token::Semicolon => {
                 if !self.is_set {
-                    return self.unexpected_token();
+                    return self.unexpected_token(vtunctx);
                 }
                 self.parent.upgrade()
             }
             _ => {
-                self.unexpected_token()
+                self.unexpected_token(vtunctx)
             }
         }
     }
 }
 
 impl VtunConfigRoot {
-    pub fn new(vtun_ctx: &mut mainvtun::VtunContext, file: &str) -> Option<Self> {
+    pub fn new(vtun_ctx: &mut VtunContext, file: &str) -> Option<Self> {
         let rootctx = Rc::new(Mutex::new(RootParsingContext::new()));
         {
             let mut ctx: Rc<Mutex<dyn ParsingContext>> = rootctx.clone();
@@ -1942,7 +1945,7 @@ impl VtunConfigRoot {
                 Ok(c) => c,
                 Err(_) => {
                     let msg = format!("Failed to read config file '{}'", file);
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                    vtun_ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                     return None;
                 }
             };
@@ -1956,7 +1959,7 @@ impl VtunConfigRoot {
                             match token {
                                 Token::_Comment => {},
                                 _ => {
-                                    nctx = mctx.token(&ctx, token);
+                                    nctx = mctx.token(vtun_ctx, &ctx, token);
                                 }
                             }
                         }
@@ -1964,7 +1967,7 @@ impl VtunConfigRoot {
                             let rctx = rootctx.lock().unwrap();
                             if rctx.failed {
                                 let msg = format!("Parse error at: {}", lexer.slice());
-                                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                                vtun_ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                                 return None;
                             }
                         }
@@ -1975,19 +1978,19 @@ impl VtunConfigRoot {
                     },
                     Err(_) => {
                         let msg = format!("Parse error at: {}", lexer.slice());
-                        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                        vtun_ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                         return None;
                     }
                 }
             }
             let mctx = ctx.lock().unwrap();
             if !mctx.end_of_file_ok() {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Parse error at: End of file");
+                vtun_ctx.syslog(lfd_mod::LOG_ERR, "Parse error at: End of file");
                 return None;
             }
         }
         let parsed = rootctx.lock().unwrap();
-        parsed.apply(&mut vtun_ctx.vtun);
+        parsed.apply(vtun_ctx);
 
         let root = VtunConfigRoot {
             host_list: parsed.get_hosts(vtun_ctx)

@@ -16,13 +16,15 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-use crate::{lfd_mod, syslog, vtun_host};
+use crate::{lfd_mod, vtun_host};
 use crate::filedes::FileDes;
 use crate::lfd_mod::VTUN_MULTI_DENY;
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 const VTUN_LOCK_DIR: &str = env!("VTUN_LOCK_DIR");
 
-fn create_lock(file: &str) -> bool  {
+fn create_lock(ctx: &VtunContext, file: &str) -> bool  {
     let pid = unsafe { libc::getpid() };
     let mut success = true;
 
@@ -31,7 +33,7 @@ fn create_lock(file: &str) -> bool  {
     let mut fd = FileDes::open(tmp_file.as_str(), libc::O_WRONLY|libc::O_CREAT|libc::O_TRUNC, 0644);
     if !fd.ok() {
         let msg = format!("Can't create temp lock file {}", file);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         return false;
     }
 
@@ -51,7 +53,7 @@ fn create_lock(file: &str) -> bool  {
             }
         } else {
             let msg = format!("Can't write to {}", tmp_file);
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
             success = false;
         }
     }
@@ -63,7 +65,7 @@ fn create_lock(file: &str) -> bool  {
     success
 }
 
-pub fn read_lock(file: &str) -> libc::pid_t {
+pub fn read_lock(ctx: &VtunContext, file: &str) -> libc::pid_t {
     /* Read PID from existing lock */
     let mut fd;
     {
@@ -90,7 +92,7 @@ pub fn read_lock(file: &str) -> libc::pid_t {
         let filen = format!("{}\0", file);
         if unsafe { libc::unlink(filen.as_ptr() as *mut libc::c_char) } < 0 {
             let msg = format!("Unable to remove broken lock {}", file);
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         }
         return -1;
     }
@@ -101,7 +103,7 @@ pub fn read_lock(file: &str) -> libc::pid_t {
         let filen = format!("{}\0", file);
         if unsafe { libc::unlink(filen.as_ptr() as *mut libc::c_char) } < 0 {
             let msg = format!("Unable to remove stale lock {}", file);
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         }
         return -1;
     }
@@ -109,7 +111,7 @@ pub fn read_lock(file: &str) -> libc::pid_t {
     pid as libc::pid_t
 }
 
-pub fn lock_host_rs(host: &vtun_host::VtunHost) -> bool {
+pub fn lock_host_rs(ctx: &VtunContext, host: &vtun_host::VtunHost) -> bool {
     if host.multi == lfd_mod::VTUN_MULTI_ALLOW {
         return true;
     }
@@ -122,19 +124,19 @@ pub fn lock_host_rs(host: &vtun_host::VtunHost) -> bool {
                             });
 
     /* Check if lock already exists. */
-    let pid = read_lock(&lock_file);
+    let pid = read_lock(ctx, &lock_file);
     if pid > 0 {
         /* Old process is alive */
         if host.multi == lfd_mod::VTUN_MULTI_KILL {
             {
                 let msg = format!("Killing old connection (process {})", pid);
-                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
             if unsafe { libc::kill(pid, libc::SIGTERM) } < 0 {
                 let errno = errno::errno();
                 if errno != errno::Errno(libc::ESRCH) {
                     let msg = format!("Can't kill process {}. {}", pid, errno.to_string());
-                    syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                    ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                     return false;
                 }
             }
@@ -149,22 +151,22 @@ pub fn lock_host_rs(host: &vtun_host::VtunHost) -> bool {
             /* Make sure it's dead */
             if unsafe { libc::kill(pid, libc::SIGKILL) } == 0 {
                 let msg = format!("Killed old connection (process {})", pid);
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
             }
             /* Remove lock */
             let lock_file_nullterm = format!("{}\0", lock_file);
             if unsafe { libc::unlink(lock_file_nullterm.as_ptr() as *const libc::c_char) } < 0 {
                 let msg = format!("Unable to remove lock {}", lock_file);
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
             }
         } else if host.multi == VTUN_MULTI_DENY {
             return false;
         }
     }
-    create_lock(lock_file.as_str())
+    create_lock(ctx, lock_file.as_str())
 }
 
-pub fn unlock_host(host: &vtun_host::VtunHost)
+pub fn unlock_host(ctx: &VtunContext, host: &vtun_host::VtunHost)
 {
     if host.multi == lfd_mod::VTUN_MULTI_ALLOW {
         return;
@@ -176,6 +178,6 @@ pub fn unlock_host(host: &vtun_host::VtunHost)
 
     if unsafe { libc::unlink(lock_file.as_ptr() as *const libc::c_char) } < 0  {
         let msg = format!("Unable to remove lock {}", lock_file);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
     }
 }

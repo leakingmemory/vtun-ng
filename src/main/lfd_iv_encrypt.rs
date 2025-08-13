@@ -17,9 +17,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit, KeyIvInit};
 use rand::RngCore;
 use rand::rngs::ThreadRng;
-use crate::syslog::vtun_syslog;
+use crate::syslog::{SyslogObject};
 use crate::{lfd_mod};
 use crate::linkfd::{LfdMod, LfdModFactory};
+use crate::mainvtun::VtunContext;
 use crate::vtun_host::VtunHost;
 
 const MAX_GIBBERISH: u32	= 10;
@@ -82,13 +83,13 @@ impl<InitEncryptor: KeyInit + BlockEncryptMut,InitDecryptor: KeyInit + cipher::B
             key
         }
     }
-    pub fn new(host: &VtunHost) -> Result<Self,i32> {
+    pub fn new(ctx: &VtunContext, host: &VtunHost) -> Result<Self,i32> {
         let key = match host.passwd {
             Some(ref passwd) => Self::prep_key(passwd.as_str()),
             None => return Err(0)
         };
         let msg = format!("Encryptor for {} starting", type_name::<Encryptor>());
-        vtun_syslog(lfd_mod::LOG_INFO, &msg);
+        ctx.syslog(lfd_mod::LOG_INFO, &msg);
         let mut obj = Self {
             random: rand::rng(),
             key,
@@ -110,14 +111,14 @@ impl<InitEncryptor: KeyInit + BlockEncryptMut,InitDecryptor: KeyInit + cipher::B
         Ok(obj)
     }
 
-    fn recv_gibberish_msg(&mut self, _msg: &mut [u8]) -> Result<ControlFlowDecision,()> {
+    fn recv_gibberish_msg(&mut self, ctx: &VtunContext, _msg: &mut [u8]) -> Result<ControlFlowDecision,()> {
         let first_gibberish = self.gibberish_counter == 0;
         self.gibberish_counter += 1;
         let gibberish_elapsed = if first_gibberish {
             self.gibberish_time = match SystemTime::now().duration_since(UNIX_EPOCH) {
                 Ok(duration) => duration.as_secs(),
                 Err(_) => {
-                    vtun_syslog(lfd_mod::LOG_ERR, "SystemTime::now() failed");
+                    ctx.syslog(lfd_mod::LOG_ERR, "SystemTime::now() failed");
                     0
                 }
             };
@@ -126,7 +127,7 @@ impl<InitEncryptor: KeyInit + BlockEncryptMut,InitDecryptor: KeyInit + cipher::B
             match SystemTime::now().duration_since(UNIX_EPOCH) {
                 Ok(duration) => duration.as_secs() - self.gibberish_time,
                 Err(_) => {
-                    vtun_syslog(lfd_mod::LOG_ERR, "SystemTime::now() failed");
+                    ctx.syslog(lfd_mod::LOG_ERR, "SystemTime::now() failed");
                     0
                 }
             }
@@ -138,12 +139,12 @@ impl<InitEncryptor: KeyInit + BlockEncryptMut,InitDecryptor: KeyInit + cipher::B
         if self.gibberish_counter >= MAX_GIBBERISH || gibberish_elapsed >= MAX_GIBBERISH_TIME {
             self.request_reinit = false;
             self.request_send = true;
-            vtun_syslog(lfd_mod::LOG_ERR, "Other end is taking too long to respond to reinit request, resetting encoder");
+            ctx.syslog(lfd_mod::LOG_ERR, "Other end is taking too long to respond to reinit request, resetting encoder");
             self.encryptor = None;
         }
         Ok(ControlFlowDecision::Ignore)
     }
-    fn recv_ivec_msg(&mut self, msg: &mut [u8]) -> Result<ControlFlowDecision,()> {
+    fn recv_ivec_msg(&mut self, ctx: &VtunContext, msg: &mut [u8]) -> Result<ControlFlowDecision,()> {
         let mut init_decryptor = match InitDecryptor::new_from_slice(&self.key) {
             Ok(decryptor) => decryptor,
             Err(_) => return Err(())
@@ -153,7 +154,7 @@ impl<InitEncryptor: KeyInit + BlockEncryptMut,InitDecryptor: KeyInit + cipher::B
             init_decryptor.decrypt_block_mut(block);
         }
         if msg[0] != b'i' || msg[1] != b'v' || msg[2] != b'e' || msg[3] != b'c' {
-            return self.recv_gibberish_msg(msg);
+            return self.recv_gibberish_msg(ctx, msg);
         }
         let iv = & msg[4..BLOCK_SIZE+4];
         self.decryptor = Some(match Decryptor::new_from_slices(&self.key, &iv) {
@@ -194,12 +195,12 @@ impl<InitEncryptor: KeyInit + BlockEncryptMut,InitDecryptor: KeyInit + cipher::B
         }
         Ok(())
     }
-    fn recv_seq_msg(&mut self, blk: &mut [u8]) -> Result<(),()> {
+    fn recv_seq_msg(&mut self, ctx: &VtunContext, blk: &mut [u8]) -> Result<(),()> {
         if blk[0] != b's' || blk[1] != b'e' || blk[2] != b'q' || blk[3] != b'#' {
             if blk[0] != b'r' || blk[1] != b's' || blk[2] != b'y' || blk[3] != b'n' {
                 return Err(());
             }
-            vtun_syslog(lfd_mod::LOG_INFO, "Reinit request received");
+            ctx.syslog(lfd_mod::LOG_INFO, "Reinit request received");
             self.encryptor = None;
             self.request_send = true;
             self.request_reinit = false;
@@ -257,7 +258,7 @@ impl<InitEncryptor: BlockEncryptMut+KeyInit,InitDecryptor: BlockDecryptMut+KeyIn
     Assert<{KEY_SIZE == 16 || KEY_SIZE == 32}>: IsTrue,
     Assert<{BLOCK_SIZE >= 8 && BLOCK_SIZE < 256 && (1 << log2_for_powers_of_two(BLOCK_SIZE)) == BLOCK_SIZE}>: IsTrue*/
 {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn encode(&mut self, _ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         self.request_send = false;
         let pad = BLOCK_SIZE - (buf.len() & (BLOCK_SIZE - 1));
         let mut len = buf.len() + pad;
@@ -299,10 +300,10 @@ impl<InitEncryptor: BlockEncryptMut+KeyInit,InitDecryptor: BlockDecryptMut+KeyIn
         }
         Ok(())
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn decode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         let init = self.decryptor.is_none();
         if init {
-            match self.recv_ivec_msg(&mut buf[0..BLOCK_SIZE*2]) {
+            match self.recv_ivec_msg(ctx, &mut buf[0..BLOCK_SIZE*2]) {
                 Ok(decision) => {
                     match decision {
                         ControlFlowDecision::Continue => {},
@@ -312,7 +313,7 @@ impl<InitEncryptor: BlockEncryptMut+KeyInit,InitDecryptor: BlockDecryptMut+KeyIn
                     }
                 },
                 Err(_) => {
-                    vtun_syslog(lfd_mod::LOG_ERR, "Decrypting init blocks failed");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Decrypting init blocks failed");
                     return Err(());
                 }
             };
@@ -324,16 +325,16 @@ impl<InitEncryptor: BlockEncryptMut+KeyInit,InitDecryptor: BlockDecryptMut+KeyIn
             match self.decryptor {
                 Some(ref mut decryptor) => decryptor.decrypt_block_mut(block),
                 None => {
-                    vtun_syslog(lfd_mod::LOG_ERR, "Decryptor failed");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Decryptor failed");
                     return Err(());
                 }
             };
         }
         {
-            match self.recv_seq_msg(&mut buf[0 .. BLOCK_SIZE]) {
+            match self.recv_seq_msg(ctx, &mut buf[0 .. BLOCK_SIZE]) {
                 Ok(()) => {},
                 Err(()) => {
-                    vtun_syslog(lfd_mod::LOG_ERR, "Decryptor sequence or reinit prefix decoding failed");
+                    ctx.syslog(lfd_mod::LOG_ERR, "Decryptor sequence or reinit prefix decoding failed");
                     return Err(());
                 }
             };
@@ -373,12 +374,12 @@ impl<InitEncryptor: KeyInit,InitDecryptor: KeyInit,Encryptor: KeyIvInit, Decrypt
 }
 
 impl<InitEncryptor: KeyInit + BlockEncryptMut + 'static, InitDecryptor: KeyInit + BlockDecryptMut + 'static, Encryptor: KeyIvInit + BlockEncryptMut + 'static, Decryptor: KeyIvInit + BlockDecryptMut + 'static, const KEY_SIZE: usize, const BLOCK_SIZE: usize> LfdModFactory for LfdIvEncryptFactory<InitEncryptor,InitDecryptor,Encryptor,Decryptor,KEY_SIZE,BLOCK_SIZE> {
-    fn create(&self, host: &mut VtunHost) -> Result<Box<dyn LfdMod>,i32> {
-        let lfd = match LfdIvEncrypt::<InitEncryptor, InitDecryptor, Encryptor, Decryptor, KEY_SIZE, BLOCK_SIZE>::new(host) {
+    fn create(&self, ctx: &VtunContext, host: &mut VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        let lfd = match LfdIvEncrypt::<InitEncryptor, InitDecryptor, Encryptor, Decryptor, KEY_SIZE, BLOCK_SIZE>::new(ctx, host) {
             Ok(lfd) => lfd,
             Err(code) => {
                 let msg = format!("Failed to create encryptor for {} (code: {})", type_name::<Encryptor>(), code);
-                vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                 return Err(0);
             }
         };

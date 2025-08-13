@@ -18,8 +18,10 @@
  */
 use std::{thread, time};
 use std::time::SystemTime;
-use crate::{lfd_mod, linkfd, syslog, vtun_host};
+use crate::{lfd_mod, linkfd, vtun_host};
 use crate::linkfd::LfdMod;
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 struct LfdShaper {
     pub bytes : usize,
@@ -28,7 +30,7 @@ struct LfdShaper {
 }
 
 impl LfdShaper {
-    pub fn new(host: *const vtun_host::VtunHost) -> LfdShaper {
+    pub fn new(ctx: &VtunContext, host: *const vtun_host::VtunHost) -> LfdShaper {
         /* Calculate max speed bytes/sec */
         let spd_out = unsafe { (*host).spd_out } as u64;
         let mut max_speed: u64 = spd_out / 8 * 1024;
@@ -38,7 +40,7 @@ impl LfdShaper {
 
         {
             let logmsg = format!("Traffic shaping(speed {}K) initialized.", spd_out);
-            syslog::vtun_syslog(lfd_mod::LOG_INFO, logmsg.as_str());
+            ctx.syslog(lfd_mod::LOG_INFO, logmsg.as_str());
         }
 
         LfdShaper {
@@ -102,8 +104,8 @@ impl LfdShaperFactory {
 }
 
 impl linkfd::LfdModFactory for LfdShaperFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
-        Ok(Box::new(LfdShaper::new(host)))
+    fn create(&self, ctx: &VtunContext, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        Ok(Box::new(LfdShaper::new(ctx, host)))
     }
 }
 
@@ -111,11 +113,11 @@ impl LfdMod for LfdShaper {
     fn avail_encode(&mut self) -> bool {
         self.avail()
     }
-    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn encode(&mut self, _ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         self.count(buf.len());
         Ok(())
     }
-    fn decode(&mut self, _buf: &mut Vec<u8>) -> Result<(), ()> {
+    fn decode(&mut self, _ctx: &VtunContext, _buf: &mut Vec<u8>) -> Result<(), ()> {
         Ok(())
     }
 

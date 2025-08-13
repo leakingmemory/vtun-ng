@@ -40,8 +40,10 @@
 use blowfish::Blowfish;
 use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 use ecb::{Decryptor, Encryptor};
-use crate::{lfd_mod, linkfd, syslog, vtun_host};
+use crate::{lfd_mod, linkfd, vtun_host};
 use crate::linkfd::{LfdModFactory};
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 pub struct LfdLegacyEncrypt {
     pub ctx_enc: Encryptor<Blowfish>,
@@ -52,7 +54,7 @@ type BlowfishEcbEnc = Encryptor<Blowfish>;
 type BlowfishEcbDec = Decryptor<Blowfish>;
 
 impl LfdLegacyEncrypt {
-    pub fn new(host: &mut vtun_host::VtunHost) -> Result<LfdLegacyEncrypt,i32> {
+    pub fn new(ctx: &VtunContext, host: &mut vtun_host::VtunHost) -> Result<LfdLegacyEncrypt,i32> {
         let passwd = match host.passwd {
             Some(ref passwd) => passwd.as_str(),
             None => return Err(0)
@@ -67,7 +69,7 @@ impl LfdLegacyEncrypt {
             ctx_dec: BlowfishEcbDec::new_from_slice(&key).unwrap()
         };
         
-        syslog::vtun_syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized");
+        ctx.syslog(lfd_mod::LOG_INFO, "BlowFish legacy encryption initialized");
 
         Ok(lfd_legacy_encrypt)
     }
@@ -84,10 +86,10 @@ impl LfdLegacyEncryptFactory {
 }
 
 impl LfdModFactory for LfdLegacyEncryptFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn linkfd::LfdMod>,i32> {
-        match LfdLegacyEncrypt::new(host) {
+    fn create(&self, ctx: &VtunContext, host: &mut vtun_host::VtunHost) -> Result<Box<dyn linkfd::LfdMod>,i32> {
+        match LfdLegacyEncrypt::new(ctx, host) {
             Err(_) => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Failed to initialize encyption");
+                ctx.syslog(lfd_mod::LOG_ERR, "Failed to initialize encyption");
                 Err(0)
             },
             Ok(lfd_encrypt_mod) => Ok(Box::new(lfd_encrypt_mod))
@@ -96,7 +98,7 @@ impl LfdModFactory for LfdLegacyEncryptFactory {
 }
 
 impl linkfd::LfdMod for LfdLegacyEncrypt {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn encode(&mut self, _ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         let pad = ((!buf.len()) & 0x07) + 1;
 
         let inputlen = buf.len();
@@ -123,7 +125,7 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
         Ok(())
     }
 
-    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn decode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         const BLOCKSIZE: usize = 8;
         for i in 0..buf.len()/ BLOCKSIZE {
             let mut data: [u8; BLOCKSIZE] = [0u8; BLOCKSIZE];
@@ -138,7 +140,7 @@ impl linkfd::LfdMod for LfdLegacyEncrypt {
         }
         let p = buf[0];
         if p < 1 || p > 8 {
-            syslog::vtun_syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length");
+            ctx.syslog(lfd_mod::LOG_INFO, "legacy_decrypt_buf: bad pad length");
             return Err(());
         }
 

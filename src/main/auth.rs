@@ -23,11 +23,12 @@
  * C - compression, S - speed for shaper and so on.
  */
 use crate::challenge::VTUN_CHAL_SIZE;
-use crate::{challenge, lfd_mod, libfuncs, linkfd, lock, setproctitle, syslog, vtun_host};
+use crate::{challenge, lfd_mod, libfuncs, linkfd, lock, setproctitle, vtun_host};
 use crate::filedes::FileDes;
 use crate::libfuncs::print_p;
 use crate::linkfd::LinkfdCtx;
 use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 const ST_INIT: i32 =  0;
 const ST_HOST: i32 =  1;
@@ -108,7 +109,7 @@ fn length_of_number(str: &[u8]) -> usize {
     str.len()
 }
 
-fn cf2bf(str: &[u8], host: &mut vtun_host::VtunHost) -> bool
+fn cf2bf(ctx: &VtunContext, str: &[u8], host: &mut vtun_host::VtunHost) -> bool
 {
     let mut off: usize = 0;
 
@@ -117,7 +118,7 @@ fn cf2bf(str: &[u8], host: &mut vtun_host::VtunHost) -> bool
     }
     {
         let msg = format!("Remote Server send {}.", str::from_utf8(&str[off..str.len()]).unwrap());
-        syslog::vtun_syslog(lfd_mod::LOG_DEBUG, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_DEBUG, msg.as_str());
     }
     off = off + 1;
     while off < str.len() {
@@ -326,7 +327,7 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Op
                 match challenge::gen_chal(&mut chal_req) {
                     Ok(_) => {},
                     Err(_) => {
-                        syslog::vtun_syslog(lfd_mod::LOG_ERR, "Failed to generate challenge for authentication");
+                        ctx.syslog(lfd_mod::LOG_ERR, "Failed to generate challenge for authentication");
                         return None;
                     }
                 };
@@ -373,7 +374,7 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Op
                 }
                 /* Lock host */
                 if match h {
-                    Some(ref mut h) => !lock::lock_host_rs(h),
+                    Some(ref mut h) => !lock::lock_host_rs(ctx, h),
                     None => true
                 } {
                     /* Multiple connections are denied */
@@ -466,7 +467,7 @@ pub(crate) fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &File
                 continue;
             }
         } else if stage == ST_CHAL {
-            if buf[0] == b'O' && buf[1] == b'K' && cf2bf(&buf, host) {
+            if buf[0] == b'O' && buf[1] == b'K' && cf2bf(ctx, &buf, host) {
                 success = true;
             }
             break;

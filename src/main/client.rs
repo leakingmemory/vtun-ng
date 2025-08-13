@@ -27,15 +27,19 @@ use std::time::Duration;
 use signal_hook::{low_level, SigId};
 use crate::{auth, exitcode, lfd_mod, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
 use crate::filedes::FileDes;
+use crate::lfd_mod::VtunOpts;
+use crate::syslog::SyslogObject;
 use crate::vtun_host::VtunSopt;
 
 struct ClientCtx {
+    log_to_syslog: bool,
     client_term: Arc<AtomicI32>
 }
 
 impl ClientCtx {
-    fn new() -> Self {
+    fn new(opts: &VtunOpts) -> Self {
         Self {
+            log_to_syslog: opts.log_to_syslog,
             client_term: Arc::new(AtomicI32::new(0))
         }
     }
@@ -43,7 +47,7 @@ impl ClientCtx {
         self.client_term.store(client_term, Ordering::Relaxed);
     }
     fn sig_term(&self) {
-        syslog::vtun_syslog(lfd_mod::LOG_INFO,"Terminated");
+        syslog::vtun_syslog(self.log_to_syslog, lfd_mod::LOG_INFO,"Terminated");
         self.set_client_term(linkfd::VTUN_SIG_TERM);
     }
 }
@@ -62,9 +66,9 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
 {
     {
         let msg = format!("VTun client ver {} started", lfd_mod::VTUN_VER);
-        syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
-    let client_ctx: Arc<ClientCtx> = Arc::new(ClientCtx::new());
+    let client_ctx: Arc<ClientCtx> = Arc::new(ClientCtx::new(&ctx.vtun));
 
     let mut sa: libc::sigaction = unsafe { mem::zeroed() };
     sa.sa_sigaction=libc::SIG_IGN;
@@ -110,7 +114,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
 
         /* Set local address */
         let mut my_addr: libc::sockaddr_in = unsafe { mem::zeroed() };
-        if !netlib::local_addr_rs(&mut my_addr, host, None) {
+        if !netlib::local_addr_rs(ctx, &mut my_addr, host, None) {
             continue;
         }
 
@@ -122,7 +126,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         if !s.ok() {
             let errno = errno::errno();
             let msg = format!("Can't create socket. {}", errno.to_string());
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
             continue;
         }
 
@@ -132,7 +136,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         if !s.bind_sockaddr_in(&my_addr) {
             let errno = errno::errno();
             let msg = format!("Can't bind socket. {}", errno.to_string());
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
             continue;
         }
 
@@ -143,7 +147,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         host.spd_out = 0;
         host.flags = host.flags & lfd_mod::VTUN_CLNT_MASK;
 
-        let linkfdctx = linkfd::LinkfdCtx::new();
+        let linkfdctx = linkfd::LinkfdCtx::new(ctx);
         linkfdctx.io_init();
 
         {
@@ -154,7 +158,7 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         }
         if ctx.vtun.quiet == 0 {
             let msg = format!("Connecting to {}", match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
-            syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
         }
 
         if !netlib::connect_t(&s, &svr_addr, host.timeout as libc::time_t) {
@@ -163,14 +167,14 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 let msg = format!("Connect to {} failed. {}",
                                   match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" },
                                   errno.to_string());
-                syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
         } else {
             if auth::auth_client_rs(ctx, &linkfdctx, &s, host) {
                 let msg = format!("Session {}[{}] opened",
                                   match host.host { Some(ref host) => host.as_str(), None => "<none>" },
                                   match ctx.vtun.svr_name { Some(ref svr_name) => svr_name.as_str(), None => "<none>" });
-                syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
+                ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
 
                 /* Start the tunnel */
                 let linkfdctx = Arc::new(linkfdctx);
@@ -182,10 +186,10 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 let msg = format!("Session {}[{}] closed",
                                   match &host.host { Some(host) => host.as_str(), None => "<none>" },
                                   match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
-                syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
+                ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
             } else {
                 let msg = format!("Connection denied by {}", match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
-                syslog::vtun_syslog(lfd_mod::LOG_INFO,msg.as_str());
+                ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
             }
         }
         host.sopt = VtunSopt::new();
@@ -200,6 +204,6 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
         None => false
     };
 
-    syslog::vtun_syslog(lfd_mod::LOG_INFO, "Exit");
+    ctx.syslog(lfd_mod::LOG_INFO, "Exit");
     Ok(())
 }

@@ -19,8 +19,10 @@
 
 /* ZLIB compression module */
 use std::io::Write;
-use crate::{lfd_mod, syslog, vtun_host};
+use crate::{lfd_mod, vtun_host};
 use crate::linkfd::{LfdMod, LfdModFactory};
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 struct LfdZlib {
     pub encoder: flate2::write::ZlibEncoder<Vec<u8>>,
@@ -28,8 +30,8 @@ struct LfdZlib {
 }
 
 impl LfdZlib {
-    pub fn new(host: &vtun_host::VtunHost) -> LfdZlib {
-        syslog::vtun_syslog(lfd_mod::LOG_INFO, "ZLIB compression initialized");
+    pub fn new(ctx: &VtunContext, host: &vtun_host::VtunHost) -> LfdZlib {
+        ctx.syslog(lfd_mod::LOG_INFO, "ZLIB compression initialized");
         LfdZlib {
             encoder: flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(host.zlevel as u32)),
             decoder: flate2::write::ZlibDecoder::new(Vec::new())
@@ -47,24 +49,24 @@ impl LfdZlibFactory {
     }
 }
 impl LfdModFactory for LfdZlibFactory {
-    fn create(&self, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
-        Ok(Box::new(LfdZlib::new(host)))
+    fn create(&self, ctx: &VtunContext, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        Ok(Box::new(LfdZlib::new(ctx, host)))
     }
 }
 
 impl LfdMod for LfdZlib {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn encode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         match self.encoder.write_all(buf) {
             Ok(_) => (),
             Err(_) => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB compression error");
+                ctx.syslog(lfd_mod::LOG_ERR, "ZLIB compression error");
                 return Err(())
             }
         };
         match self.encoder.flush() {
             Ok(()) => {},
             Err(_) => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB compression error (flush failed)");
+                ctx.syslog(lfd_mod::LOG_ERR, "ZLIB compression error (flush failed)");
                 return Err(())
             },
         };
@@ -75,18 +77,18 @@ impl LfdMod for LfdZlib {
         self.encoder.get_mut().clear();
         Ok(())
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn decode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         match self.decoder.write_all(buf) {
             Ok(_) => (),
             Err(_) => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB decompression error");
+                ctx.syslog(lfd_mod::LOG_ERR, "ZLIB decompression error");
                 return Err(());
             }
         };
         match self.decoder.flush() {
             Ok(()) => {},
             Err(_) => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "ZLIB decompression error (flush failed)");
+                ctx.syslog(lfd_mod::LOG_ERR, "ZLIB decompression error (flush failed)");
                 return Err(())
             },
         };

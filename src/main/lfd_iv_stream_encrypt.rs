@@ -17,6 +17,7 @@ use cipher::block_padding::{Padding, UnpadError};
 use cipher::inout::{InOut, InOutBuf, InOutBufReserved, NotEqualError, PadError};
 use crate::lfd_iv_encrypt::LfdIvEncryptFactory;
 use crate::linkfd::{LfdMod, LfdModFactory};
+use crate::mainvtun::VtunContext;
 use crate::vtun_host::VtunHost;
 
 pub(crate) struct FixedSizeForVariableKeySizeWrapper<Cipher, KeySize> {
@@ -260,8 +261,8 @@ impl<InitEncryptor: KeyInit,InitDecryptor: KeyInit, StreamEncryptor: KeyIvInit, 
 }
 
 impl<InitEncryptor: KeyInit + BlockEncryptMut + 'static, InitDecryptor: KeyInit + BlockDecryptMut + 'static, StreamEncryptor: KeyIvInit + StreamCipher + 'static, const KEY_SIZE: usize, const BLOCK_SIZE: usize> LfdModFactory for LfdIvStreamEncryptFactory<InitEncryptor,InitDecryptor,StreamEncryptor, KEY_SIZE, BLOCK_SIZE> {
-    fn create(&self, host: &mut VtunHost) -> Result<Box<dyn LfdMod>, i32> {
+    fn create(&self, ctx: &VtunContext, host: &mut VtunHost) -> Result<Box<dyn LfdMod>, i32> {
         let factory = LfdIvEncryptFactory::<InitEncryptor,InitDecryptor,StreamEncryptorToEncryptorAndDecryptor<StreamEncryptor>,StreamEncryptorToEncryptorAndDecryptor<StreamEncryptor>,KEY_SIZE,BLOCK_SIZE>::new();
-        factory.create(host)
+        factory.create(ctx, host)
     }
 }

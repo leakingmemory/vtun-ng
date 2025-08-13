@@ -37,6 +37,7 @@ pub struct VtunOpts {
     pub bind_addr: vtun_host::VtunAddr, /* Server should listen on this address */
     pub svr_type: libc::c_int, /* Server mode */
     pub syslog: libc::c_int, /* Facility to log messages to syslog under */
+    pub log_to_syslog: bool, /* Log to syslog (true) or to stdout (false) */
     pub quiet: libc::c_int, /* Be quiet about common errors */
 }
 
@@ -58,6 +59,7 @@ impl VtunOpts {
             bind_addr: vtun_host::VtunAddr::new(),
             svr_type: -1,
             syslog: LOG_DAEMON,
+            log_to_syslog: true,
             quiet: 0,
         }
     }

@@ -16,9 +16,10 @@ use std::any::type_name;
 use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 use rand::RngCore;
 use rand::rngs::ThreadRng;
-use crate::syslog::vtun_syslog;
+use crate::syslog::{SyslogObject};
 use crate::{lfd_mod};
 use crate::linkfd::{LfdMod, LfdModFactory};
+use crate::mainvtun::VtunContext;
 use crate::vtun_host::VtunHost;
 
 struct LfdGenericEncrypt<Encryptor,Decryptor,const KEY_SIZE: usize,const BLOCK_SIZE: usize> {
@@ -65,7 +66,7 @@ impl<Encryptor: KeyInit,Decryptor: KeyInit,const KEY_SIZE: usize,const BLOCK_SIZ
             key
         }
     }
-    pub fn new(host: &VtunHost) -> Result<Self,i32> {
+    pub fn new(ctx: &VtunContext, host: &VtunHost) -> Result<Self,i32> {
         let key = match host.passwd {
             Some(ref passwd) => Self::prep_key(passwd.as_str()),
             None => return Err(0)
@@ -82,7 +83,7 @@ impl<Encryptor: KeyInit,Decryptor: KeyInit,const KEY_SIZE: usize,const BLOCK_SIZ
             }
         };
         let msg = format!("Generic encryptor for {} initialized", type_name::<Encryptor>());
-        vtun_syslog(lfd_mod::LOG_INFO, &msg);
+        ctx.syslog(lfd_mod::LOG_INFO, &msg);
         Ok(lfd_generic_encryptor)
     }
 }
@@ -92,7 +93,7 @@ impl<Encryptor: BlockEncryptMut,Decryptor: BlockDecryptMut,const KEY_SIZE: usize
     Assert<{KEY_SIZE == 16 || KEY_SIZE == 32}>: IsTrue,
     Assert<{BLOCK_SIZE >= 8 && BLOCK_SIZE < 256 && (1 << log2_for_powers_of_two(BLOCK_SIZE)) == BLOCK_SIZE}>: IsTrue*/
 {
-    fn encode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn encode(&mut self, _ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         let pad = BLOCK_SIZE - (buf.len() & (BLOCK_SIZE - 1));
         let len = buf.len() + pad;
         buf.resize(len, 0);
@@ -111,7 +112,7 @@ impl<Encryptor: BlockEncryptMut,Decryptor: BlockDecryptMut,const KEY_SIZE: usize
         }
         Ok(())
     }
-    fn decode(&mut self, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn decode(&mut self, _ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         for i in 0..buf.len()/BLOCK_SIZE {
             let block = Block::<Decryptor>::from_mut_slice(&mut buf[i*BLOCK_SIZE..(i+1)*BLOCK_SIZE]);
             self.decryptor.decrypt_block_mut(block);
@@ -144,12 +145,12 @@ impl<Encryptor: KeyInit, Decryptor: KeyInit, const KEY_SIZE: usize, const BLOCK_
 }
 
 impl<Encryptor: KeyInit + BlockEncryptMut + 'static, Decryptor: KeyInit + BlockDecryptMut + 'static, const KEY_SIZE: usize, const BLOCK_SIZE: usize> LfdModFactory for LfdGenericEncryptFactory<Encryptor,Decryptor,KEY_SIZE,BLOCK_SIZE> {
-    fn create(&self, host: &mut VtunHost) -> Result<Box<dyn LfdMod>,i32> {
-        match LfdGenericEncrypt::<Encryptor, Decryptor, KEY_SIZE, BLOCK_SIZE>::new(host) {
+    fn create(&self, ctx: &VtunContext, host: &mut VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        match LfdGenericEncrypt::<Encryptor, Decryptor, KEY_SIZE, BLOCK_SIZE>::new(ctx, host) {
             Ok(lfd) => Ok(Box::new(lfd)),
             Err(code) => {
                 let msg = format!("Failed to create generic encryptor for {} (code: {})", type_name::<Encryptor>(), code);
-                vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                 Err(0)
             }
         }

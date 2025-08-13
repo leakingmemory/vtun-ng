@@ -17,8 +17,10 @@
     GNU General Public License for more details.
  */
 use std::cmp::PartialEq;
-use crate::{driver, lfd_mod, syslog};
+use crate::{driver, lfd_mod};
 use crate::filedes::FileDes;
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 
 pub(crate) enum TunDevType {
     Tun, Tap
@@ -53,7 +55,7 @@ impl PartialEq<TunDevType> for &TunDevType {
 }
 
 impl TunDev {
-    pub fn new(opt_name: Option<&str>, dev_type: TunDevType) -> Option<TunDev> {
+    pub fn new(ctx: &VtunContext, opt_name: Option<&str>, dev_type: TunDevType) -> Option<TunDev> {
         match opt_name {
             Some(name) => {
                 let mut dev = TunDev {
@@ -63,13 +65,13 @@ impl TunDev {
                 if cfg!(target_os = "linux") {
                     if dev.open("/dev/net/tun", dev_type.clone()) {
                         if dev.linux_prep(Some(name), dev_type) {
-                            dev.log_open();
+                            dev.log_open(ctx);
                             return Some(dev);
                         }
                     }
                 }
                 if dev.open(name, dev_type) {
-                    dev.log_open();
+                    dev.log_open(ctx);
                     return Some(dev);
                 }
                 None
@@ -82,7 +84,7 @@ impl TunDev {
                 if cfg!(target_os = "linux") {
                     if dev.open("/dev/net/tun", dev_type) {
                         if dev.linux_prep(None, dev_type) {
-                            dev.log_open();
+                            dev.log_open(ctx);
                             return Some(dev);
                         }
                     }
@@ -97,7 +99,7 @@ impl TunDev {
                     let path = format!("/dev/{}", &name);
                     if dev.open(path.as_str(), dev_type) {
                         dev.name = Some(Box::new(name));
-                        dev.log_open();
+                        dev.log_open(ctx);
                         return Some(dev);
                     }
                 }
@@ -105,18 +107,18 @@ impl TunDev {
             }
         }
     }
-    pub fn new_from_fd(fd: FileDes, dev: &str) -> TunDev {
+    pub fn new_from_fd(ctx: &VtunContext, fd: FileDes, dev: &str) -> TunDev {
         let tun = TunDev { name: Some(Box::new(dev.to_string())), fd: Some(fd) };
-        tun.log_open();
+        tun.log_open(ctx);
         tun
     }
-    pub fn log_open(&self) {
+    pub fn log_open(&self, ctx: &VtunContext) {
         let name = match &self.name {
             None => "none".to_string(),
             Some(ref name) => name.to_string()
         };
         let msg = format!("Opened device endpoint {}", name);
-        syslog::vtun_syslog(lfd_mod::LOG_INFO, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
 
     #[cfg(not(target_os = "linux"))]

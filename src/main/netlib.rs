@@ -17,10 +17,12 @@
     GNU General Public License for more details.
  */
 
-use crate::{lfd_mod, libfuncs, mainvtun, syslog, vtun_host};
+use crate::{lfd_mod, libfuncs, vtun_host};
 use crate::filedes::FileDes;
 use crate::lfd_mod::VTUN_ADDR_NAME;
 use crate::linkfd::LinkfdCtx;
+use crate::mainvtun::VtunContext;
+use crate::syslog::SyslogObject;
 /* Connect with timeout */
 pub fn connect_t(s: &FileDes, svr: &libc::sockaddr_in, timeout: libc::time_t) -> bool {
     let sock_flags= match s.fcntl_getfl() {
@@ -93,18 +95,18 @@ fn getifaddr(ifname: &str) -> Option<u32>
 }
 
 /* Set local address */
-pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost, con: Option<&FileDes>) -> bool
+pub fn local_addr_rs(ctx: &VtunContext, addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost, con: Option<&FileDes>) -> bool
 {
     match con {
         Some(rmt_fd) => {
             /* Use address of the already connected socket. */
             if !rmt_fd.getsockname_sockaddr_in(addr) {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't get local socket address");
+                ctx.syslog(lfd_mod::LOG_ERR,"Can't get local socket address");
                 return false;
             }
         },
         None => {
-            if !generic_addr_rs(addr, &host.src_addr) {
+            if !generic_addr_rs(ctx, addr, &host.src_addr) {
                 return false;
             }
         }
@@ -117,7 +119,7 @@ pub fn local_addr_rs(addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHos
     true
 }
 
-pub fn server_addr(ctx: &mainvtun::VtunContext, addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost) -> bool
+pub fn server_addr(ctx: &VtunContext, addr: &mut libc::sockaddr_in, host: &mut vtun_host::VtunHost) -> bool
 {
     {
         let z: libc::sockaddr_in = unsafe { std::mem::zeroed() };
@@ -133,7 +135,7 @@ pub fn server_addr(ctx: &mainvtun::VtunContext, addr: &mut libc::sockaddr_in, ho
     let hostname = match ctx.vtun.svr_name {
         Some(ref s) => s.clone(),
         None => {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, "Server name is not specified");
+            ctx.syslog(lfd_mod::LOG_ERR, "Server name is not specified");
             return false;
         }
     };
@@ -141,7 +143,7 @@ pub fn server_addr(ctx: &mainvtun::VtunContext, addr: &mut libc::sockaddr_in, ho
 
     if hent.is_empty() {
         let msg = format!("Can't resolv server address: {}", hostname);
-        syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
         return false;
     }
     /*
@@ -163,7 +165,7 @@ pub fn server_addr(ctx: &mainvtun::VtunContext, addr: &mut libc::sockaddr_in, ho
 }
 
 /* Set address by interface name, ip address or hostname */
-pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr) -> bool {
+pub fn generic_addr_rs(ctx: &VtunContext, addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr) -> bool {
     {
         let z: libc::sockaddr_in = unsafe { std::mem::zeroed() };
         *addr = z;
@@ -178,7 +180,7 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
         let ifname = match vaddr.name {
             Some(ref ifname) => ifname.clone(),
             None => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get interface name");
+                ctx.syslog(lfd_mod::LOG_ERR, "Can't get interface name");
                 return false;
             }
         };
@@ -186,7 +188,7 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
             Some(s_addr) => s_addr as libc::in_addr_t,
             None => {
                 let msg = format!("Can't get address of interface {}", ifname);
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
                 return false;
             }
         };
@@ -194,14 +196,14 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
         let hostname = match vaddr.name {
             Some(ref name) => name.clone(),
             None => {
-                syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't get address to resolve");
+                ctx.syslog(lfd_mod::LOG_ERR, "Can't get address to resolve");
                 return false;
             }
         };
         let hent = dns_lookup::lookup_host(hostname.as_str()).unwrap_or(Vec::new());
         if hent.is_empty() {
             let msg = format!("Can't resolv local address {}", hostname);
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
             return false;
         }
         for hent in hent {
@@ -214,7 +216,7 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
         let parts = ip.split('.').collect::<Vec<&str>>();
         if parts.len() != 4 {
             let msg = format!("Can't decode address {}", ip);
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, msg.as_str());
+            ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
             return false;
         }
         let mut ip_addr: u32 = 0;
@@ -237,27 +239,27 @@ pub fn generic_addr_rs(addr: &mut libc::sockaddr_in, vaddr: &vtun_host::VtunAddr
  * Establish UDP session with host connected to fd(socket).
  * Returns connected UDP socket or -1 on error.
  */
-pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host: &mut vtun_host::VtunHost, rmt_fd: &mut FileDes) -> bool
+pub fn udp_session(ctx: &mut VtunContext, linkfdctx: &LinkfdCtx, host: &mut vtun_host::VtunHost, rmt_fd: &mut FileDes) -> bool
 {
     let mut saddr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
 
     let s = FileDes::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
     if !s.ok() {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't create socket");
+        ctx.syslog(lfd_mod::LOG_ERR,"Can't create socket");
         return false;
     }
 
     s.set_so_reuseaddr(true);
 
     /* Set local address and port */
-    local_addr_rs(&mut saddr, host, Some(rmt_fd));
+    local_addr_rs(ctx, &mut saddr, host, Some(rmt_fd));
     if !s.bind_sockaddr_in(&saddr) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't bind to the socket");
+        ctx.syslog(lfd_mod::LOG_ERR,"Can't bind to the socket");
         return false;
     }
 
     if !s.getsockname_sockaddr_in(&mut saddr) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't get socket name");
+        ctx.syslog(lfd_mod::LOG_ERR,"Can't get socket name");
         return false;
     }
 
@@ -266,7 +268,7 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host:
     {
         let buf = u16::from_be(port as libc::in_port_t).to_be_bytes();
         if libfuncs::write_n(linkfdctx, rmt_fd, &buf).is_none() {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR, "Can't write port number");
+            ctx.syslog(lfd_mod::LOG_ERR, "Can't write port number");
             return false;
         }
     }
@@ -276,12 +278,12 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host:
     let mut port = [0u8; 2];
     if libfuncs::readn_t(linkfdctx, rmt_fd,&mut port,host.timeout as libc::time_t) < 0 {
         let msg = format!("Can't read port number {}", errno::errno().to_string());
-        syslog::vtun_syslog(lfd_mod::LOG_ERR,msg.as_str());
+        ctx.syslog(lfd_mod::LOG_ERR,msg.as_str());
         return false;
     }
 
     if !rmt_fd.getpeername_sockaddr_in(&mut saddr) {
-        syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't get peer name");
+        ctx.syslog(lfd_mod::LOG_ERR,"Can't get peer name");
         return false;
     }
 
@@ -298,7 +300,7 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host:
         ctx.is_rmt_fd_connected = false;
     } else {
         if !s.connect_sockaddr_in(&saddr) {
-            syslog::vtun_syslog(lfd_mod::LOG_ERR,"Can't connect socket");
+            ctx.syslog(lfd_mod::LOG_ERR,"Can't connect socket");
             return false;
         }
         ctx.is_rmt_fd_connected = true;
@@ -310,6 +312,6 @@ pub fn udp_session(ctx: &mut mainvtun::VtunContext, linkfdctx: &LinkfdCtx, host:
     rmt_fd.close();
     *rmt_fd = s;
 
-    syslog::vtun_syslog(lfd_mod::LOG_INFO,"UDP connection initialized");
+    ctx.syslog(lfd_mod::LOG_INFO,"UDP connection initialized");
     true
 }

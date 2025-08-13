@@ -1,0 +1,29 @@
+name: Build & Release Snap
+
+on:
+  push:
+    branches: [ snap ]
+
+jobs:
+  snap:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Snapcraft
+        uses: snapcore/action-build@v1     # sets up LXD + snapcraft
+
+      - name: Build snap
+        run: snapcraft snap --destructive-mode
+
+      - name: Upload to Snap Store
+        env:
+          SNAPCRAFT_LOGIN: ${{ secrets.SNAPCRAFT_LOGIN }}
+        run: |
+          # Write secret to a file with safest possible permissions
+          login_file=$(mktemp)
+          echo "$SNAPCRAFT_LOGIN" > "$login_file"
+          chmod 600 "$login_file"
+
+          snapcraft login --with "$login_file"
+          snapcraft upload vtun-ng_*.snap --release=edge

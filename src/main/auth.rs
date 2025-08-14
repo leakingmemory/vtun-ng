@@ -117,7 +117,7 @@ fn cf2bf(ctx: &VtunContext, str: &[u8], host: &mut vtun_host::VtunHost) -> bool
         off = off + 1;
     }
     {
-        let msg = format!("Remote Server send {}.", str::from_utf8(&str[off..str.len()]).unwrap());
+        let msg = format!("Remote Server send {}.", std::str::from_utf8(&str[off..str.len()]).unwrap());
         ctx.syslog(lfd_mod::LOG_DEBUG, msg.as_str());
     }
     off = off + 1;
@@ -322,7 +322,7 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Op
 
         if stage == ST_HOST {
             if str1.len() == 4 && str1[0] == b'H' && str1[1] == b'O' && str1[2] == b'S' && str1[3] == b'T' {
-                host = str::from_utf8(&str2).unwrap().to_string();
+                host = std::str::from_utf8(&str2).unwrap().to_string();
 
                 match challenge::gen_chal(&mut chal_req) {
                     Ok(_) => {},

@@ -1,0 +1,47 @@
+{
+  "id": "org.radiotube.vtun-ng",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "23.08",
+  "sdk": "org.freedesktop.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.rust-stable"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "build-args": [
+      "--share=network"
+    ]
+  },
+  "command": "vtunngd",
+  "finish-args": [
+    "--share=network",
+    "--socket=system-bus",
+    "--device=all",
+    "--filesystem=host"
+  ],
+  "modules": [
+    {
+      "name": "vtun-ng",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cargo build --frozen --release",
+        "install -Dm755 target/release/vtunngd \"${FLATPAK_DEST}/bin/vtunngd\""
+      ],
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://github.com/leakingmemory/vtun-ng/releases/download/v3.0.20/vtun-ng-3.0.20.tar.gz",
+          "sha256": "a6cd0fba6449db75f4cd6cdeac914c75373893eea5e8142ee336d0a8a32279c8"
+        },
+        "cargo-sources.json",
+        {
+          "type": "inline",
+          "dest": ".cargo",
+          "dest-filename": "config.toml",
+          "contents": "[source.crates-io]\nreplace-with = \"vendored\"\n\n[source.vendored]\ndirectory = \"cargo/vendor\""
+        }
+      ]
+    }
+  ]
+}
+

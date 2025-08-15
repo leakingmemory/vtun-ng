@@ -48,6 +48,6 @@ jobs:
       - name: Upload .flatpak to release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "v${{ VERSION }}"
+          tag_name: "v${{ env.VERSION}}"
           files: |
-            "${{ APP_ID }}-${{ VERSION }}.flatpak"
+            ${{ env.APP_ID }}-${{ env.VERSION }}.flatpak

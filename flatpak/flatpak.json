@@ -27,7 +27,7 @@
       "sources": [
         {
           "type": "archive",
-          "url": "https://github.com/leakingmemory/vtun-ng/releases/download/v3.0.20/vtun-ng-3.0.20.tar.gz",
+          "url": "https://github.com/leakingmemory/vtun-ng/releases/download/v3.0.21/vtun-ng-3.0.21.tar.gz",
           "sha256": "73a465acae8c025d2cab899c4c0ee6e30f86e4548517a438d3a9e64b90ea6c5f"
         },
         "cargo-sources.json",

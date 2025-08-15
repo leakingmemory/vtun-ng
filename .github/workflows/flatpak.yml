@@ -29,7 +29,6 @@ jobs:
         run: |
           flatpak-builder \
             --user --disable-rofiles-fuse \
-            --offline \
             --repo=repo build-dir "${MANIFEST}"
 
       - name: Create bundle

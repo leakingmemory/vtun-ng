@@ -5,6 +5,9 @@ on:
     tags:
       - 'flatp*'
 
+permissions:
+  contents: write
+
 jobs:
   flatpak:
     runs-on: ubuntu-22.04
@@ -45,5 +48,9 @@ jobs:
       - name: Upload .flatpak to release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: v${VERSION}
+          name: v${VERSION}
+          draft: false
+          prerelease: false
           files: |
             ${APP_ID}-${VERSION}.flatpak

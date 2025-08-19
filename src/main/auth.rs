@@ -37,7 +37,7 @@ const ST_CHAL: i32 =  2;
 /* Authentication message size */
 pub(crate) const VTUN_MESG_SIZE: usize =	50;
 
-fn bf2cf(host: &vtun_host::VtunHost) -> Vec<u8>
+pub fn bf2cf(host: &vtun_host::VtunHost) -> Vec<u8>
 {
     let mut str: Vec<u8> = Vec::new();
     str.reserve(20);
@@ -109,7 +109,7 @@ fn length_of_number(str: &[u8]) -> usize {
     str.len()
 }
 
-fn cf2bf(ctx: &VtunContext, str: &[u8], host: &mut vtun_host::VtunHost) -> bool
+pub fn cf2bf(ctx: &VtunContext, str: &[u8], host: &mut vtun_host::VtunHost) -> bool
 {
     let mut off: usize = 0;
 
@@ -251,16 +251,30 @@ fn get_tokenize_length(slice: &mut [u8]) -> usize {
     len
 }
 /* Authentication (Server side) */
-pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Option<vtun_host::VtunHost> {
+pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host: &str) -> Result<vtun_host::VtunHost,()> {
     setproctitle::set_title("authentication");
 
-    let fmt = format!("VTUN server ver {}\n", lfd_mod::VTUN_VER);
-    print_p(fd, fmt.as_bytes());
-
-    let mut stage = ST_HOST;
-    let mut host = String::new();
-    let mut h: Option<&vtun_host::VtunHost> = None;
     let mut chal_req: [u8; VTUN_CHAL_SIZE] = [0u8; VTUN_CHAL_SIZE];
+
+    match challenge::gen_chal(&mut chal_req) {
+        Ok(_) => {},
+        Err(_) => {
+            ctx.syslog(lfd_mod::LOG_ERR, "Failed to generate challenge for authentication");
+            return Err(());
+        }
+    };
+    let mut msg: Vec<u8> = Vec::new();
+    msg.reserve(32);
+    {
+        let part = "OK CHAL: ".as_bytes();
+        for i in 0..part.len() {
+            msg.push(part[i]);
+        }
+    }
+    let mut req = cl2cs(&chal_req);
+    msg.append(&mut req);
+    msg.push(b'\n');
+    print_p(fd, msg.as_slice());
 
     let mut buf = [0u8; VTUN_MESG_SIZE];
     loop {
@@ -320,104 +334,71 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Op
             }
         }
 
-        if stage == ST_HOST {
-            if str1.len() == 4 && str1[0] == b'H' && str1[1] == b'O' && str1[2] == b'S' && str1[3] == b'T' {
-                host = std::str::from_utf8(&str2).unwrap().to_string();
-
-                match challenge::gen_chal(&mut chal_req) {
-                    Ok(_) => {},
-                    Err(_) => {
-                        ctx.syslog(lfd_mod::LOG_ERR, "Failed to generate challenge for authentication");
-                        return None;
-                    }
-                };
-                let mut msg: Vec<u8> = Vec::new();
-                msg.reserve(32);
-                {
-                    let part = "OK CHAL: ".as_bytes();
-                    for i in 0..part.len() {
-                        msg.push(part[i]);
-                    }
-                }
-                let mut req = cl2cs(&chal_req);
-                msg.append(&mut req);
-                msg.push(b'\n');
-                print_p(fd, msg.as_slice());
-                stage = ST_CHAL;
-                continue;
+        if str1.len() == 4 && str1[0] == b'C' && str1[1] == b'H' && str1[2] == b'A' && str1[3] == b'L' {
+            let mut chal_res: Vec<u8> = Vec::new();
+            if !cs2cl(&str2, &mut chal_res) {
+                break;
             }
-        } else if stage == ST_CHAL {
-            if str1.len() == 4 && str1[0] == b'C' && str1[1] == b'H' && str1[2] == b'A' && str1[3] == b'L' {
-                let mut chal_res: Vec<u8> = Vec::new();
-                if !cs2cl(&str2, &mut chal_res) {
-                    break;
-                }
 
-                h = match ctx.config {
-                    Some(ref config) => config.find_host(&host),
-                    None => break
-                };
+            let h = match ctx.config {
+                Some(ref config) => config.find_host(&host),
+                None => break
+            };
 
-                match h {
-                    Some(ref mut h) => match h.passwd {
-                        Some(ref passwd) => challenge::decrypt_chal(chal_res.as_mut_slice(), passwd.as_str()),
-                        None => break
+            let h = match h {
+                Some(h) => match h.passwd {
+                    Some(ref passwd) => {
+                        challenge::decrypt_chal(chal_res.as_mut_slice(), passwd.as_str());
+                        h
                     },
                     None => break
-                };
+                },
+                None => break
+            };
 
+            {
+                let mut matched = true;
                 for i in 0..VTUN_CHAL_SIZE {
                     if chal_req[i] != chal_res[i] {
-                        h = None;
+                        matched = false;
                         break;
                     }
                 }
-                /* Lock host */
-                if match h {
-                    Some(ref mut h) => !lock::lock_host_rs(ctx, h),
-                    None => true
-                } {
-                    /* Multiple connections are denied */
-                    h = None;
+                if !matched {
                     break;
                 }
-                let mut msg: Vec<u8> = Vec::new();
-                {
-                    let part = "OK FLAGS: ".as_bytes();
-                    for i in 0..part.len() {
-                        msg.push(part[i]);
-                    }
-                }
-                {
-                    let part = match h {
-                        Some(ref h) => bf2cf(h),
-                        None => break
-                    };
-                    for i in 0..part.len() {
-                        msg.push(part[i]);
-                    }
-                }
-                msg.push(b'\n');
-                print_p(fd, msg.as_slice());
+            }
+            /* Lock host */
+            if !lock::lock_host_rs(ctx, h) {
+                /* Multiple connections are denied */
                 break;
             }
-            break;
+            let mut msg: Vec<u8> = Vec::new();
+            {
+                let part = "OK FLAGS: ".as_bytes();
+                for i in 0..part.len() {
+                    msg.push(part[i]);
+                }
+            }
+            {
+                let part = bf2cf(h);
+                for i in 0..part.len() {
+                    msg.push(part[i]);
+                }
+            }
+            msg.push(b'\n');
+            print_p(fd, msg.as_slice());
+            return Ok(h.clone());
         }
+        break;
     }
-
-    match h {
-        Some(ref mut h) => Some((*h).clone()),
-        None => {
-            print_p(fd, "ERR\n".as_bytes());
-            None
-        }
-    }
+    Err(())
 }
 
 /* Authentication (Client side) */
-pub(crate) fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host: &mut vtun_host::VtunHost) -> bool {
+pub(crate) fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host: &mut vtun_host::VtunHost) -> Result<(),()> {
     let mut success = false;
-    let mut stage = ST_INIT;
+    let mut stage = ST_HOST;
 
     let mut buf = [0u8; VTUN_MESG_SIZE];
     while libfuncs::readn_t(linkfdctx, fd, &mut buf, ctx.vtun.timeout as libc::time_t) > 0 {
@@ -475,5 +456,9 @@ pub(crate) fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &File
         break;
     }
 
-    success
+    if success {
+        Ok(())
+    } else {
+        Err(())
+    }
 }

@@ -81,6 +81,10 @@ mod lfd_generic_encrypt;
 mod lfd_iv_encrypt;
 #[path = "main/lfd_iv_stream_encrypt.rs"]
 mod lfd_iv_stream_encrypt;
+#[path = "main/challenge2.rs"]
+mod challenge2;
+#[path = "main/auth2.rs"]
+mod auth2;
 
 use std::io::Write;
 use std::{env};

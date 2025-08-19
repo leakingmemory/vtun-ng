@@ -20,8 +20,7 @@ use std::{mem, ptr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use signal_hook::low_level;
-use crate::{exitcode, lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, syslog, tunnel};
-use crate::auth::auth_server;
+use crate::{auth2, exitcode, lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, syslog, tunnel};
 use crate::filedes::FileDes;
 use crate::linkfd::LinkfdCtx;
 use crate::mainvtun::VtunContext;
@@ -64,8 +63,8 @@ fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::Error
     let linkfdctx = LinkfdCtx::new(ctx);
     linkfdctx.io_init();
 
-    match auth_server(ctx, &linkfdctx, &sock) {
-        Some(mut host) => {
+    match auth2::auth_server(ctx, &linkfdctx, &sock) {
+        Ok(mut host) => {
             let mut sa: libc::sigaction = unsafe { mem::zeroed() };
             sa.sa_sigaction = libc::SIG_IGN;
             sa.sa_flags = libc::SA_NOCLDWAIT;
@@ -108,7 +107,7 @@ fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::Error
                 Err(e) => return e.get_exit_code()
             }
         }
-        None => {
+        Err(_) => {
             let msg = format!("Denied connection from {}:{}", ip, u16::from_be(cl_addr.sin_port));
             ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
         }

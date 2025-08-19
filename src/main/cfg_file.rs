@@ -222,7 +222,8 @@ struct HostConfigParsingContext {
     pub nathack_ctx: Option<Rc<Mutex<NatHackConfigParsingContext>>>,
     pub persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     pub keep_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
-    pub stat_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>
+    pub stat_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
+    pub experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>
 }
 
 impl HostConfigParsingContext {
@@ -243,7 +244,8 @@ impl HostConfigParsingContext {
             nathack_ctx: None,
             persist_ctx: None,
             keep_ctx: None,
-            stat_ctx: None
+            stat_ctx: None,
+            experimental_ctx: None
         }
     }
     pub fn apply(&self, ctx: &VtunContext, host: &mut VtunHost) {
@@ -348,6 +350,13 @@ impl HostConfigParsingContext {
                 }
             }
         }
+        match self.experimental_ctx {
+            None => {},
+            Some(ref experimental_ctx) => {
+                let experimental_ctx = experimental_ctx.lock().unwrap();
+                host.experimental = experimental_ctx.value;
+            }
+        }
     }
 }
 
@@ -425,6 +434,11 @@ impl ParsingContext for HostConfigParsingContext {
                 let stat_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "stat")));
                 self.stat_ctx = Some(stat_ctx.clone());
                 Some(stat_ctx)
+            },
+            Token::KwExperimental => {
+                let experimental_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "experimental")));
+                self.experimental_ctx = Some(experimental_ctx.clone());
+                Some(experimental_ctx)
             },
             Token::Ident(ident) => {
                 match ident.as_str() {
@@ -1026,7 +1040,8 @@ struct OptionsConfigParsingContext {
     shell_ctx: Option<Rc<Mutex<StringOptionParsingContext>>>,
     bindaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>,
     persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
-    syslog_ctx: Option<Rc<Mutex<SyslogOptionParsingContext>>>
+    syslog_ctx: Option<Rc<Mutex<SyslogOptionParsingContext>>>,
+    experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
 }
 
 impl OptionsConfigParsingContext {
@@ -1043,7 +1058,8 @@ impl OptionsConfigParsingContext {
             shell_ctx: None,
             bindaddr_ctx: None,
             persist_ctx: None,
-            syslog_ctx: None
+            syslog_ctx: None,
+            experimental_ctx: None
         }
     }
     fn apply(&self, ctx: &mut VtunContext) {
@@ -1116,6 +1132,12 @@ impl OptionsConfigParsingContext {
                 ctx.vtun.syslog = syslog_ctx.lock().unwrap().value;
             }
         }
+        match self.experimental_ctx {
+            None => {},
+            Some(ref experimental_ctx) => {
+                ctx.vtun.experimental = experimental_ctx.lock().unwrap().value;
+            }
+        }
     }
 }
 
@@ -1183,6 +1205,11 @@ impl ParsingContext for OptionsConfigParsingContext {
                 let syslog_ctx = Rc::new(Mutex::new(SyslogOptionParsingContext::new(Rc::clone(&ctx))));
                 self.syslog_ctx = Some(syslog_ctx.clone());
                 Some(syslog_ctx)
+            },
+            Token::KwExperimental => {
+                let experimental_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "experimental")));
+                self.experimental_ctx = Some(experimental_ctx.clone());
+                Some(experimental_ctx)
             },
             Token::Semicolon => None,
             Token::RBrace => {
@@ -1938,18 +1965,21 @@ impl ParsingContext for BoolOptionParsingContext {
 
 impl VtunConfigRoot {
     pub fn new(vtun_ctx: &mut VtunContext, file: &str) -> Option<Self> {
+        let content = match fs::read_to_string(file) {
+            Ok(c) => c,
+            Err(_) => {
+                let msg = format!("Failed to read config file '{}'", file);
+                vtun_ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                return None;
+            }
+        };
+        Self::new_from_string(vtun_ctx, content.as_str())
+    }
+    pub fn new_from_string(vtun_ctx: &mut VtunContext, content: &str) -> Option<Self> {
         let rootctx = Rc::new(Mutex::new(RootParsingContext::new()));
         {
             let mut ctx: Rc<Mutex<dyn ParsingContext>> = rootctx.clone();
-            let content = match fs::read_to_string(file) {
-                Ok(c) => c,
-                Err(_) => {
-                    let msg = format!("Failed to read config file '{}'", file);
-                    vtun_ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
-                    return None;
-                }
-            };
-            let mut lexer = Token::lexer(content.as_str());
+            let mut lexer = Token::lexer(content);
             while let Some(result) = lexer.next() {
                 match result {
                     Ok(token) => {

@@ -3,11 +3,6 @@ VTun-ng - Forked from VTun maintained by Bishop Clark up until around 2016.
 VTun - Virtual Tunnel over TCP/IP network.
 Copyright (C) 1998-2016 Maxim Krasnyansky <max_mk@yahoo.com>
 
-This product includes software developed by the OpenSSL Project
-for use in the OpenSSL Toolkit. (http://www.openssl.org/).
-
-Copyright (c) 1998-2004 The OpenSSL Project.  All rights reserved.
-
 Compilation and Installation:
 
 In order to compile VTun you need several software packages.

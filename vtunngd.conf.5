@@ -85,6 +85,10 @@ This option is ignored by the server.
 .IP \fBsyslog\fR\ \fBnumber\fR|\fBname\fR
 syslog facility specification, either numeric or name (from syslog (3)).
 
+.IP \fBexperimental\fR\ \fByes\fR|\fBno\fR
+experimental mode. To enable new protocol extensions that are not yet
+ready for general use.
+
 .IP \fBppp\ \fIpath\fR
 path to \fBpppd\fR(8) program.  Can be used in session sections.
 
@@ -279,6 +283,11 @@ control multiple connections.  \fIvalue\fR can be
 \fBno\fR or \fBdeny\fR to deny them or
 \fBkillold\fR to allow new connection and kill old one.
 Ignored by the client.
+
+.IP \fBexperimental\fR\ \fByes\fR|\fBno\fR
+experimental mode. To enable new protocol extensions that are not yet
+ready for general use.
+
 .IP \fBup\ \fIlist\fR
 list of programs to run after connection has been established.
 Used to initialize protocols, devices, routing and firewall.

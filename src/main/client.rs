@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 use signal_hook::{low_level, SigId};
-use crate::{auth, exitcode, lfd_mod, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
+use crate::{auth2, exitcode, lfd_mod, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
 use crate::filedes::FileDes;
 use crate::lfd_mod::VtunOpts;
 use crate::syslog::SyslogObject;
@@ -170,26 +170,29 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
         } else {
-            if auth::auth_client_rs(ctx, &linkfdctx, &s, host) {
-                let msg = format!("Session {}[{}] opened",
-                                  match host.host { Some(ref host) => host.as_str(), None => "<none>" },
-                                  match ctx.vtun.svr_name { Some(ref svr_name) => svr_name.as_str(), None => "<none>" });
-                ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
+            match auth2::auth_client_rs(ctx, &linkfdctx, &s, host) {
+                Ok(_) => {
+                    let msg = format!("Session {}[{}] opened",
+                                      match host.host { Some(ref host) => host.as_str(), None => "<none>" },
+                                      match ctx.vtun.svr_name { Some(ref svr_name) => svr_name.as_str(), None => "<none>" });
+                    ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
 
-                /* Start the tunnel */
-                let linkfdctx = Arc::new(linkfdctx);
-                client_ctx.set_client_term(match tunnel::tunnel(ctx, &linkfdctx, host, s) {
-                    Ok(client_term) => client_term,
-                    Err(exitcode) => return Err(exitcode)
-                });
+                    /* Start the tunnel */
+                    let linkfdctx = Arc::new(linkfdctx);
+                    client_ctx.set_client_term(match tunnel::tunnel(ctx, &linkfdctx, host, s) {
+                        Ok(client_term) => client_term,
+                        Err(exitcode) => return Err(exitcode)
+                    });
 
-                let msg = format!("Session {}[{}] closed",
-                                  match &host.host { Some(host) => host.as_str(), None => "<none>" },
-                                  match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
-                ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
-            } else {
-                let msg = format!("Connection denied by {}", match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
-                ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
+                    let msg = format!("Session {}[{}] closed",
+                                      match &host.host { Some(host) => host.as_str(), None => "<none>" },
+                                      match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
+                    ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
+                },
+                Err(_) => {
+                    let msg = format!("Connection denied by {}", match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
+                    ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
+                }
             }
         }
         host.sopt = VtunSopt::new();

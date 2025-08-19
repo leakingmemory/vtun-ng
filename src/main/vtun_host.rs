@@ -84,6 +84,7 @@ pub struct VtunHost {
     pub ka_maxfail: libc::c_int,
     pub src_addr: VtunAddr,
     pub sopt: VtunSopt,
+    pub experimental: bool,
 }
 
 impl VtunHost {
@@ -108,6 +109,7 @@ impl VtunHost {
             ka_maxfail: 4,
             src_addr: VtunAddr::new(),
             sopt: VtunSopt::new(),
+            experimental: false,
         }
     }
     pub fn clear_nat_hack_server(&mut self)

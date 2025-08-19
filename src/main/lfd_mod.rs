@@ -39,6 +39,7 @@ pub struct VtunOpts {
     pub syslog: libc::c_int, /* Facility to log messages to syslog under */
     pub log_to_syslog: bool, /* Log to syslog (true) or to stdout (false) */
     pub quiet: libc::c_int, /* Be quiet about common errors */
+    pub experimental: bool, /* Server setting for experimental features */
 }
 
 impl VtunOpts {
@@ -61,6 +62,7 @@ impl VtunOpts {
             syslog: LOG_DAEMON,
             log_to_syslog: true,
             quiet: 0,
+            experimental: false,
         }
     }
 }
@@ -108,12 +110,13 @@ pub const VTUN_NAT_HACK_MASK: libc::c_int =	VTUN_NAT_HACK_CLIENT | VTUN_NAT_HACK
 pub const VTUN_CONNECT_TIMEOUT: libc::c_int = 30;
 
 pub const VTUN_VER: &str = "3.X 07/24/2025";
+pub const VTUN_EXPERIMENTAL_VER: &str = "3.1 08/10/2025";
 
 pub const _LOG_EMERG: libc::c_int = 0;
 pub const _LOG_ALERT: libc::c_int = 1;
 pub const _LOG_CRIT: libc::c_int = 2;
 pub const LOG_ERR: libc::c_int = 3;
-pub const _LOG_WARNING: libc::c_int = 4;
+pub const LOG_WARNING: libc::c_int = 4;
 pub const _LOG_NOTICE: libc::c_int = 5;
 pub const LOG_INFO: libc::c_int = 6;
 pub const LOG_DEBUG: libc::c_int = 7;

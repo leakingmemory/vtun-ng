@@ -17,8 +17,9 @@ if [ ! -f test-image/usr/local/bin/vtunngd ]; then
   echo 'Did not install'
   exit 1
 fi
+rm -rf test-image
+cargo test || exit 1
 cd ..
 echo "Cleaning up"
 rm -rf vtun-ng-$version
-rm -rf test-image
 echo "Success"

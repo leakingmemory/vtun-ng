@@ -25,6 +25,7 @@ use crate::mainvtun::VtunContext;
 use crate::{cfg_file};
 use crate::{auth, challenge, challenge2, lfd_mod, libfuncs, setproctitle, vtun_host};
 use crate::auth::VTUN_MESG_SIZE;
+use crate::challenge2::mix_in_bytes;
 use crate::challenge::VTUN_CHAL_SIZE;
 #[cfg(test)]
 use crate::lfd_mod::VtunOpts;
@@ -395,6 +396,7 @@ fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
             }
         };
     }
+    mix_in_bytes(&mut client_challenge, host.as_bytes());
     match fd.read_timeout_zeropad(&mut padded, linkfdctx, ctx.vtun.timeout as time_t) {
         Ok(_) => {},
         Err(_) => {
@@ -509,7 +511,22 @@ fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
                 return Err(AuthServerError::ProtoError);
             }
         }
-        challenge2::mix_in_bytes(&mut chalreq, flags.as_slice());
+        {
+            let mut mix_in_bytes = Vec::<u8>::new();
+            let host = match host.host {
+                Some(ref host) => host.as_bytes(),
+                None => "".as_bytes()
+            };
+            mix_in_bytes.resize(flags.len() + host.len() + 1, 0u8);
+            for i in 0..flags.len() {
+                mix_in_bytes[i] = flags[i];
+            }
+            mix_in_bytes[flags.len()] = b':';
+            for i in 0..host.len() {
+                mix_in_bytes[i + flags.len() + 1] = host[i];
+            }
+            challenge2::mix_in_bytes(&mut chalreq, mix_in_bytes.as_slice());
+        }
         match challenge2::encrypt_challenge(&mut chalreq, passwd.as_str()) {
             Ok(_) => {},
             Err(_) => {
@@ -595,6 +612,13 @@ fn auth_client_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
                 return Err(AuthClientError::ProtoError);
             }
         };
+        {
+            let host = match host.host {
+                Some(ref host) => host.as_bytes(),
+                None => "".as_bytes()
+            };
+            mix_in_bytes(&mut chalreq, host);
+        }
         match challenge2::encrypt_challenge(&mut chalreq, passwd.as_str()) {
             Ok(_) => {},
             Err(_) => {
@@ -668,7 +692,22 @@ fn auth_client_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
             }
         };
     }
-    challenge2::mix_in_bytes(&mut server_challenge, flags);
+    {
+        let mut mix_in_bytes = Vec::<u8>::new();
+        let host = match host.host {
+            Some(ref host) => host.as_bytes(),
+            None => "".as_bytes()
+        };
+        mix_in_bytes.resize(flags.len() + host.len() + 1, 0u8);
+        for i in 0..flags.len() {
+            mix_in_bytes[i] = flags[i];
+        }
+        mix_in_bytes[flags.len()] = b':';
+        for i in 0..host.len() {
+            mix_in_bytes[i + flags.len() + 1] = host[i];
+        }
+        challenge2::mix_in_bytes(&mut server_challenge, mix_in_bytes.as_slice());
+    }
     match fd.read_timeout_zeropad(&mut padded, linkfdctx, ctx.vtun.timeout as time_t) {
         Ok(_) => {},
         Err(_) => {
@@ -765,6 +804,14 @@ fn get_test_context() -> VtunContext {
 #[cfg(test)]
 fn insert_test_config(ctx: &mut VtunContext) {
     let test_config = "testconnection {
+  passwd uC8PW21hrz3;
+  type ether;
+  proto tcp;
+  encrypt aes256cbc;
+  keepalive yes;
+};
+
+testconnection2 {
   passwd uC8PW21hrz3;
   type ether;
   proto tcp;
@@ -907,7 +954,9 @@ impl AuthCandidateConnection for NaughtyServer {
 
 #[cfg(test)]
 struct ClientServerEndpoint {
-    msgqueue: Vec<Vec<u8>>
+    msgqueue: Vec<Vec<u8>>,
+    eof: bool,
+    mitm_flags: bool
 }
 
 #[cfg(test)]
@@ -935,15 +984,19 @@ struct ClientServerPipeServerEnd {
 
 #[cfg(test)]
 impl ClientServerPipe {
-    pub fn new() -> Self {
+    pub fn new(mitm_flags: bool) -> Self {
         Self {
             state: Arc::new(ClientServerPipeState {
                 client_endpoint: Mutex::new(ClientServerEndpoint {
-                    msgqueue: Vec::new()
+                    msgqueue: Vec::new(),
+                    eof: false,
+                    mitm_flags
                 }),
                 client_condvar: Condvar::new(),
                 server_endpoint: Mutex::new(ClientServerEndpoint {
-                    msgqueue: Vec::new()
+                    msgqueue: Vec::new(),
+                    eof: false,
+                    mitm_flags: false
                 }),
                 server_condvar: Condvar::new()
             })
@@ -958,6 +1011,11 @@ impl ClientServerPipeClientEnd {
             state: pipe.state.clone()
         }
     }
+    pub fn close(&self) {
+        let mut server_endpoint = self.state.server_endpoint.lock().unwrap();
+        server_endpoint.close();
+        self.state.server_condvar.notify_one();
+    }
 }
 
 #[cfg(test)]
@@ -967,11 +1025,36 @@ impl ClientServerPipeServerEnd {
             state: pipe.state.clone()
         }
     }
+    pub fn close(&self) {
+        let mut client_endpoint = self.state.client_endpoint.lock().unwrap();
+        client_endpoint.close();
+        self.state.client_condvar.notify_one();
+    }
 }
 
 #[cfg(test)]
 impl ClientServerEndpoint {
     fn write(&mut self, buf: &[u8]) {
+        if self.mitm_flags {
+            let mut msglen = buf.len();
+            for i in 0..buf.len() {
+                if buf[i] == b'\n' || buf[i] == b'\0' {
+                    msglen = i;
+                    break;
+                }
+            }
+            let msg = str::from_utf8(&buf[0..msglen]).unwrap_or_else(|_| "");
+            if msg.starts_with("OK FLAGS:") {
+                let msg = "OK FLAGS: <T>\n";
+                let mut vec: Vec<u8> = Vec::new();
+                vec.resize(msg.as_bytes().len(), 0);
+                for i in 0..msg.as_bytes().len() {
+                    vec[i] = msg.as_bytes()[i];
+                }
+                self.msgqueue.push(vec);
+                return;
+            }
+        }
         let mut vec: Vec<u8> = Vec::new();
         vec.resize(buf.len(), 0u8);
         for i in 0..buf.len() {
@@ -980,7 +1063,7 @@ impl ClientServerEndpoint {
         self.msgqueue.push(vec);
     }
     fn read_ready(&self) -> bool {
-        !self.msgqueue.is_empty()
+        !self.msgqueue.is_empty() || self.eof
     }
     fn read_timeout_zeropad(&mut self, buf: &mut [u8]) -> Result<(), ()> {
         if self.msgqueue.is_empty() {
@@ -998,6 +1081,9 @@ impl ClientServerEndpoint {
             buf[i] = 0;
         }
         Ok(())
+    }
+    fn close(&mut self) {
+        self.eof = true;
     }
 }
 
@@ -1118,7 +1204,7 @@ fn test_with_naughty_server() {
 #[cfg(test)]
 #[test]
 fn test_client_server_succesful_auth() {
-    let pipe = ClientServerPipe::new();
+    let pipe = ClientServerPipe::new(false);
     let server_end = ClientServerPipeServerEnd::new(&pipe);
     let server_handle = thread::spawn(move || {
         let mut ctx = get_test_context();
@@ -1126,7 +1212,9 @@ fn test_client_server_succesful_auth() {
         let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
         assert!(ctx.config.is_some());
         println!("Server started");
-        assert!(match auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection") {
+        let server_result = auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection");
+        server_end.close();
+        assert!(match server_result {
             Ok(_) => true,
             Err(_) => false
         });
@@ -1148,11 +1236,121 @@ fn test_client_server_succesful_auth() {
     assert!(host.is_some());
     let mut host = host.unwrap();
     println!("Client started");
-    assert!(match auth_client_chalresp(&ctx, &linkfdctx, &client_end, &mut host) {
+    let client_result = auth_client_chalresp(&ctx, &linkfdctx, &client_end, &mut host);
+    client_end.close();
+    assert!(match client_result {
         Ok(_) => true,
         Err(_) => false
     });
     println!("Server authentication was good");
     server_handle.join().unwrap();
     println!("All good");
+}
+
+#[cfg(test)]
+#[test]
+fn test_client_server_mitm_flags_auth() {
+    let pipe = ClientServerPipe::new(true);
+    let server_end = ClientServerPipeServerEnd::new(&pipe);
+    let server_handle = thread::spawn(move || {
+        let mut ctx = get_test_context();
+        insert_test_config(&mut ctx);
+        let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
+        assert!(ctx.config.is_some());
+        println!("Server started");
+        let server_result = auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection");
+        server_end.close();
+        let mut error = AuthServerError::GenRandom;
+        assert!(match server_result {
+            Ok(_) => false,
+            Err(code) => {
+                error = code;
+                true
+            }
+        });
+        assert!(matches!(error, AuthServerError::ReadError));
+        println!("Client authentication was good");
+    });
+    let client_end = ClientServerPipeClientEnd::new(&pipe);
+    let mut ctx = get_test_context();
+    insert_test_config(&mut ctx);
+    let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
+    assert!(ctx.config.is_some());
+    let host = match ctx.config {
+        Some(ref config) => {
+            let host = config.find_host("testconnection");
+            assert!(host.is_some());
+            Some(host.unwrap().clone())
+        },
+        None => None
+    };
+    assert!(host.is_some());
+    let mut host = host.unwrap();
+    println!("Client started");
+    let mut error = AuthClientError::EncryptionError;
+    let client_result = auth_client_chalresp(&ctx, &linkfdctx, &client_end, &mut host);
+    client_end.close();
+    assert!(match client_result {
+        Ok(_) => false,
+        Err(code) => {
+            error = code;
+            true
+        }
+    });
+    assert!(matches!(error, AuthClientError::AuthenticationError));
+    println!("Client finished");
+    server_handle.join().unwrap();
+}
+
+#[cfg(test)]
+#[test]
+fn test_client_server_mitm_service_name() {
+    let pipe = ClientServerPipe::new(false);
+    let server_end = ClientServerPipeServerEnd::new(&pipe);
+    let server_handle = thread::spawn(move || {
+        let mut ctx = get_test_context();
+        insert_test_config(&mut ctx);
+        let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
+        assert!(ctx.config.is_some());
+        println!("Server started");
+        let result = auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection2");
+        server_end.close();
+        let mut error = AuthServerError::GenRandom;
+        assert!(match result {
+            Ok(_) => false,
+            Err(code) => {
+                error = code;
+                true
+            }
+        });
+        assert!(matches!(error, AuthServerError::AuthenticationError));
+    });
+    let client_end = ClientServerPipeClientEnd::new(&pipe);
+    let mut ctx = get_test_context();
+    insert_test_config(&mut ctx);
+    let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
+    assert!(ctx.config.is_some());
+    let host = match ctx.config {
+        Some(ref config) => {
+            let host = config.find_host("testconnection");
+            assert!(host.is_some());
+            Some(host.unwrap().clone())
+        },
+        None => None
+    };
+    assert!(host.is_some());
+    let mut host = host.unwrap();
+    println!("Client started");
+    let mut error = AuthClientError::EncryptionError;
+    assert!(match auth_client_chalresp(&ctx, &linkfdctx, &client_end, &mut host) {
+        Ok(_) => false,
+        Err(code) => {
+            error = code;
+            true
+        }
+    });
+    client_end.close();
+    assert!(matches!(error, AuthClientError::ReadError));
+    println!("Client finished");
+    server_handle.join().unwrap();
 }

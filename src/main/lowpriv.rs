@@ -1,11 +1,11 @@
 use std::io::{pipe, Read, Write};
-use caps::{CapSet};
 use libc::WEXITSTATUS;
 use crate::exitcode::ExitCode;
 use crate::lfd_mod;
 use crate::mainvtun::VtunContext;
 use crate::syslog::{SyslogObject};
 
+#[cfg(target_os = "linux")]
 pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worker_fn: &mut F) -> Result<i32, ExitCode> where F: FnMut(&mut VtunContext) -> Result<i32,()>
 {
     let (mut r, mut w) = match pipe() {
@@ -67,6 +67,13 @@ pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worke
     }
 }
 
+#[cfg(not(target_os = "linux"))]
+pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worker_fn: &mut F) -> Result<i32, ExitCode> where F: FnMut(&mut VtunContext) -> Result<i32,()> {
+    is_forked = false;
+    worker_fn(ctx)
+}
+
+#[cfg(target_os = "linux")]
 fn drop_privileges(ctx: &VtunContext) -> Result<(),()> {
     match set_no_new_privs(ctx) {
         Ok(_) => {},
@@ -75,22 +82,68 @@ fn drop_privileges(ctx: &VtunContext) -> Result<(),()> {
     drop_caps(ctx)
 }
 
-#[cfg(target_os = "linux")]
-fn drop_caps(ctx: &VtunContext) -> Result<(),()> {
-    for set in [CapSet::Bounding, CapSet::Ambient, CapSet::Effective, CapSet::Permitted, CapSet::Inheritable] {
-        match caps::clear(None, set).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)) {
-            Ok(_) => {},
-            Err(_) => {
-                ctx.syslog(lfd_mod::LOG_ERR, "Unable to clear capabilities");
-                return Err(());
-            }
-        };
-    }
-    Ok(())
+#[repr(C)]
+struct CapHdr {
+    version: u32,
+    pid: u32,
+    padding: [u64; 7]
 }
 
-#[cfg(not(target_os = "linux"))]
+#[repr(C)]
+struct CapDataPoint {
+    effective: u32,
+    permitted: u32,
+    inheritable: u32
+}
+#[repr(C)]
+struct CapData {
+    capabilities: [CapDataPoint; 8],
+    padding: [u32; 8]
+}
+
+#[cfg(target_os = "linux")]
 fn drop_caps(ctx: &VtunContext) -> Result<(),()> {
+    // Drop bounding set capabilities
+    for cap in 0..=63 {
+        let capread = unsafe { libc::prctl(libc::PR_CAPBSET_READ, cap) };
+        if capread < 0 {
+            break;
+        }
+        if (capread & 1) == 0 {
+            continue;
+        }
+        if unsafe { libc::prctl(libc::PR_CAPBSET_DROP, cap, 0, 0, 0) } < 0 {
+            ctx.syslog(lfd_mod::LOG_ERR, "Unable to drop capability from bounding set");
+            return Err(());
+        }
+    }
+
+    // Drop ambient set capabilities
+    if unsafe { libc::prctl(libc::PR_CAP_AMBIENT, libc::PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0) } != 0 {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unable to drop capabilities from ambient set");
+        return Err(());
+    }
+
+    // Drop effective, permitted and inheritable capabilities
+    let mut hdr: CapHdr = unsafe { std::mem::zeroed() };
+    let mut data: CapData = unsafe { std::mem::zeroed() };
+    hdr.version = 0x20080522;
+    hdr.pid = 0;
+    if unsafe { libc::syscall(libc::SYS_capget, &mut hdr as *mut CapHdr as *mut libc::c_void, &mut data as *mut CapData as *mut libc::c_void) } < 0 {
+        let msg = format!("Unable to get capabilities: {}", errno::errno().to_string());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        return Err(());
+    }
+    for i in 0..4 {
+        data.capabilities[i].effective = 0;
+        data.capabilities[i].permitted = 0;
+        data.capabilities[i].inheritable = 0;
+    }
+    if unsafe { libc::syscall(libc::SYS_capset, &mut hdr as *mut CapHdr as *mut libc::c_void, &mut data as *mut CapData as *mut libc::c_void) } < 0 {
+        let msg = format!("Unable to set capabilities: {}", errno::errno().to_string());
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        return Err(());
+    }
     Ok(())
 }
 
@@ -101,10 +154,5 @@ fn set_no_new_privs(ctx: &VtunContext) -> Result<(),()> {
         ctx.syslog(lfd_mod::LOG_ERR, "Unable to set no_new_privs");
         return Err(());
     }
-    Ok(())
-}
-
-#[cfg(not(target_os = "linux"))]
-fn set_no_new_privs(ctx: VtunContext) -> Result<(),()> {
     Ok(())
 }

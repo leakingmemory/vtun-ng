@@ -318,25 +318,22 @@ fn tunnel_lfd(ctx: &mut VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &
     }
 
     let typeflags = host.flags & linkfd::VTUN_TYPE_MASK;
+    let proc_title;
     if typeflags == linkfd::VTUN_TTY {
-        let msg = format!("{} tty", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
-        set_title(msg.as_str());
+        proc_title = format!("{} tty", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
     } else if typeflags == linkfd::VTUN_PIPE {
         /* Close second end of the pipe */
         driver.close_second_pipe_fd();
-        {
-            let ttle = format!("{} pipe", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
-            set_title(ttle.as_str());
-        }
+        proc_title = format!("{} pipe", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
     } else if typeflags == linkfd::VTUN_ETHER {
-        let ttle = format!("{} ether {}", match host.host {Some(ref host) => host.as_str(), None => "<none>"}, dev);
-        set_title(ttle.as_str());
+        proc_title = format!("{} ether {}", match host.host {Some(ref host) => host.as_str(), None => "<none>"}, dev);
     } else if typeflags == linkfd::VTUN_TUN {
-        let ttle = format!("{} tun {}", match host.host {Some(ref host) => host.as_str(), None => "<none>"}, dev);
-        set_title(ttle.as_str());
+        proc_title = format!("{} tun {}", match host.host {Some(ref host) => host.as_str(), None => "<none>"}, dev);
+    } else {
+        proc_title = format!("{} unknown", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
     }
     let mut is_forked: bool = false;
-    let linkfd_result = fork_lowpriv_worker(ctx, &mut is_forked,&mut |ctx: &mut VtunContext| -> Result<i32,()> {
+    let linkfd_result = fork_lowpriv_worker(ctx, proc_title.as_str(), &mut is_forked,&mut |ctx: &mut VtunContext| -> Result<i32,()> {
         unsafe {
             libc::signal(libc::SIGCHLD, libc::SIG_IGN);
         }

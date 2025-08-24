@@ -1,17 +1,23 @@
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use std::io::{pipe, Read, Write};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use libc::WEXITSTATUS;
 use crate::exitcode::ExitCode;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::lfd_mod;
 use crate::mainvtun::VtunContext;
-#[cfg(target_os = "linux")]
+use crate::setproctitle::set_title;
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::syslog::{SyslogObject};
 
-#[cfg(target_os = "linux")]
-pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worker_fn: &mut F) -> Result<i32, ExitCode> where F: FnMut(&mut VtunContext) -> Result<i32,()>
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<i32, ExitCode> where F: FnMut(&mut VtunContext) -> Result<i32,()>
 {
+    let priv_proc_title = format!("masterproc {}", proc_title);
+    {
+        let setup_proc_title = format!("drop priv {}", proc_title);
+        set_title(setup_proc_title.as_str());
+    }
     let (mut r, mut w) = match pipe() {
         Ok(p) => p,
         Err(_) => {
@@ -26,6 +32,7 @@ pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worke
         ctx.syslog(lfd_mod::LOG_ERR, "Unable to fork low privileged child");
         Err(ExitCode::from_code(1))
     } else if res == 0 {
+        set_title(proc_title);
         *is_forked = true;
         drop(r);
         match drop_privileges(ctx) {
@@ -44,6 +51,7 @@ pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worke
             Err(_) => Err(ExitCode::from_code(1))
         }
     } else {
+        set_title(priv_proc_title.as_str());
         *is_forked = false;
         drop(w);
         let mut wstatus: libc::c_int = 0;
@@ -71,22 +79,37 @@ pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worke
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worker_fn: &mut F) -> Result<i32, ExitCode> where F: FnMut(&mut VtunContext) -> Result<i32,()> {
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<i32, ExitCode> where F: FnMut(&mut VtunContext) -> Result<i32,()> {
     *is_forked = false;
+    set_title(proc_title);
     match worker_fn(ctx) {
         Ok(rv) => Ok(rv),
         Err(_) => Err(ExitCode::from_code(1))
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn drop_privileges(ctx: &VtunContext) -> Result<(),()> {
+    drop_caps(ctx)
+}
+
+#[cfg(target_os = "freebsd")]
+fn drop_caps(ctx: &VtunContext) -> Result<(),()> {
+    if (unsafe { libc::cap_enter() } < 0) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unable to enter capability restricted mode");
+        return Err(());
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn drop_caps(ctx: &VtunContext) -> Result<(),()> {
     match set_no_new_privs(ctx) {
         Ok(_) => {},
         Err(_) => return Err(())
     }
-    drop_caps(ctx)
+    drop_capsets(ctx)
 }
 
 #[cfg(target_os = "linux")]
@@ -112,7 +135,7 @@ struct CapData {
 }
 
 #[cfg(target_os = "linux")]
-fn drop_caps(ctx: &VtunContext) -> Result<(),()> {
+fn drop_capsets(ctx: &VtunContext) -> Result<(),()> {
     // Drop bounding set capabilities
     for cap in 0..=63 {
         let capread = unsafe { libc::prctl(libc::PR_CAPBSET_READ, cap) };

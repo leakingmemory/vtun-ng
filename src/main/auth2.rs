@@ -22,17 +22,15 @@ use crate::filedes::FileDes;
 use crate::linkfd::LinkfdCtx;
 use crate::mainvtun::VtunContext;
 #[cfg(test)]
-use crate::{cfg_file};
+use crate::{cfg_file, mainvtun};
 use crate::{auth, challenge, challenge2, lfd_mod, libfuncs, setproctitle, vtun_host};
 use crate::auth::VTUN_MESG_SIZE;
 use crate::challenge2::mix_in_bytes;
 use crate::challenge::VTUN_CHAL_SIZE;
-#[cfg(test)]
-use crate::lfd_mod::VtunOpts;
+use crate::exitcode::ExitCode;
 use crate::libfuncs::print_p;
+use crate::lowpriv::fork_lowpriv_worker;
 use crate::syslog::SyslogObject;
-#[cfg(test)]
-use crate::vtun_host::VtunAddr;
 
 trait ToWireForm {
     fn size_for_to_wire_form(&self) -> usize;
@@ -178,7 +176,7 @@ impl AuthCandidateConnection for FileDes {
     }
 }
 
-pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Result<vtun_host::VtunHost,()> {
+pub fn auth_server(ctx: &mut VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Result<vtun_host::VtunHost,ExitCode> {
     setproctitle::set_title("protocol negotiation");
     let experimental_enabled = ctx.vtun.experimental;
     let greeting;
@@ -193,7 +191,7 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Re
     let mut buf = [0u8; VTUN_MESG_SIZE];
     if libfuncs::readn_t(linkfdctx, fd, &mut buf, ctx.vtun.timeout as time_t + 1) <= 0 {
         ctx.syslog(lfd_mod::LOG_ERR, "Read from client failed, terminating connection");
-        return Err(());
+        return Err(ExitCode::from_code(1));
     }
 
     let mut auth2_enabled = true;
@@ -212,7 +210,7 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Re
     if buf[0] == b'H' && buf[1] == b'O' && buf[2] == b'S' && buf[3] == b'T' && buf[4] == b':' && buf[5] == b' ' {
         if auth2_enabled && !experimental_enabled {
             ctx.syslog(lfd_mod::LOG_ERR, "Client requested features that are experimental and disabled by default");
-            return Err(());
+            return Err(ExitCode::from_code(1));
         }
         let mut len = VTUN_MESG_SIZE;
         for i in 6..VTUN_MESG_SIZE {
@@ -222,22 +220,61 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Re
             }
         }
         let service_name = String::from_utf8_lossy(buf[6..len].as_ref());
-        let auth_result = if auth2_enabled {
-            match auth_server_chalresp(ctx, linkfdctx, fd, service_name.as_ref()) {
-                Ok(host) => Ok(host),
-                Err(_) => Err(())
+        let host = {
+            let fhost = match ctx.config {
+                Some(ref config) => config.find_host(service_name.as_ref()),
+                None => None
+            };
+            match fhost {
+                Some(host) => host.clone(),
+                None => {
+                    ctx.syslog(lfd_mod::LOG_ERR, "Requested host config not found, terminating connection");
+                    print_p(fd, "ERR\n".as_bytes());
+                    return Err(ExitCode::from_code(1));
+                }
             }
-        } else {
-            auth::auth_server(ctx, linkfdctx, fd, service_name.as_ref())
+        };
+        let auth_result = {
+            let mut is_forked = false;
+            println!("Forking authentication worker");
+            let auth_result = fork_lowpriv_worker(ctx, "authentication", &mut is_forked, &mut |ctx: &mut VtunContext| {
+                if auth2_enabled {
+                    match auth_server_chalresp(ctx, linkfdctx, fd, &host, service_name.as_ref()) {
+                        Ok(host) => Ok(host),
+                        Err(_) => Err(())
+                    }
+                } else {
+                    auth::auth_server(ctx, linkfdctx, fd, &host)
+                }
+            });
+            if is_forked {
+                println!("Authentication fork is exiting");
+                return match auth_result {
+                    Ok(_) => Err(ExitCode::from_code(1)),
+                    Err(exit_code) => {
+                        if (exit_code.get_exit_code().is_ok()) {
+                            println!("Ok code");
+                        } else {
+                            println!("Err code");
+                        }
+                        Err(exit_code)
+                    }
+                };
+            }
+            println!("Authentication result");
+            auth_result
         };
         if let Err(_) = auth_result {
             print_p(fd, "ERR\n".as_bytes());
         }
-        return auth_result;
+        return match auth_result {
+            Ok(_) => Ok(host.clone()),
+            Err(_) => Err(ExitCode::from_code(1))
+        };
     }
 
     ctx.syslog(lfd_mod::LOG_ERR, "Client greeting not recognized, terminating connection");
-    Err(())
+    Err(ExitCode::from_code(1))
 }
 
 pub fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host: &mut vtun_host::VtunHost) -> Result<(),()> {
@@ -366,14 +403,13 @@ enum AuthServerError {
     WriteError,
     ReadError,
     ProtoError,
-    HostConfigNotFound,
     HostConfigInvalid,
     EncryptionError,
     AuthenticationError,
     ClientRejected
 }
 
-fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthCandidateConnection, host: &str) -> Result<vtun_host::VtunHost,AuthServerError> {
+fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthCandidateConnection, host: &vtun_host::VtunHost, service_name: &str) -> Result<(),AuthServerError> {
     let mut client_challenge: [u8; VTUN_CHAL_SIZE] = [0u8; VTUN_CHAL_SIZE];
     let mut padded = [0u8; VTUN_MESG_SIZE];
     let mut tmp = [0u8; VTUN_MESG_SIZE];
@@ -396,7 +432,7 @@ fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
             }
         };
     }
-    mix_in_bytes(&mut client_challenge, host.as_bytes());
+    mix_in_bytes(&mut client_challenge, service_name.as_bytes());
     match fd.read_timeout_zeropad(&mut padded, linkfdctx, ctx.vtun.timeout as time_t) {
         Ok(_) => {},
         Err(_) => {
@@ -405,7 +441,7 @@ fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
         }
     }
     let passwd;
-    let host = {
+    {
         let chalmsg = padded[0] == b'C' && padded[1] == b'H' && padded[2] == b'A' && padded[3] == b'L' && padded[4] == b':' && padded[5] == b' ' && padded[6] == b'<';
         if !chalmsg {
             ctx.syslog(lfd_mod::LOG_ERR, "Incorrect challenge response, terminating connection");
@@ -428,19 +464,6 @@ fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
             Err(_) => {
                 ctx.syslog(lfd_mod::LOG_ERR, "Incorrect challenge response, terminating connection");
                 return Err(AuthServerError::ProtoError);
-            }
-        };
-        let host = {
-            let fhost = match ctx.config {
-                Some(ref config) => config.find_host(host),
-                None => None
-            };
-            match fhost {
-                Some(host) => host,
-                None => {
-                    ctx.syslog(lfd_mod::LOG_ERR, "Requested host config not found, terminating connection");
-                    return Err(AuthServerError::HostConfigNotFound);
-                }
             }
         };
         passwd = match host.passwd {
@@ -470,7 +493,6 @@ fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
             ctx.syslog(lfd_mod::LOG_ERR, "Incorrect challenge response, terminating connection");
             return Err(AuthServerError::AuthenticationError);
         }
-        host
     };
     let flags;
     {
@@ -556,7 +578,7 @@ fn auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
         }
     }
     if padded[0] == b'O' && padded[1] == b'K' {
-        Ok(host.clone())
+        Ok(())
     } else {
         ctx.syslog(lfd_mod::LOG_ERR, "Client rejected the response, terminating connection");
         Err(AuthServerError::ClientRejected)
@@ -770,37 +792,6 @@ fn auth_client_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthC
     Ok(())
 }
 
-#[cfg(test)]
-fn get_test_context() -> VtunContext {
-    VtunContext {
-        config: None,
-        vtun: VtunOpts {
-            timeout: 0,
-            persist: 0,
-            cfg_file: None,
-            shell: None,
-            ppp: None,
-            ifcfg: None,
-            route: None,
-            fwall: None,
-            iproute: None,
-            svr_name: None,
-            svr_addr: None,
-            bind_addr: VtunAddr {
-                name: None,
-                ip: None,
-                port: 0,
-                type_: 0,
-            },
-            svr_type: 0,
-            syslog: 0,
-            log_to_syslog: false,
-            quiet: 0,
-            experimental: false,
-        },
-        is_rmt_fd_connected: false,
-    }
-}
 #[cfg(test)]
 fn insert_test_config(ctx: &mut VtunContext) {
     let test_config = "testconnection {
@@ -1146,9 +1137,29 @@ impl AuthCandidateConnection for ClientServerPipeServerEnd {
 }
 
 #[cfg(test)]
+fn test_auth_server_chalresp(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &dyn AuthCandidateConnection, service_name: &str) -> Result<(),Result<AuthServerError,()>> {
+    let host = {
+        let fhost = match ctx.config {
+            Some(ref config) => config.find_host(service_name.as_ref()),
+            None => None
+        };
+        match fhost {
+            Some(host) => host,
+            None => {
+                return Err(Err(()));
+            }
+        }
+    };
+    match auth_server_chalresp(ctx, linkfdctx, fd, host, service_name) {
+        Ok(_) => Ok(()),
+        Err(error) => Err(Ok(error))
+    }
+}
+
+#[cfg(test)]
 #[test]
 fn test_with_naughty_client() {
-    let mut ctx = get_test_context();
+    let mut ctx = mainvtun::get_test_context();
     insert_test_config(&mut ctx);
     let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
     let client = NaughtyClient {
@@ -1157,11 +1168,16 @@ fn test_with_naughty_client() {
         })
     };
     let mut error = AuthServerError::ClientRejected;
-    assert!(match auth_server_chalresp(&ctx, &linkfdctx, &client, "testconnection") {
+    assert!(match test_auth_server_chalresp(&ctx, &linkfdctx, &client, "testconnection") {
         Ok(_) => false,
-        Err(code) => {
-            error = code;
-            true
+        Err(err) => {
+            match err {
+                Ok(code) => {
+                    error = code;
+                    true
+                },
+                Err(_) => false
+            }
         }
     });
     assert!(matches!(error, AuthServerError::AuthenticationError));
@@ -1170,7 +1186,7 @@ fn test_with_naughty_client() {
 #[cfg(test)]
 #[test]
 fn test_with_naughty_server() {
-    let mut ctx = get_test_context();
+    let mut ctx = mainvtun::get_test_context();
     insert_test_config(&mut ctx);
     let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
     let server = NaughtyServer {
@@ -1207,12 +1223,12 @@ fn test_client_server_succesful_auth() {
     let pipe = ClientServerPipe::new(false);
     let server_end = ClientServerPipeServerEnd::new(&pipe);
     let server_handle = thread::spawn(move || {
-        let mut ctx = get_test_context();
+        let mut ctx = mainvtun::get_test_context();
         insert_test_config(&mut ctx);
         let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
         assert!(ctx.config.is_some());
         println!("Server started");
-        let server_result = auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection");
+        let server_result = test_auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection");
         server_end.close();
         assert!(match server_result {
             Ok(_) => true,
@@ -1221,7 +1237,7 @@ fn test_client_server_succesful_auth() {
         println!("Client authentication was good");
     });
     let client_end = ClientServerPipeClientEnd::new(&pipe);
-    let mut ctx = get_test_context();
+    let mut ctx = mainvtun::get_test_context();
     insert_test_config(&mut ctx);
     let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
     assert!(ctx.config.is_some());
@@ -1253,26 +1269,31 @@ fn test_client_server_mitm_flags_auth() {
     let pipe = ClientServerPipe::new(true);
     let server_end = ClientServerPipeServerEnd::new(&pipe);
     let server_handle = thread::spawn(move || {
-        let mut ctx = get_test_context();
+        let mut ctx = mainvtun::get_test_context();
         insert_test_config(&mut ctx);
         let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
         assert!(ctx.config.is_some());
         println!("Server started");
-        let server_result = auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection");
+        let server_result = test_auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection");
         server_end.close();
         let mut error = AuthServerError::GenRandom;
         assert!(match server_result {
             Ok(_) => false,
-            Err(code) => {
-                error = code;
-                true
+            Err(err) => {
+                match err {
+                    Ok(code) => {
+                        error = code;
+                        true
+                    },
+                    Err(_) => false
+                }
             }
         });
         assert!(matches!(error, AuthServerError::ReadError));
         println!("Client authentication was good");
     });
     let client_end = ClientServerPipeClientEnd::new(&pipe);
-    let mut ctx = get_test_context();
+    let mut ctx = mainvtun::get_test_context();
     insert_test_config(&mut ctx);
     let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
     assert!(ctx.config.is_some());
@@ -1308,25 +1329,30 @@ fn test_client_server_mitm_service_name() {
     let pipe = ClientServerPipe::new(false);
     let server_end = ClientServerPipeServerEnd::new(&pipe);
     let server_handle = thread::spawn(move || {
-        let mut ctx = get_test_context();
+        let mut ctx = mainvtun::get_test_context();
         insert_test_config(&mut ctx);
         let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
         assert!(ctx.config.is_some());
         println!("Server started");
-        let result = auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection2");
+        let result = test_auth_server_chalresp(&ctx, &linkfdctx, &server_end, "testconnection2");
         server_end.close();
         let mut error = AuthServerError::GenRandom;
         assert!(match result {
             Ok(_) => false,
-            Err(code) => {
-                error = code;
-                true
+            Err(err) => {
+                match err {
+                    Ok(code) => {
+                        error = code;
+                        true
+                    },
+                    Err(_) => false
+                }
             }
         });
         assert!(matches!(error, AuthServerError::AuthenticationError));
     });
     let client_end = ClientServerPipeClientEnd::new(&pipe);
-    let mut ctx = get_test_context();
+    let mut ctx = mainvtun::get_test_context();
     insert_test_config(&mut ctx);
     let linkfdctx: LinkfdCtx = LinkfdCtx::new(&ctx);
     assert!(ctx.config.is_some());

@@ -21,6 +21,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use signal_hook::low_level;
 use crate::{auth2, exitcode, lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, syslog, tunnel};
+use crate::exitcode::ExitCode;
 use crate::filedes::FileDes;
 use crate::linkfd::LinkfdCtx;
 use crate::mainvtun::VtunContext;
@@ -46,16 +47,16 @@ impl ServerCtx {
         self.set_server_term(linkfd::VTUN_SIG_TERM);
     }
 }
-fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::ErrorCode> {
+fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),ExitCode> {
     let mut cl_addr : libc::sockaddr_in = unsafe { mem::zeroed() };
     if !sock.getpeername_sockaddr_in(&mut cl_addr) {
         ctx.syslog(lfd_mod::LOG_ERR, "Can't get peer name");
-        return exitcode::ExitCode::from_code(1).get_exit_code();
+        return Err(ExitCode::from_code(1));
     }
     let mut my_addr : libc::sockaddr_in = unsafe { mem::zeroed() };
     if !sock.getsockname_sockaddr_in(&mut my_addr) {
         ctx.syslog(lfd_mod::LOG_ERR, "Can't get local socket address");
-        return exitcode::ExitCode::from_code(1).get_exit_code();
+        return Err(ExitCode::from_code(1));
     }
 
     let ip = std::net::Ipv4Addr::from(u32::from_be(cl_addr.sin_addr.s_addr)).to_string();
@@ -104,10 +105,13 @@ fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::Error
 
             match result {
                 Ok(_) => {},
-                Err(e) => return e.get_exit_code()
+                Err(e) => return Err(ExitCode::from_code(1))
             }
         }
-        Err(_) => {
+        Err(exitcode) => {
+            if (exitcode.get_exit_code().is_ok()) {
+                return Err(exitcode);
+            }
             let msg = format!("Denied connection from {}:{}", ip, u16::from_be(cl_addr.sin_port));
             ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
         }
@@ -115,32 +119,32 @@ fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::Error
     Ok(())
 }
 
-fn listener(ctx: &mut VtunContext) -> Result<(), exitcode::ErrorCode> {
+fn listener(ctx: &mut VtunContext) -> Result<(), ExitCode> {
     let mut my_addr: libc::sockaddr_in = unsafe { mem::zeroed() };
     my_addr.sin_family = libc::AF_INET as libc::sa_family_t;
 
     /* Set listen address */
     if !netlib::generic_addr_rs(ctx, &mut my_addr, & ctx.vtun.bind_addr) {
         ctx.syslog(lfd_mod::LOG_ERR, "Can't fill in listen socket");
-        return exitcode::ExitCode::from_code(1).get_exit_code();
+        return Err(ExitCode::from_code(1));
     }
 
     let mut s= FileDes::socket(libc::AF_INET, libc::SOCK_STREAM,0);
     if !s.ok() {
         ctx.syslog(lfd_mod::LOG_ERR, "Can't create socket");
-        return exitcode::ExitCode::from_code(1).get_exit_code();
+        return Err(ExitCode::from_code(1));
     }
 
     s.set_so_reuseaddr(true);
 
     if !s.bind_sockaddr_in(&my_addr) {
         ctx.syslog(lfd_mod::LOG_ERR, "Can't bind to the socket");
-        return exitcode::ExitCode::from_code(1).get_exit_code();
+        return Err(ExitCode::from_code(1));
     }
 
     if !s.listen(10) {
         ctx.syslog(lfd_mod::LOG_ERR, "Can't listen on the socket");
-        return exitcode::ExitCode::from_code(1).get_exit_code();
+        return Err(ExitCode::from_code(1));
     }
 
     let server_ctx = Arc::new(ServerCtx::new(ctx));
@@ -228,7 +232,7 @@ fn listener(ctx: &mut VtunContext) -> Result<(), exitcode::ErrorCode> {
     Ok(())
 }
 
-pub fn server_rs(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::ErrorCode> {
+pub fn server_rs(ctx: &mut VtunContext, sock: FileDes) -> Result<(),ExitCode> {
     let mut sa: libc::sigaction = unsafe { mem::zeroed() };
     sa.sa_sigaction=libc::SIG_IGN;
     sa.sa_flags=libc::SA_NOCLDWAIT;
@@ -252,6 +256,6 @@ pub fn server_rs(ctx: &mut VtunContext, sock: FileDes) -> Result<(),exitcode::Er
     } else if svr_type == lfd_mod::VTUN_INETD {
         connection(ctx, sock)
     } else {
-        exitcode::ExitCode::from_code(1).get_exit_code()
+        Err(ExitCode::from_code(1))
     }
 }

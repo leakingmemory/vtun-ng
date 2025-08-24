@@ -251,7 +251,7 @@ fn get_tokenize_length(slice: &mut [u8]) -> usize {
     len
 }
 /* Authentication (Server side) */
-pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host: &str) -> Result<vtun_host::VtunHost,()> {
+pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host: &vtun_host::VtunHost) -> Result<(),()> {
     setproctitle::set_title("authentication");
 
     let mut chal_req: [u8; VTUN_CHAL_SIZE] = [0u8; VTUN_CHAL_SIZE];
@@ -340,18 +340,9 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host:
                 break;
             }
 
-            let h = match ctx.config {
-                Some(ref config) => config.find_host(&host),
-                None => break
-            };
-
-            let h = match h {
-                Some(h) => match h.passwd {
-                    Some(ref passwd) => {
-                        challenge::decrypt_chal(chal_res.as_mut_slice(), passwd.as_str());
-                        h
-                    },
-                    None => break
+            match host.passwd {
+                Some(ref passwd) => {
+                    challenge::decrypt_chal(chal_res.as_mut_slice(), passwd.as_str());
                 },
                 None => break
             };
@@ -369,7 +360,7 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host:
                 }
             }
             /* Lock host */
-            if !lock::lock_host_rs(ctx, h) {
+            if !lock::lock_host_rs(ctx, host) {
                 /* Multiple connections are denied */
                 break;
             }
@@ -381,14 +372,14 @@ pub fn auth_server(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, host:
                 }
             }
             {
-                let part = bf2cf(h);
+                let part = bf2cf(host);
                 for i in 0..part.len() {
                     msg.push(part[i]);
                 }
             }
             msg.push(b'\n');
             print_p(fd, msg.as_slice());
-            return Ok(h.clone());
+            return Ok(());
         }
         break;
     }

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use crate::{driver, exitcode, lfd_mod, linkfd, netlib, pipe_dev, pty_dev, tcp_proto, tun_dev, udp_proto, vtun_host};
 use crate::exitcode::ExitCode;
 use crate::filedes::FileDes;
+use crate::lowpriv::fork_lowpriv_worker;
 use crate::mainvtun::VtunContext;
 use crate::setproctitle::set_title;
 use crate::syslog::SyslogObject;
@@ -315,9 +316,6 @@ fn tunnel_lfd(ctx: &mut VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &
             return Err(ExitCode::from_code(1));
         }
     }
-    unsafe {
-        libc::signal(libc::SIGCHLD, libc::SIG_IGN);
-    }
 
     let typeflags = host.flags & linkfd::VTUN_TYPE_MASK;
     if typeflags == linkfd::VTUN_TTY {
@@ -337,7 +335,16 @@ fn tunnel_lfd(ctx: &mut VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &
         let ttle = format!("{} tun {}", match host.host {Some(ref host) => host.as_str(), None => "<none>"}, dev);
         set_title(ttle.as_str());
     }
-    let linkfd_result = linkfd::linkfd(ctx, linkfdctx, host, driver, proto);
+    let mut is_forked: bool = false;
+    let linkfd_result = fork_lowpriv_worker(ctx, &mut is_forked,&mut |ctx: &mut VtunContext| -> Result<i32,()> {
+        unsafe {
+            libc::signal(libc::SIGCHLD, libc::SIG_IGN);
+        }
+        linkfd::linkfd(ctx, linkfdctx, host, driver, proto)
+    });
+    if is_forked {
+        return linkfd_result;
+    }
 
     {
         let ttle = format!("{} running down commands", match host.host {Some(ref host) => host.as_str(), None => "<none>"});

@@ -85,6 +85,8 @@ mod lfd_iv_stream_encrypt;
 mod challenge2;
 #[path = "main/auth2.rs"]
 mod auth2;
+#[path = "main/lowpriv.rs"]
+mod lowpriv;
 
 use std::io::Write;
 use std::{env};

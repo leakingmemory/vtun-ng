@@ -18,7 +18,9 @@
  */
 
 use crate::{cfg_file, exitcode, lfd_mod};
+use crate::lfd_mod::VtunOpts;
 use crate::syslog::SyslogObject;
+use crate::vtun_host::VtunAddr;
 
 pub struct VtunContext {
     pub config: Option<cfg_file::VtunConfigRoot>,
@@ -26,20 +28,53 @@ pub struct VtunContext {
     pub is_rmt_fd_connected: bool
 }
 
-pub fn reread_config(ctx: &mut VtunContext) -> Result<(), exitcode::ErrorCode>
+#[cfg(test)]
+pub fn get_test_context() -> VtunContext {
+    VtunContext {
+        config: None,
+        vtun: VtunOpts {
+            timeout: 0,
+            persist: 0,
+            cfg_file: None,
+            shell: None,
+            ppp: None,
+            ifcfg: None,
+            route: None,
+            fwall: None,
+            iproute: None,
+            svr_name: None,
+            svr_addr: None,
+            bind_addr: VtunAddr {
+                name: None,
+                ip: None,
+                port: 0,
+                type_: 0,
+            },
+            svr_type: 0,
+            syslog: 0,
+            log_to_syslog: false,
+            quiet: 0,
+            experimental: false,
+        },
+        is_rmt_fd_connected: false,
+    }
+}
+
+
+pub fn reread_config(ctx: &mut VtunContext) -> Result<(), exitcode::ExitCode>
 {
     let cfg_file = match ctx.vtun.cfg_file {
         Some(ref cfg_file) => cfg_file.clone(),
         None => {
             ctx.syslog(lfd_mod::LOG_ERR,"No config file specified");
-            return exitcode::ExitCode::from_code(1).get_exit_code();
+            return Err(exitcode::ExitCode::from_code(1));
         }
     };
     ctx.config = match cfg_file::VtunConfigRoot::new(ctx, cfg_file.as_str()) {
         Some(config) => Some(config),
         None => {
             ctx.syslog(lfd_mod::LOG_ERR,"No hosts defined");
-            return exitcode::ExitCode::from_code(1).get_exit_code();
+            return Err(exitcode::ExitCode::from_code(1));
         }
     };
     Ok(())

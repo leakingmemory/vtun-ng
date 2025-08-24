@@ -212,7 +212,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
     }
     match mainvtun::reread_config(&mut ctx) {
         Ok(_) => {},
-        Err(e) => return Err(e)
+        Err(e) => return e.get_exit_code()
     };
 
     if ctx.vtun.syslog != libc::LOG_DAEMON {
@@ -308,7 +308,10 @@ fn main() -> Result<(), exitcode::ErrorCode>
             write_pid(&ctx);
         }
 
-        server::server_rs(&mut ctx, sock)
+        match server::server_rs(&mut ctx, sock) {
+            Ok(_) => Ok(()),
+            Err(exitcode) => exitcode.get_exit_code()
+        }
     } else {
         setproctitle::set_title("vtunngd[c]: ");
         match match host {

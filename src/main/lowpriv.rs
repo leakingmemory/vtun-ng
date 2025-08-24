@@ -1,8 +1,12 @@
+#[cfg(target_os = "linux")]
 use std::io::{pipe, Read, Write};
+#[cfg(target_os = "linux")]
 use libc::WEXITSTATUS;
 use crate::exitcode::ExitCode;
+#[cfg(target_os = "linux")]
 use crate::lfd_mod;
 use crate::mainvtun::VtunContext;
+#[cfg(target_os = "linux")]
 use crate::syslog::{SyslogObject};
 
 #[cfg(target_os = "linux")]
@@ -69,8 +73,11 @@ pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worke
 
 #[cfg(not(target_os = "linux"))]
 pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, is_forked: &mut bool, worker_fn: &mut F) -> Result<i32, ExitCode> where F: FnMut(&mut VtunContext) -> Result<i32,()> {
-    is_forked = false;
-    worker_fn(ctx)
+    *is_forked = false;
+    match worker_fn(ctx) {
+        Ok(rv) => Ok(rv),
+        Err(_) => Err(ExitCode::from_code(1))
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -82,6 +89,7 @@ fn drop_privileges(ctx: &VtunContext) -> Result<(),()> {
     drop_caps(ctx)
 }
 
+#[cfg(target_os = "linux")]
 #[repr(C)]
 struct CapHdr {
     version: u32,
@@ -89,12 +97,14 @@ struct CapHdr {
     padding: [u64; 7]
 }
 
+#[cfg(target_os = "linux")]
 #[repr(C)]
 struct CapDataPoint {
     effective: u32,
     permitted: u32,
     inheritable: u32
 }
+#[cfg(target_os = "linux")]
 #[repr(C)]
 struct CapData {
     capabilities: [CapDataPoint; 8],

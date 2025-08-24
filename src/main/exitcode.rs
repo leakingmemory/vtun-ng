@@ -42,6 +42,13 @@ impl ExitCode {
     }
 
     pub fn get_exit_code(&self) -> Result<(),ErrorCode> {
-        self.exit_code.clone()
+        if match self.exit_code {
+            Ok(_) => true,
+            Err(ref e) => e.code == 0
+        } {
+            Ok(())
+        } else {
+            self.exit_code.clone()
+        }
     }
 }

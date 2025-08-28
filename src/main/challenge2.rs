@@ -14,6 +14,7 @@
 use aes::Aes256;
 use cipher::{Block, BlockDecryptMut, BlockEncryptMut, KeyInit};
 use ecb::{Decryptor, Encryptor};
+use rand::RngCore;
 use sha2::Digest;
 
 pub fn encrypt_challenge(buf: &mut [u8], passwd: &str) -> Result<(),()>{
@@ -50,4 +51,21 @@ pub fn mix_in_bytes(buf: &mut [u8], data: &[u8]) {
     for i in 0..len {
         buf[i] = hash[i];
     }
+}
+
+pub fn gen_digest_salt() -> [u8; 16] {
+    let mut result = [0u8; 16];
+    rand::rng().fill_bytes(&mut result);
+    result
+}
+pub fn digest_passwd(salt: &[u8], passwd: &str) -> [u8; 32] {
+    let mut result = [0u8; 32];
+    let mut digester = sha2::Sha256::new();
+    digester.update(salt);
+    digester.update(passwd.as_bytes());
+    let hash = digester.finalize();
+    for i in 0..32 {
+        result[i] = hash[i];
+    }
+    result
 }

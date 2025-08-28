@@ -18,8 +18,10 @@
  */
 
 use crate::{cfg_file, exitcode, lfd_mod};
+#[cfg(test)]
 use crate::lfd_mod::VtunOpts;
 use crate::syslog::SyslogObject;
+#[cfg(test)]
 use crate::vtun_host::VtunAddr;
 
 pub struct VtunContext {

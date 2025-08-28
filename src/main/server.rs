@@ -20,7 +20,7 @@ use std::{mem, ptr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use signal_hook::low_level;
-use crate::{auth2, exitcode, lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, syslog, tunnel};
+use crate::{auth2, lfd_mod, linkfd, lock, mainvtun, netlib, setproctitle, syslog, tunnel};
 use crate::exitcode::ExitCode;
 use crate::filedes::FileDes;
 use crate::linkfd::LinkfdCtx;
@@ -105,11 +105,11 @@ fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),ExitCode> {
 
             match result {
                 Ok(_) => {},
-                Err(e) => return Err(ExitCode::from_code(1))
+                Err(_) => return Err(ExitCode::from_code(1))
             }
         }
         Err(exitcode) => {
-            if (exitcode.get_exit_code().is_ok()) {
+            if exitcode.get_exit_code().is_ok() {
                 return Err(exitcode);
             }
             let msg = format!("Denied connection from {}:{}", ip, u16::from_be(cl_addr.sin_port));

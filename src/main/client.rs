@@ -25,9 +25,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 use signal_hook::{low_level, SigId};
-use crate::{auth2, exitcode, lfd_mod, linkfd, mainvtun, netlib, setproctitle, syslog, tunnel, vtun_host};
+use crate::{auth2, challenge2, lfd_mod, linkfd, lowpriv, netlib, setproctitle, syslog, tunnel, vtun_host};
+use crate::exitcode::ExitCode;
 use crate::filedes::FileDes;
 use crate::lfd_mod::VtunOpts;
+use crate::mainvtun::VtunContext;
 use crate::syslog::SyslogObject;
 use crate::vtun_host::VtunSopt;
 
@@ -62,7 +64,7 @@ fn register_signal(client_ctx: &Arc<ClientCtx>, signal_id: libc::c_int) -> Optio
     }
 }
 
-pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost) -> Result<(), exitcode::ExitCode>
+pub fn client_rs(ctx: &mut VtunContext, host: &mut vtun_host::VtunHost) -> Result<(), ExitCode>
 {
     {
         let msg = format!("VTun client ver {} started", lfd_mod::VTUN_VER);
@@ -170,8 +172,67 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                 ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
             }
         } else {
-            match auth2::auth_client_rs(ctx, &linkfdctx, &s, host) {
-                Ok(_) => {
+            let salt = challenge2::gen_digest_salt();
+            let mut is_forked = false;
+            match lowpriv::fork_lowpriv_worker(ctx, "authentication", &mut is_forked, &mut |ctx: &mut VtunContext| {
+                match auth2::auth_client_rs(ctx, &linkfdctx, &s, host) {
+                    Ok(_) => {
+                        Ok(auth2::ClientAuthDecision{
+                            values: auth2::ClientAuthValues {
+                                flags: host.flags,
+                                timeout: host.timeout,
+                                spd_in: host.spd_in,
+                                spd_out: host.spd_out,
+                                zlevel: host.zlevel,
+                                cipher: host.cipher
+                            },
+                            decision: auth2::AuthDecision {
+                                service_name: match host.host {
+                                    Some(ref name) => name.clone(),
+                                    None => "".to_string()
+                                },
+                                passwd_digest: challenge2::digest_passwd(&salt, match host.passwd {
+                                    Some(ref passwd) => passwd.as_str(),
+                                    None => ""
+                                })
+                            }
+                        })
+                    },
+                    Err(_) => Err(())
+                }
+            }) {
+                Ok(decision) => {
+                    if is_forked {
+                        return Err(ExitCode::ok());
+                    }
+                    let chk_passwd = challenge2::digest_passwd(&salt, match host.passwd {
+                        Some(ref passwd) => passwd.as_str(),
+                        None => ""
+                    });
+                    {
+                        let mut matching = chk_passwd.len() == decision.decision.passwd_digest.len();
+                        if matching {
+                            for i in 0..chk_passwd.len() {
+                                if chk_passwd[i] != decision.decision.passwd_digest[i] {
+                                    matching = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if match host.host {
+                            Some(ref host) => { host != decision.decision.service_name.as_str() },
+                            None => {"" != decision.decision.service_name.as_str()}
+                        } || !matching {
+                            ctx.syslog(lfd_mod::LOG_ERR,"Connection rejected due to invalid authentication result");
+                            return Err(ExitCode::from_code(1));
+                        }
+                    }
+                    host.flags = decision.values.flags;
+                    host.timeout = decision.values.timeout;
+                    host.spd_in = decision.values.spd_in;
+                    host.spd_out = decision.values.spd_out;
+                    host.zlevel = decision.values.zlevel;
+                    host.cipher = decision.values.cipher;
                     let msg = format!("Session {}[{}] opened",
                                       match host.host { Some(ref host) => host.as_str(), None => "<none>" },
                                       match ctx.vtun.svr_name { Some(ref svr_name) => svr_name.as_str(), None => "<none>" });
@@ -189,7 +250,10 @@ pub fn client_rs(ctx: &mut mainvtun::VtunContext, host: &mut vtun_host::VtunHost
                                       match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
                     ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
                 },
-                Err(_) => {
+                Err(code) => {
+                    if is_forked {
+                        return Err(code)
+                    }
                     let msg = format!("Connection denied by {}", match &ctx.vtun.svr_name { Some(svr_name) => svr_name.as_str(), None => "<none>" });
                     ctx.syslog(lfd_mod::LOG_INFO,msg.as_str());
                 }

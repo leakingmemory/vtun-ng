@@ -6,13 +6,14 @@ use libc::WEXITSTATUS;
 use crate::exitcode::ExitCode;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::lfd_mod;
+#[cfg(test)]
 use crate::mainvtun;
 use crate::mainvtun::VtunContext;
 use crate::setproctitle::set_title;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::syslog::{SyslogObject};
 
-trait LowprivReturnable<T> {
+pub trait LowprivReturnable<T> {
     fn write_to_pipe(&self, w: &mut PipeWriter) -> Result<(),()>;
     fn read_from_pipe(r: &mut PipeReader) -> Result<T,()>;
 }
@@ -91,7 +92,15 @@ pub fn fork_lowpriv_worker<T,F>(ctx: &mut VtunContext, proc_title: &str, is_fork
             Ok(_) => match worker_fn(ctx) {
                 Ok(rv) => {
                     match rv.write_to_pipe(&mut w) {
-                        Ok(_) => Err(ExitCode::from_code(0)),
+                        Ok(_) => {
+                            match w.flush() {
+                                Ok(_) => Err(ExitCode::from_code(0)),
+                                Err(_) => {
+                                    ctx.syslog(lfd_mod::LOG_ERR, "Unable to flush writes to pipe for low privileged child");
+                                    Err(ExitCode::from_code(1))
+                                }
+                            }
+                        },
                         Err(_) => {
                             ctx.syslog(lfd_mod::LOG_ERR, "Unable to write return value to pipe for low privileged child");
                             Err(ExitCode::from_code(1))
@@ -212,7 +221,7 @@ fn test_novalue(exp_rv: Result<(),()>)
         }
     } else {
         match exp_rv {
-            Ok(ref exp_rv) => {
+            Ok(_) => {
                 assert!(result.is_ok());
             },
             Err(_) => {
@@ -325,14 +334,12 @@ fn drop_capsets(ctx: &VtunContext) -> Result<(),()> {
         }
         if unsafe { libc::prctl(libc::PR_CAPBSET_DROP, cap, 0, 0, 0) } < 0 {
             ctx.syslog(lfd_mod::LOG_ERR, "Unable to drop capability from bounding set");
-            return Err(());
         }
     }
 
     // Drop ambient set capabilities
     if unsafe { libc::prctl(libc::PR_CAP_AMBIENT, libc::PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0) } != 0 {
         ctx.syslog(lfd_mod::LOG_ERR, "Unable to drop capabilities from ambient set");
-        return Err(());
     }
 
     // Drop effective, permitted and inheritable capabilities
@@ -343,7 +350,6 @@ fn drop_capsets(ctx: &VtunContext) -> Result<(),()> {
     if unsafe { libc::syscall(libc::SYS_capget, &mut hdr as *mut CapHdr as *mut libc::c_void, &mut data as *mut CapData as *mut libc::c_void) } < 0 {
         let msg = format!("Unable to get capabilities: {}", errno::errno().to_string());
         ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
-        return Err(());
     }
     for i in 0..4 {
         data.capabilities[i].effective = 0;
@@ -353,7 +359,6 @@ fn drop_capsets(ctx: &VtunContext) -> Result<(),()> {
     if unsafe { libc::syscall(libc::SYS_capset, &mut hdr as *mut CapHdr as *mut libc::c_void, &mut data as *mut CapData as *mut libc::c_void) } < 0 {
         let msg = format!("Unable to set capabilities: {}", errno::errno().to_string());
         ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
-        return Err(());
     }
     Ok(())
 }

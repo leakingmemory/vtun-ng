@@ -60,8 +60,16 @@ impl LowprivReturnable<()> for () {
     }
 }
 
+pub fn run_lowpriv_section<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<T, ExitCode> where T: LowprivReturnable<T>, F: FnMut(&mut VtunContext) -> Result<T,()> {
+    if ctx.vtun.dropcaps {
+        fork_lowpriv_worker(ctx, proc_title, is_forked, worker_fn)
+    } else {
+        run_inline_section(ctx, proc_title, is_forked, worker_fn)
+    }
+}
+
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-pub fn fork_lowpriv_worker<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<T, ExitCode> where T: LowprivReturnable<T>, F: FnMut(&mut VtunContext) -> Result<T,()>
+fn fork_lowpriv_worker<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<T, ExitCode> where T: LowprivReturnable<T>, F: FnMut(&mut VtunContext) -> Result<T,()>
 {
     let priv_proc_title = format!("masterproc {}", proc_title);
     {
@@ -267,7 +275,12 @@ fn test_novalue_err()
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
-pub fn fork_lowpriv_worker<F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<i32, ExitCode> where F: FnMut(&mut VtunContext) -> Result<i32,()> {
+fn fork_lowpriv_worker<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<T, ExitCode> where T: LowprivReturnable<T>, F: FnMut(&mut VtunContext) -> Result<T,()> {
+    ctx.syslog(lfd_mod::LOG_ERR, "Security hardening options like dropcaps are not supported on this platform");
+    Err(ExitCode::from_code(1))
+}
+
+fn run_inline_section<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<T, ExitCode> where T: LowprivReturnable<T>, F: FnMut(&mut VtunContext) -> Result<T,()> {
     *is_forked = false;
     set_title(proc_title);
     match worker_fn(ctx) {

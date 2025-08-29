@@ -174,7 +174,7 @@ pub fn client_rs(ctx: &mut VtunContext, host: &mut vtun_host::VtunHost) -> Resul
         } else {
             let salt = challenge2::gen_digest_salt();
             let mut is_forked = false;
-            match lowpriv::fork_lowpriv_worker(ctx, "authentication", &mut is_forked, &mut |ctx: &mut VtunContext| {
+            match lowpriv::run_lowpriv_section(ctx, "authentication", &mut is_forked, &mut |ctx: &mut VtunContext| {
                 match auth2::auth_client_rs(ctx, &linkfdctx, &s, host) {
                     Ok(_) => {
                         Ok(auth2::ClientAuthDecision{

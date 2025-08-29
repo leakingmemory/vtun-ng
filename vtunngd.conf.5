@@ -89,6 +89,17 @@ syslog facility specification, either numeric or name (from syslog (3)).
 experimental mode. To enable new protocol extensions that are not yet
 ready for general use.
 
+.IP \fBhardening\fR\ \fBdropcaps\fR (experimental)
+Enable hardening features such as dropcaps which on supported platforms
+(currently FreeBSD and Linux) will drop kernel capabilites when
+interacting over external network. Dropcaps will cause vtunngd to
+fork for both authenticating with remote hosts and tunneling traffic
+to and from remote hosts. This hurts performance and may cause a server
+to be more susceptible to denial of service attacks. While on the
+positive side this helps protect against RCE vulnerabilities by
+restricting what capabilities an attacker is able to exploit if they
+gain access.
+
 .IP \fBppp\ \fIpath\fR
 path to \fBpppd\fR(8) program.  Can be used in session sections.
 

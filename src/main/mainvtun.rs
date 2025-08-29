@@ -18,7 +18,6 @@
  */
 
 use crate::{cfg_file, exitcode, lfd_mod};
-#[cfg(test)]
 use crate::lfd_mod::VtunOpts;
 use crate::syslog::SyslogObject;
 #[cfg(test)]
@@ -26,7 +25,7 @@ use crate::vtun_host::VtunAddr;
 
 pub struct VtunContext {
     pub config: Option<cfg_file::VtunConfigRoot>,
-    pub vtun: lfd_mod::VtunOpts,
+    pub vtun: VtunOpts,
     pub is_rmt_fd_connected: bool
 }
 
@@ -57,6 +56,7 @@ pub fn get_test_context() -> VtunContext {
             log_to_syslog: false,
             quiet: 0,
             experimental: false,
+            dropcaps: false
         },
         is_rmt_fd_connected: false,
     }

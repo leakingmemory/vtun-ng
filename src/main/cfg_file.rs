@@ -16,12 +16,14 @@ use std::{fs};
 use std::rc::{Rc, Weak};
 use std::sync::Mutex;
 use logos::Logos;
-use crate::{lfd_mod, linkfd, vtun_host};
+use crate::{lfd_mod, linkfd};
 use crate::lexer::Token;
+#[cfg(test)]
+use crate::lfd_mod::VtunOpts;
 use crate::mainvtun::VtunContext;
 use crate::syslog::SyslogObject;
 use crate::tunnel::VtunCmd;
-use crate::vtun_host::VtunHost;
+use crate::vtun_host::{VtunAddr, VtunHost};
 
 pub struct VtunConfigRoot {
     pub host_list: Vec<VtunHost>
@@ -1042,6 +1044,7 @@ struct OptionsConfigParsingContext {
     persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     syslog_ctx: Option<Rc<Mutex<SyslogOptionParsingContext>>>,
     experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
+    hardening_ctx: Option<Rc<Mutex<HardeningOptionParsingContext>>>,
 }
 
 impl OptionsConfigParsingContext {
@@ -1059,7 +1062,8 @@ impl OptionsConfigParsingContext {
             bindaddr_ctx: None,
             persist_ctx: None,
             syslog_ctx: None,
-            experimental_ctx: None
+            experimental_ctx: None,
+            hardening_ctx: None
         }
     }
     fn apply(&self, ctx: &mut VtunContext) {
@@ -1138,6 +1142,12 @@ impl OptionsConfigParsingContext {
                 ctx.vtun.experimental = experimental_ctx.lock().unwrap().value;
             }
         }
+        match self.hardening_ctx {
+            None => {},
+            Some(ref hardening_ctx) => {
+                ctx.vtun.dropcaps = hardening_ctx.lock().unwrap().dropcaps;
+            }
+        }
     }
 }
 
@@ -1211,6 +1221,11 @@ impl ParsingContext for OptionsConfigParsingContext {
                 self.experimental_ctx = Some(experimental_ctx.clone());
                 Some(experimental_ctx)
             },
+            Token::KwHardening => {
+                let hardening_ctx = Rc::new(Mutex::new(HardeningOptionParsingContext::new(Rc::clone(&ctx))));
+                self.hardening_ctx = Some(hardening_ctx.clone());
+                Some(hardening_ctx)
+            },
             Token::Semicolon => None,
             Token::RBrace => {
                 self.parent.upgrade()
@@ -1237,7 +1252,7 @@ impl KwBindaddrConfigParsingContext {
             token_name,
             bindaddr_ctx: None
         }
-    }pub fn apply(&self, ctx: &VtunContext, bindaddr: &mut vtun_host::VtunAddr) {
+    }pub fn apply(&self, ctx: &VtunContext, bindaddr: &mut VtunAddr) {
         match self.bindaddr_ctx {
             None => {},
             Some(ref bindaddr_ctx) => bindaddr_ctx.lock().unwrap().apply(ctx, bindaddr)
@@ -1291,7 +1306,7 @@ impl BindaddrConfigParsingContext {
             iface_ctx: None
         }
     }
-    pub fn apply(&self, ctx: &VtunContext, bindaddr: &mut vtun_host::VtunAddr) {
+    pub fn apply(&self, ctx: &VtunContext, bindaddr: &mut VtunAddr) {
         match self.iface_ctx {
             None => {},
             Some(ref iface_ctx) => {
@@ -1361,7 +1376,7 @@ impl AddrConfigParsingContext {
             hostname: None
         }
     }
-    pub fn apply(&self, bindaddr: &mut vtun_host::VtunAddr) {
+    pub fn apply(&self, bindaddr: &mut VtunAddr) {
         match self.hostname {
             Some(ref hostname) => {
                 bindaddr.name = Some(hostname.clone());
@@ -1501,6 +1516,55 @@ impl ParsingContext for SyslogOptionParsingContext {
                 self.parent.upgrade()
             },
             _ => self.handle_token(vtunctx, token)
+        }
+    }
+}
+
+struct HardeningOptionParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    dropcaps: bool
+}
+
+impl HardeningOptionParsingContext {
+    fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            dropcaps: false
+        }
+    }
+    fn handle_string(&mut self, ctx: &VtunContext, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if self.dropcaps || str != "dropcaps" {
+            return self.unexpected_token(ctx);
+        }
+        self.dropcaps = true;
+        None
+    }
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after hardening");
+        self.set_failed(ctx);
+        None
+    }
+}
+impl ParsingContext for HardeningOptionParsingContext {
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error after syslog");
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
+            None => {}
+        }
+    }
+
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::Semicolon => {
+                if !self.dropcaps {
+                    return self.unexpected_token(vtunctx);
+                }
+                self.parent.upgrade()
+            },
+            Token::Ident(ident) => self.handle_string(vtunctx, ident.as_str()),
+            Token::Quoted(str) => self.handle_string(vtunctx, str.as_str()),
+            _ => self.unexpected_token(vtunctx)
         }
     }
 }
@@ -2045,4 +2109,64 @@ impl VtunConfigRoot {
         }
         None
     }
+}
+
+#[cfg(test)]
+fn test_context() -> VtunContext {
+    VtunContext {
+        config: None,
+        vtun: VtunOpts {
+            timeout: 0,
+            persist: 0,
+            cfg_file: None,
+            shell: None,
+            ppp: None,
+            ifcfg: None,
+            route: None,
+            fwall: None,
+            iproute: None,
+            svr_name: None,
+            svr_addr: None,
+            bind_addr: VtunAddr {
+                name: None,
+                ip: None,
+                port: 0,
+                type_: 0,
+            },
+            svr_type: 0,
+            syslog: 0,
+            log_to_syslog: false,
+            quiet: 0,
+            experimental: false,
+            dropcaps: false,
+        },
+        is_rmt_fd_connected: false,
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn test_not_dropcaps() {
+    let test_config = "options {
+    };";
+    let mut ctx = test_context();
+    assert!(match VtunConfigRoot::new_from_string(&mut ctx, test_config) {
+        Some(_) => true,
+        None => false
+    });
+    assert!(!ctx.vtun.dropcaps);
+}
+
+#[cfg(test)]
+#[test]
+fn test_dropcaps() {
+    let test_config = "options {
+        hardening dropcaps;
+    };";
+    let mut ctx = test_context();
+    assert!(match VtunConfigRoot::new_from_string(&mut ctx, test_config) {
+        Some(_) => true,
+        None => false
+    });
+    assert!(ctx.vtun.dropcaps);
 }

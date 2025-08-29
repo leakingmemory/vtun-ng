@@ -20,7 +20,7 @@ use std::sync::Arc;
 use crate::{driver, exitcode, lfd_mod, linkfd, netlib, pipe_dev, pty_dev, tcp_proto, tun_dev, udp_proto, vtun_host};
 use crate::exitcode::ExitCode;
 use crate::filedes::FileDes;
-use crate::lowpriv::fork_lowpriv_worker;
+use crate::lowpriv::run_lowpriv_section;
 use crate::mainvtun::VtunContext;
 use crate::setproctitle::set_title;
 use crate::syslog::SyslogObject;
@@ -333,7 +333,7 @@ fn tunnel_lfd(ctx: &mut VtunContext, linkfdctx: &Arc<linkfd::LinkfdCtx>, host: &
         proc_title = format!("{} unknown", match host.host {Some(ref host) => host.as_str(), None => "<none>"});
     }
     let mut is_forked: bool = false;
-    let linkfd_result = fork_lowpriv_worker(ctx, proc_title.as_str(), &mut is_forked,&mut |ctx: &mut VtunContext| -> Result<i32,()> {
+    let linkfd_result = run_lowpriv_section(ctx, proc_title.as_str(), &mut is_forked,&mut |ctx: &mut VtunContext| -> Result<i32,()> {
         unsafe {
             libc::signal(libc::SIGCHLD, libc::SIG_IGN);
         }

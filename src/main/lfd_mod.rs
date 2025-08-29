@@ -40,6 +40,7 @@ pub struct VtunOpts {
     pub log_to_syslog: bool, /* Log to syslog (true) or to stdout (false) */
     pub quiet: libc::c_int, /* Be quiet about common errors */
     pub experimental: bool, /* Server setting for experimental features */
+    pub dropcaps: bool,
 }
 
 impl VtunOpts {
@@ -63,6 +64,7 @@ impl VtunOpts {
             log_to_syslog: true,
             quiet: 0,
             experimental: false,
+            dropcaps: false,
         }
     }
 }

@@ -68,6 +68,7 @@ pub enum Token {
     #[token("persist")]   KwPersist,
     #[token("keep")]      KwKeep,
     #[token("experimental")] KwExperimental,
+    #[token("hardening")] KwHardening,
     #[token("proto")]     KwProto,
     #[token("multi")]     KwMulti,
     #[token("backup")]    KwBackup,

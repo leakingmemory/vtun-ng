@@ -30,7 +30,7 @@ use crate::challenge2::mix_in_bytes;
 use crate::challenge::VTUN_CHAL_SIZE;
 use crate::exitcode::ExitCode;
 use crate::libfuncs::print_p;
-use crate::lowpriv::{fork_lowpriv_worker, LowprivReturnable};
+use crate::lowpriv::{run_lowpriv_section, LowprivReturnable};
 use crate::syslog::SyslogObject;
 
 trait ToWireForm {
@@ -244,7 +244,7 @@ pub fn auth_server(ctx: &mut VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -
     }
     let salt = challenge2::gen_digest_salt();
     let mut is_forked = false;
-    let decision: Result<AuthDecision,ExitCode> = fork_lowpriv_worker(ctx, "authentication", &mut is_forked, &mut |ctx: &mut VtunContext| -> Result<AuthDecision,()> {
+    let decision: Result<AuthDecision,ExitCode> = run_lowpriv_section(ctx, "authentication", &mut is_forked, &mut |ctx: &mut VtunContext| -> Result<AuthDecision,()> {
         print_p(fd, greeting.as_bytes());
 
         let mut buf = [0u8; VTUN_MESG_SIZE];

@@ -3,6 +3,7 @@ use std::io::{pipe, Read, Write, PipeWriter};
 use std::io::PipeReader;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use libc::WEXITSTATUS;
+use users::{Groups, Users, UsersCache};
 use crate::exitcode::ExitCode;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::lfd_mod;
@@ -61,14 +62,13 @@ impl LowprivReturnable<()> for () {
 }
 
 pub fn run_lowpriv_section<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<T, ExitCode> where T: LowprivReturnable<T>, F: FnMut(&mut VtunContext) -> Result<T,()> {
-    if ctx.vtun.dropcaps {
+    if ctx.vtun.dropcaps || ctx.vtun.setuid {
         fork_lowpriv_worker(ctx, proc_title, is_forked, worker_fn)
     } else {
         run_inline_section(ctx, proc_title, is_forked, worker_fn)
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn fork_lowpriv_worker<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<T, ExitCode> where T: LowprivReturnable<T>, F: FnMut(&mut VtunContext) -> Result<T,()>
 {
     let priv_proc_title = format!("masterproc {}", proc_title);
@@ -275,8 +275,9 @@ fn test_novalue_err()
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
-fn fork_lowpriv_worker<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &mut bool, worker_fn: &mut F) -> Result<T, ExitCode> where T: LowprivReturnable<T>, F: FnMut(&mut VtunContext) -> Result<T,()> {
-    ctx.syslog(lfd_mod::LOG_ERR, "Security hardening options like dropcaps are not supported on this platform");
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn drop_privileges(ctx: &VtunContext) -> Result<(),()> {
+    ctx.syslog(lfd_mod::LOG_ERR, "Security hardening option dropcaps is not supported on this platform");
     Err(ExitCode::from_code(1))
 }
 
@@ -289,27 +290,146 @@ fn run_inline_section<T,F>(ctx: &mut VtunContext, proc_title: &str, is_forked: &
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn drop_privileges(ctx: &VtunContext) -> Result<(),()> {
-    drop_caps(ctx)
+    if ctx.vtun.dropcaps {
+        match drop_caps(ctx, true, ctx.vtun.setuid || ctx.vtun.setgid) {
+            Ok(_) => {},
+            Err(_) => return Err(())
+        }
+    }
+    if ctx.vtun.setuid || ctx.vtun.setgid {
+        if ctx.vtun.setgid {
+            match setgid(ctx) {
+                Ok(_) => {},
+                Err(_) => return Err(())
+            };
+        }
+        if ctx.vtun.setuid {
+            match setuid(ctx) {
+                Ok(_) => {},
+                Err(_) => return Err(())
+            };
+        }
+        if ctx.vtun.dropcaps {
+            match drop_caps(ctx, false, false) {
+                Ok(_) => {},
+                Err(_) => return Err(())
+            }
+        }
+    }
+    Ok(())
+}
+
+fn get_user_id(ctx: &VtunContext, user: &lfd_mod::SetUidIdentifier) -> Result<libc::uid_t,()> {
+    let user = match user {
+        lfd_mod::SetUidIdentifier::Id(id) => return Ok(*id as libc::uid_t),
+        lfd_mod::SetUidIdentifier::Name(name) => name.as_str(),
+        lfd_mod::SetUidIdentifier::Default => "nobody"
+    };
+    let uid = {
+        let cache = UsersCache::new();
+        match cache.get_user_by_name(user) {
+            Some(passwd) => passwd.uid(),
+            None => {
+                let msg = format!("Failed to retrieve user information for setgid: {}", user);
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                return Err(());
+            }
+        }
+    };
+    Ok(uid)
+}
+
+fn get_group_id(ctx: &VtunContext, user: &lfd_mod::SetUidIdentifier) -> Result<libc::gid_t,()> {
+    let user = match user {
+        lfd_mod::SetUidIdentifier::Id(id) => return Ok(*id as libc::gid_t),
+        lfd_mod::SetUidIdentifier::Name(name) => name.as_str(),
+        lfd_mod::SetUidIdentifier::Default => "nobody"
+    };
+    let gid = {
+        let cache = UsersCache::new();
+        match cache.get_group_by_name(user) {
+            Some(passwd) => passwd.gid(),
+            None => {
+                let msg = format!("Failed to retrieve user information for setgid: {}", user);
+                ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+                return Err(());
+            }
+        }
+    };
+    Ok(gid)
+}
+
+fn setuid(ctx: &VtunContext) -> Result<(),()> {
+    let uid = match get_user_id(ctx, &ctx.vtun.set_uid_user) {
+        Ok(uid) => uid,
+        Err(_) => return Err(())
+    };
+    if uid == 0 {
+        ctx.syslog(lfd_mod::LOG_ERR, "Setting user id to root/0 is not allowed, remove 'hardening setuid' to run as root.");
+        return Err(())
+    }
+    {
+        let pid = unsafe { libc::getpid() };
+        let msg = format!("Setting uid of pid {} to {}", pid, uid);
+        ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
+    }
+    if unsafe { libc::setuid(uid) } != 0 {
+        ctx.syslog(lfd_mod::LOG_ERR, "Failed to set user id (hardening setuid)");
+        return Err(())
+    }
+    if unsafe { libc::seteuid(uid) } != 0 {
+        ctx.syslog(lfd_mod::LOG_ERR, "Failed to set effective user id (hardening setuid)");
+        return Err(())
+    }
+    Ok(())
+}
+
+fn setgid(ctx: &VtunContext) -> Result<(),()> {
+    let gid = match get_group_id(ctx, &ctx.vtun.set_gid_user) {
+        Ok(gid) => gid,
+        Err(_) => return Err(())
+    };
+    if gid == 0 {
+        ctx.syslog(lfd_mod::LOG_ERR, "Setting group id to root/0 is not allowed, remove 'hardening setgid' and 'setgid <group>' to run as root.");
+        return Err(())
+    }
+    {
+        let pid = unsafe { libc::getpid() };
+        let msg = format!("Setting gid of pid {} to {}", pid, gid);
+        ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
+    }
+    if unsafe { libc::setgid(gid) } != 0 {
+        ctx.syslog(lfd_mod::LOG_ERR, "Failed to set user id (hardening setuid)");
+        return Err(())
+    }
+    if unsafe { libc::setegid(gid) } != 0 {
+        ctx.syslog(lfd_mod::LOG_ERR, "Failed to set effective user id (hardening setuid)");
+        return Err(())
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "freebsd")]
-fn drop_caps(ctx: &VtunContext) -> Result<(),()> {
-    if (unsafe { libc::cap_enter() } < 0) {
-        ctx.syslog(lfd_mod::LOG_ERR, "Unable to enter capability restricted mode");
-        return Err(());
+fn drop_caps(ctx: &VtunContext, is_root: bool, will_setuid: bool) -> Result<(),()> {
+    if (!is_root || !will_setuid) {
+        if (unsafe { libc::cap_enter() } < 0) {
+            ctx.syslog(lfd_mod::LOG_ERR, "Unable to enter capability restricted mode");
+            return Err(());
+        }
     }
     Ok(())
 }
 
 #[cfg(target_os = "linux")]
-fn drop_caps(ctx: &VtunContext) -> Result<(),()> {
-    match set_no_new_privs(ctx) {
-        Ok(_) => {},
-        Err(_) => return Err(())
+fn drop_caps(ctx: &VtunContext, is_root: bool, will_setuid: bool) -> Result<(),()> {
+    if !is_root || !will_setuid {
+        match set_no_new_privs(ctx) {
+            Ok(_) => {},
+            Err(_) => return Err(())
+        }
     }
-    drop_capsets(ctx)
+    drop_capsets(ctx, is_root, !is_root)
 }
 
 #[cfg(target_os = "linux")]
@@ -334,19 +454,26 @@ struct CapData {
     padding: [u32; 8]
 }
 
+const CAP_SETGID: u32 = 6;
+const CAP_SETUID: u32 = 7;
+
 #[cfg(target_os = "linux")]
-fn drop_capsets(ctx: &VtunContext) -> Result<(),()> {
-    // Drop bounding set capabilities
-    for cap in 0..=63 {
-        let capread = unsafe { libc::prctl(libc::PR_CAPBSET_READ, cap) };
-        if capread < 0 {
-            break;
-        }
-        if (capread & 1) == 0 {
-            continue;
-        }
-        if unsafe { libc::prctl(libc::PR_CAPBSET_DROP, cap, 0, 0, 0) } < 0 {
-            ctx.syslog(lfd_mod::LOG_ERR, "Unable to drop capability from bounding set");
+fn drop_capsets(ctx: &VtunContext, drop_bounding: bool, drop_setuid: bool) -> Result<(),()> {
+    if drop_bounding {
+        for cap in 0..=63 {
+            if !drop_setuid && (cap == CAP_SETGID || cap == CAP_SETUID) {
+                continue;
+            }
+            let capread = unsafe { libc::prctl(libc::PR_CAPBSET_READ, cap) };
+            if capread < 0 {
+                break;
+            }
+            if (capread & 1) == 0 {
+                continue;
+            }
+            if unsafe { libc::prctl(libc::PR_CAPBSET_DROP, cap, 0, 0, 0) } < 0 {
+                ctx.syslog(lfd_mod::LOG_ERR, "Unable to drop capability from bounding set");
+            }
         }
     }
 
@@ -365,9 +492,20 @@ fn drop_capsets(ctx: &VtunContext) -> Result<(),()> {
         ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
     }
     for i in 0..4 {
-        data.capabilities[i].effective = 0;
-        data.capabilities[i].permitted = 0;
-        data.capabilities[i].inheritable = 0;
+        let base_cap = i * 32;
+        let next_cap = base_cap + 32;
+        let mut mask: u32 = 0;
+        if !drop_setuid {
+            if CAP_SETGID >= base_cap && CAP_SETGID < next_cap {
+                mask |= 1 << (CAP_SETGID - base_cap);
+            }
+            if CAP_SETUID >= base_cap && CAP_SETUID < next_cap {
+                mask |= 1 << (CAP_SETUID - base_cap);
+            }
+        }
+        data.capabilities[i as usize].effective &= mask;
+        data.capabilities[i as usize].permitted &= mask;
+        data.capabilities[i as usize].inheritable &= mask;
     }
     if unsafe { libc::syscall(libc::SYS_capset, &mut hdr as *mut CapHdr as *mut libc::c_void, &mut data as *mut CapData as *mut libc::c_void) } < 0 {
         let msg = format!("Unable to set capabilities: {}", errno::errno().to_string());

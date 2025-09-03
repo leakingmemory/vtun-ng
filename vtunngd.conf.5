@@ -89,16 +89,38 @@ syslog facility specification, either numeric or name (from syslog (3)).
 experimental mode. To enable new protocol extensions that are not yet
 ready for general use.
 
-.IP \fBhardening\fR\ \fBdropcaps\fR (experimental)
-Enable hardening features such as dropcaps which on supported platforms
-(currently FreeBSD and Linux) will drop kernel capabilites when
-interacting over external network. Dropcaps will cause vtunngd to
+.IP \fBhardening\fR\ \fBdropcaps\fR \fBsetuid\fR \fBsetgid\fR (experimental)
+Enable hardening features such as dropcaps or setuid.
+
+Dropcaps will on supported platforms
+(currently FreeBSD and Linux) drop kernel capabilites when
+interacting over external network. This reduces the potential
+concequences of a RCE breach by limiting access to resources and
+kernel interfaces.
+
+Setuid will change the user id to something else than root while
+communicating on external network. This also limits the concequences
+of a potential RCE breach similarly to dropcaps by limiting access.
+Default user and group is nobody, but can be changed by using setuid
+and setgid options (see below).
+
+Dropcaps and setuid will cause vtunngd to
 fork for both authenticating with remote hosts and tunneling traffic
 to and from remote hosts. This hurts performance and may cause a server
 to be more susceptible to denial of service attacks. While on the
 positive side this helps protect against RCE vulnerabilities by
 restricting what capabilities an attacker is able to exploit if they
 gain access.
+
+.IP \fBsetuid\fR\ \fB<user>\fR (experimental)
+Set the user id to change to when running network communication. Setting
+this option will enable the setuid hardening feature (see hardening above). This option
+accepts both a username and a user id.
+
+.IP \fBsetgid\fR\ \fB<group>\fR (experimental)
+Set the group id to change to when running network communication. Setting
+this option will enable the setgid hardening feature (see hardening above). This
+option accepts both a group name and a group id.
 
 .IP \fBppp\ \fIpath\fR
 path to \fBpppd\fR(8) program.  Can be used in session sections.

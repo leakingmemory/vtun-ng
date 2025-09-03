@@ -19,6 +19,22 @@
 use libc::LOG_DAEMON;
 use crate::vtun_host;
 
+pub enum SetUidIdentifier {
+    Name(String),
+    Id(u64),
+    Default
+}
+
+impl Clone for SetUidIdentifier {
+    fn clone(&self) -> Self {
+        match self {
+            SetUidIdentifier::Name(name) => SetUidIdentifier::Name(name.clone()),
+            SetUidIdentifier::Id(id) => SetUidIdentifier::Id(*id),
+            SetUidIdentifier::Default => SetUidIdentifier::Default
+        }
+    }
+}
+
 pub struct VtunOpts {
     pub timeout: libc::c_int,
     pub persist: libc::c_int,
@@ -39,8 +55,12 @@ pub struct VtunOpts {
     pub syslog: libc::c_int, /* Facility to log messages to syslog under */
     pub log_to_syslog: bool, /* Log to syslog (true) or to stdout (false) */
     pub quiet: libc::c_int, /* Be quiet about common errors */
+    pub set_uid_user: SetUidIdentifier,
+    pub set_gid_user: SetUidIdentifier,
     pub experimental: bool, /* Server setting for experimental features */
     pub dropcaps: bool,
+    pub setuid: bool,
+    pub setgid: bool,
 }
 
 impl VtunOpts {
@@ -63,8 +83,12 @@ impl VtunOpts {
             syslog: LOG_DAEMON,
             log_to_syslog: true,
             quiet: 0,
+            set_uid_user: SetUidIdentifier::Default,
+            set_gid_user: SetUidIdentifier::Default,
             experimental: false,
             dropcaps: false,
+            setuid: false,
+            setgid: false,
         }
     }
 }

@@ -1044,7 +1044,9 @@ struct OptionsConfigParsingContext {
     persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     syslog_ctx: Option<Rc<Mutex<SyslogOptionParsingContext>>>,
     experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
-    hardening_ctx: Option<Rc<Mutex<HardeningOptionParsingContext>>>,
+    hardening_ctx: Vec<Rc<Mutex<HardeningOptionParsingContext>>>,
+    setuid_ctx: Option<Rc<Mutex<KwSetuidSetgidConfigParsingContext>>>,
+    setgid_ctx: Option<Rc<Mutex<KwSetuidSetgidConfigParsingContext>>>,
 }
 
 impl OptionsConfigParsingContext {
@@ -1063,7 +1065,9 @@ impl OptionsConfigParsingContext {
             persist_ctx: None,
             syslog_ctx: None,
             experimental_ctx: None,
-            hardening_ctx: None
+            hardening_ctx: Vec::new(),
+            setuid_ctx: None,
+            setgid_ctx: None,
         }
     }
     fn apply(&self, ctx: &mut VtunContext) {
@@ -1142,10 +1146,22 @@ impl OptionsConfigParsingContext {
                 ctx.vtun.experimental = experimental_ctx.lock().unwrap().value;
             }
         }
-        match self.hardening_ctx {
+        for hardening_ctx in &self.hardening_ctx {
+            let hardening_ctx = hardening_ctx.lock().unwrap();
+            ctx.vtun.dropcaps |= hardening_ctx.dropcaps;
+            ctx.vtun.setuid |= hardening_ctx.setuid;
+            ctx.vtun.setgid |= hardening_ctx.setgid;
+        }
+        match self.setuid_ctx {
             None => {},
-            Some(ref hardening_ctx) => {
-                ctx.vtun.dropcaps = hardening_ctx.lock().unwrap().dropcaps;
+            Some(ref setuid_ctx) => {
+                setuid_ctx.lock().unwrap().apply(ctx);
+            }
+        }
+        match self.setgid_ctx {
+            None => {},
+            Some(ref setgid_ctx) => {
+                setgid_ctx.lock().unwrap().apply(ctx);
             }
         }
     }
@@ -1223,8 +1239,18 @@ impl ParsingContext for OptionsConfigParsingContext {
             },
             Token::KwHardening => {
                 let hardening_ctx = Rc::new(Mutex::new(HardeningOptionParsingContext::new(Rc::clone(&ctx))));
-                self.hardening_ctx = Some(hardening_ctx.clone());
+                self.hardening_ctx.push(hardening_ctx.clone());
                 Some(hardening_ctx)
+            },
+            Token::KwSetuid => {
+                let setuid_ctx = Rc::new(Mutex::new(KwSetuidSetgidConfigParsingContext::new(Rc::clone(&ctx), "setuid")));
+                self.setuid_ctx = Some(setuid_ctx.clone());
+                Some(setuid_ctx)
+            },
+            Token::KwSetgid => {
+                let setuid_ctx = Rc::new(Mutex::new(KwSetuidSetgidConfigParsingContext::new(Rc::clone(&ctx), "setgid")));
+                self.setgid_ctx = Some(setuid_ctx.clone());
+                Some(setuid_ctx)
             },
             Token::Semicolon => None,
             Token::RBrace => {
@@ -1522,21 +1548,42 @@ impl ParsingContext for SyslogOptionParsingContext {
 
 struct HardeningOptionParsingContext {
     parent: Weak<Mutex<dyn ParsingContext>>,
-    dropcaps: bool
+    dropcaps: bool,
+    setuid: bool,
+    setgid: bool
 }
 
 impl HardeningOptionParsingContext {
     fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
         Self {
             parent: Rc::downgrade(&parent),
-            dropcaps: false
+            dropcaps: false,
+            setuid: false,
+            setgid: false
         }
     }
     fn handle_string(&mut self, ctx: &VtunContext, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
-        if self.dropcaps || str != "dropcaps" {
-            return self.unexpected_token(ctx);
+        match str {
+            "dropcaps" => {
+                if self.dropcaps {
+                    return self.unexpected_token(ctx);
+                }
+                self.dropcaps = true;
+            },
+            "setuid" => {
+                if self.setuid {
+                    return self.unexpected_token(ctx);
+                }
+                self.setuid = true;
+            },
+            "setgid" => {
+                if self.setgid {
+                    return self.unexpected_token(ctx);
+                }
+                self.setgid = true;
+            },
+            _ => return self.unexpected_token(ctx)
         }
-        self.dropcaps = true;
         None
     }
     fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
@@ -1557,13 +1604,94 @@ impl ParsingContext for HardeningOptionParsingContext {
     fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         match token {
             Token::Semicolon => {
-                if !self.dropcaps {
+                if !self.dropcaps && !self.setuid && !self.setgid {
                     return self.unexpected_token(vtunctx);
                 }
                 self.parent.upgrade()
             },
             Token::Ident(ident) => self.handle_string(vtunctx, ident.as_str()),
+            Token::KwSetuid => self.handle_string(vtunctx, "setuid"),
+            Token::KwSetgid => self.handle_string(vtunctx, "setgid"),
             Token::Quoted(str) => self.handle_string(vtunctx, str.as_str()),
+            _ => self.unexpected_token(vtunctx)
+        }
+    }
+}
+
+struct KwSetuidSetgidConfigParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    ident: &'static str,
+    uidgid: lfd_mod::SetUidIdentifier
+}
+
+impl KwSetuidSetgidConfigParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>, ident: &'static str) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            ident,
+            uidgid: lfd_mod::SetUidIdentifier::Default
+        }
+    }
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        let msg = format!("Unexpected token after {}", self.ident);
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        self.set_failed(ctx);
+        None
+    }
+    fn string_token(&mut self, ctx: &VtunContext, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if !matches!(self.uidgid, lfd_mod::SetUidIdentifier::Default) {
+            return self.unexpected_token(ctx);
+        }
+        self.uidgid = lfd_mod::SetUidIdentifier::Name(str.to_string());
+        None
+    }
+    fn number_token(&mut self, ctx: &VtunContext, num: u64) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        if !matches!(self.uidgid, lfd_mod::SetUidIdentifier::Default) {
+            return self.unexpected_token(ctx);
+        }
+        self.uidgid = lfd_mod::SetUidIdentifier::Id(num);
+        None
+    }
+    pub fn apply(&self, vtun_ctx: &mut VtunContext) {
+        match self.ident {
+            "setuid" => {
+                if !matches!(self.uidgid, lfd_mod::SetUidIdentifier::Default) {
+                    vtun_ctx.vtun.setuid = true;
+                }
+                vtun_ctx.vtun.set_uid_user = self.uidgid.clone();
+            },
+            "setgid" => {
+                if !matches!(self.uidgid, lfd_mod::SetUidIdentifier::Default) {
+                    vtun_ctx.vtun.setgid = true;
+                }
+                vtun_ctx.vtun.set_gid_user = self.uidgid.clone();
+            }
+            _ => {}
+        }
+    }
+}
+
+impl ParsingContext for KwSetuidSetgidConfigParsingContext {
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        let msg = format!("Parse error in {}", self.ident);
+        ctx.syslog(lfd_mod::LOG_ERR, msg.as_str());
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
+            None => {}
+        }
+    }
+
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::Ident(ident) => self.string_token(vtunctx, ident.as_str()),
+            Token::Quoted(str) => self.string_token(vtunctx, str.as_str()),
+            Token::Number(num) => self.number_token(vtunctx, num),
+            Token::Semicolon => {
+                if matches!(self.uidgid, lfd_mod::SetUidIdentifier::Default) {
+                    return self.unexpected_token(vtunctx);
+                }
+                self.parent.upgrade()
+            },
             _ => self.unexpected_token(vtunctx)
         }
     }
@@ -2137,8 +2265,12 @@ fn test_context() -> VtunContext {
             syslog: 0,
             log_to_syslog: false,
             quiet: 0,
+            set_uid_user: lfd_mod::SetUidIdentifier::Default,
+            set_gid_user: lfd_mod::SetUidIdentifier::Default,
             experimental: false,
             dropcaps: false,
+            setuid: false,
+            setgid: false,
         },
         is_rmt_fd_connected: false,
     }
@@ -2146,7 +2278,7 @@ fn test_context() -> VtunContext {
 
 #[cfg(test)]
 #[test]
-fn test_not_dropcaps() {
+fn test_not_dropcaps_and_not_setuid() {
     let test_config = "options {
     };";
     let mut ctx = test_context();
@@ -2155,11 +2287,13 @@ fn test_not_dropcaps() {
         None => false
     });
     assert!(!ctx.vtun.dropcaps);
+    assert!(!ctx.vtun.setuid);
+    assert!(!ctx.vtun.setgid);
 }
 
 #[cfg(test)]
 #[test]
-fn test_dropcaps() {
+fn test_dropcaps_and_not_setuid() {
     let test_config = "options {
         hardening dropcaps;
     };";
@@ -2169,4 +2303,106 @@ fn test_dropcaps() {
         None => false
     });
     assert!(ctx.vtun.dropcaps);
+    assert!(!ctx.vtun.setuid);
+    assert!(!ctx.vtun.setgid);
+}
+
+#[cfg(test)]
+#[test]
+fn test_setuid_and_not_dropcaps() {
+    let test_config = "options {
+        hardening setuid;
+    };";
+    let mut ctx = test_context();
+    assert!(match VtunConfigRoot::new_from_string(&mut ctx, test_config) {
+        Some(_) => true,
+        None => false
+    });
+    assert!(ctx.vtun.setuid);
+    assert!(!ctx.vtun.dropcaps);
+}
+
+#[cfg(test)]
+#[test]
+fn test_setgid_and_not_dropcaps() {
+    let test_config = "options {
+        hardening setgid;
+    };";
+    let mut ctx = test_context();
+    assert!(match VtunConfigRoot::new_from_string(&mut ctx, test_config) {
+        Some(_) => true,
+        None => false
+    });
+    assert!(!ctx.vtun.setuid);
+    assert!(ctx.vtun.setgid);
+    assert!(!ctx.vtun.dropcaps);
+}
+
+#[cfg(test)]
+#[test]
+fn test_setuid_and_dropcaps() {
+    let test_config = "options {
+        hardening setuid dropcaps;
+    };";
+    let mut ctx = test_context();
+    assert!(match VtunConfigRoot::new_from_string(&mut ctx, test_config) {
+        Some(_) => true,
+        None => false
+    });
+    assert!(ctx.vtun.setuid);
+    assert!(ctx.vtun.dropcaps);
+}
+
+#[cfg(test)]
+#[test]
+fn test_setuid_and_dropcaps2() {
+    let test_config = "options {
+        hardening setuid;
+        hardening dropcaps;
+    };";
+    let mut ctx = test_context();
+    assert!(match VtunConfigRoot::new_from_string(&mut ctx, test_config) {
+        Some(_) => true,
+        None => false
+    });
+    assert!(ctx.vtun.setuid);
+    assert!(ctx.vtun.dropcaps);
+}
+
+#[cfg(test)]
+#[test]
+fn test_setuid_nobody() {
+    let test_config = "options {
+        setuid nobody;
+    };";
+    let mut ctx = test_context();
+    assert!(match VtunConfigRoot::new_from_string(&mut ctx, test_config) {
+        Some(_) => true,
+        None => false
+    });
+    assert!(ctx.vtun.setuid);
+    assert!(!ctx.vtun.setgid);
+    assert!(match ctx.vtun.set_uid_user {
+        lfd_mod::SetUidIdentifier::Name(name) => name == "nobody",
+        _ => false
+    });
+}
+
+#[cfg(test)]
+#[test]
+fn test_setgid_nobody() {
+    let test_config = "options {
+        setgid nobody;
+    };";
+    let mut ctx = test_context();
+    assert!(match VtunConfigRoot::new_from_string(&mut ctx, test_config) {
+        Some(_) => true,
+        None => false
+    });
+    assert!(!ctx.vtun.setuid);
+    assert!(ctx.vtun.setgid);
+    assert!(match ctx.vtun.set_gid_user {
+        lfd_mod::SetUidIdentifier::Name(name) => name == "nobody",
+        _ => false
+    });
 }

@@ -55,8 +55,12 @@ pub fn get_test_context() -> VtunContext {
             syslog: 0,
             log_to_syslog: false,
             quiet: 0,
+            set_uid_user: lfd_mod::SetUidIdentifier::Default,
+            set_gid_user: lfd_mod::SetUidIdentifier::Default,
             experimental: false,
-            dropcaps: false
+            dropcaps: false,
+            setuid: false,
+            setgid: false,
         },
         is_rmt_fd_connected: false,
     }

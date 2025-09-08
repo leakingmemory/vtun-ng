@@ -1,7 +1,16 @@
 
- - New bidirectional auth
- - Maybe drop privileges after setting up a tunnel
- - Add new crypto algorithms
+ - Experimental features that are planned to be launched with 3.1.0
+   - dropcaps, setuid, setgid
+   - bidirectional auth
+ - Requires encryption "3.1" config, where 3.1 implies bidirectional auth
+   This is supposed to be a client setting that requires the server to
+   comply with required features.
+ - Allowlist for encryption algorithms, client setting since the server
+   decides which algorithm is used. But the client should reject the connection
+   if the server chooses an algorithm not in the allowlist.
+ - Add new crypto algorithms, specificly AES-GCM, AES-GCM-SIV which does integrity checking.
+ - Add PKI-mode and assymetric key mode.
+ - Build configurable enable/disable zlib and lzo
 
 General plan is to remain completely backwards compatible with
 vtun-3.0.4 for a while.

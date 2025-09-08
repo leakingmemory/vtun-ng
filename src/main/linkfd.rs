@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU64};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use aes::{Aes128, Aes256};
+use aes_gcm::{Aes128Gcm, Aes256Gcm};
 use blowfish::Blowfish;
 use cipher::consts::{U16, U32};
 use ecb::{Decryptor, Encryptor};
@@ -11,7 +12,7 @@ use errno::{errno, set_errno};
 use libc::{SIGALRM, SIGHUP, SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::{low_level, SigId};
 use time::OffsetDateTime;
-use crate::{driver, fdselect, lfd_generic_encrypt, lfd_iv_encrypt, lfd_iv_stream_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, syslog, vtun_host};
+use crate::{driver, fdselect, lfd_gcm_encrypt, lfd_generic_encrypt, lfd_iv_encrypt, lfd_iv_stream_encrypt, lfd_legacy_encrypt, lfd_lzo, lfd_mod, lfd_shaper, lfd_zlib, syslog, vtun_host};
 use crate::mainvtun::VtunContext;
 use crate::syslog::SyslogObject;
 
@@ -341,6 +342,14 @@ pub fn linkfd(ctx: &mut VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun
             lfd_mod::VTUN_ENC_BF256OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, ofb::Ofb<lfd_iv_stream_encrypt::FixedSizeForVariableKeySizeWrapper<Blowfish,U32>>, 32, 8>::new()),
             lfd_mod::VTUN_ENC_AES128OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, ofb::Ofb<Aes128>, 16, 16>::new()),
             lfd_mod::VTUN_ENC_AES256OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, ofb::Ofb<Aes256>, 32, 16>::new()),
+            lfd_mod::VTUN_ENC_AES128GCM => {
+                ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-mode is experimental");
+                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>,Decryptor<Aes128>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes128Gcm,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes128Gcm,16>, 16, 16>::new())
+            },
+            lfd_mod::VTUN_ENC_AES256GCM => {
+                ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-mode is experimental");
+                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes256Gcm,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes256Gcm,16>, 32, 16>::new())
+            },
             _ => {
                 ctx.syslog(lfd_mod::LOG_ERR, "Unknown encryption algorithm");
                 return Err(());

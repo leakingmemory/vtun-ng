@@ -27,6 +27,20 @@ const MAX_GIBBERISH: u32	= 10;
 const MIN_GIBBERISH: u32   = 1;
 const MAX_GIBBERISH_TIME: u64   = 2;
 
+pub trait EncryptVec<const BLOCK_SIZE: usize> {
+    fn encrypt_mut(&mut self, data: &mut Vec<u8>, base: usize, len: usize) -> Result<(),()>;
+    fn _get_block_size() -> usize {
+        BLOCK_SIZE
+    }
+}
+
+pub trait DecryptVec<const BLOCK_SIZE: usize> {
+    fn decrypt_mut(&mut self, data: &mut Vec<u8>) -> Result<(),()>;
+    fn _get_block_size() -> usize {
+        BLOCK_SIZE
+    }
+}
+
 struct LfdIvEncrypt<InitEncryptor,InitDecryptor,Encryptor,Decryptor,const KEY_SIZE: usize,const BLOCK_SIZE: usize> {
     random: ThreadRng,
     key: [u8; KEY_SIZE],
@@ -253,12 +267,40 @@ fn remove_prefix(buf: &mut Vec<u8>, prefix_size: usize) {
     buf.truncate(len - prefix_size);
 }
 
-impl<InitEncryptor: BlockEncryptMut+KeyInit,InitDecryptor: BlockDecryptMut+KeyInit,Encryptor: BlockEncryptMut+KeyIvInit,Decryptor: BlockDecryptMut+KeyIvInit,const KEY_SIZE: usize,const BLOCK_SIZE: usize> LfdMod for LfdIvEncrypt<InitEncryptor,InitDecryptor,Encryptor,Decryptor,KEY_SIZE,BLOCK_SIZE>
+impl<Encryptor: BlockEncryptMut, const BLOCK_SIZE: usize> EncryptVec<BLOCK_SIZE> for Encryptor {
+    fn encrypt_mut(&mut self, buf: &mut Vec<u8>, base: usize, len: usize) -> Result<(), ()> {
+        for i in base/BLOCK_SIZE..(base+len)/BLOCK_SIZE {
+            let mut data: [u8; BLOCK_SIZE] = [0u8; BLOCK_SIZE];
+            for j in 0..BLOCK_SIZE {
+                data[j] = buf[i*BLOCK_SIZE + j];
+            }
+            let block = Block::<Encryptor>::from_mut_slice(&mut data);
+            self.encrypt_block_mut(block);
+            for j in 0..BLOCK_SIZE {
+                buf[i*BLOCK_SIZE + j] = block[j];
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<Decryptor: BlockDecryptMut, const BLOCK_SIZE: usize> DecryptVec<BLOCK_SIZE> for Decryptor {
+    fn decrypt_mut(&mut self, buf: &mut Vec<u8>) -> Result<(), ()> {
+        let len = buf.len();
+        for i in 0..len/BLOCK_SIZE {
+            let block = Block::<Decryptor>::from_mut_slice(&mut buf[i*BLOCK_SIZE..(i+1)*BLOCK_SIZE]);
+            self.decrypt_block_mut(block);
+        }
+        Ok(())
+    }
+}
+
+impl<InitEncryptor: BlockEncryptMut+KeyInit,InitDecryptor: BlockDecryptMut+KeyInit,Encryptor: EncryptVec<BLOCK_SIZE>+KeyIvInit,Decryptor: DecryptVec<BLOCK_SIZE>+KeyIvInit,const KEY_SIZE: usize,const BLOCK_SIZE: usize> LfdMod for LfdIvEncrypt<InitEncryptor,InitDecryptor,Encryptor,Decryptor,KEY_SIZE,BLOCK_SIZE>
 /*where -- when rust gets support
     Assert<{KEY_SIZE == 16 || KEY_SIZE == 32}>: IsTrue,
     Assert<{BLOCK_SIZE >= 8 && BLOCK_SIZE < 256 && (1 << log2_for_powers_of_two(BLOCK_SIZE)) == BLOCK_SIZE}>: IsTrue*/
 {
-    fn encode(&mut self, _ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
+    fn encode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         self.request_send = false;
         let pad = BLOCK_SIZE - (buf.len() & (BLOCK_SIZE - 1));
         let mut len = buf.len() + pad;
@@ -281,24 +323,21 @@ impl<InitEncryptor: BlockEncryptMut+KeyInit,InitDecryptor: BlockDecryptMut+KeyIn
             len = len + BLOCK_SIZE;
         }
         self.seq += 1;
-        for i in base/BLOCK_SIZE..(base+len)/BLOCK_SIZE {
-            let mut data: [u8; BLOCK_SIZE] = [0u8; BLOCK_SIZE];
-            for j in 0..BLOCK_SIZE {
-                data[j] = buf[i*BLOCK_SIZE + j];
+        match match self.encryptor {
+            Some(ref mut encryptor) => encryptor.encrypt_mut(buf, base, len),
+            None => {
+                ctx.syslog(lfd_mod::LOG_ERR, "Encryptor failed");
+                buf.clear();
+                Err(())
             }
-            let block = Block::<Encryptor>::from_mut_slice(&mut data);
-            match self.encryptor {
-                Some(ref mut encryptor) => encryptor.encrypt_block_mut(block),
-                None => {
-                    buf.clear();
-                    return Err(());
-                }
-            };
-            for j in 0..BLOCK_SIZE {
-                buf[i*BLOCK_SIZE + j] = block[j];
+        } {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                ctx.syslog(lfd_mod::LOG_ERR, "Encryptor failed");
+                buf.clear();
+                Err(())
             }
         }
-        Ok(())
     }
     fn decode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         let init = self.decryptor.is_none();
@@ -319,17 +358,21 @@ impl<InitEncryptor: BlockEncryptMut+KeyInit,InitDecryptor: BlockDecryptMut+KeyIn
             };
             remove_prefix(buf, BLOCK_SIZE * 2);
         }
-        let len = buf.len();
-        for i in 0..len/BLOCK_SIZE {
-            let block = Block::<Decryptor>::from_mut_slice(&mut buf[i*BLOCK_SIZE..(i+1)*BLOCK_SIZE]);
-            match self.decryptor {
-                Some(ref mut decryptor) => decryptor.decrypt_block_mut(block),
-                None => {
-                    ctx.syslog(lfd_mod::LOG_ERR, "Decryptor failed");
-                    return Err(());
-                }
-            };
-        }
+        match match self.decryptor {
+            Some(ref mut decryptor) => decryptor.decrypt_mut(buf),
+            None => {
+                ctx.syslog(lfd_mod::LOG_ERR, "Decryptor failed");
+                buf.clear();
+                return Err(());
+            }
+        } {
+            Ok(_) => {},
+            Err(_) => {
+                ctx.syslog(lfd_mod::LOG_ERR, "Decryptor failed");
+                buf.clear();
+                return Err(());
+            }
+        };
         {
             match self.recv_seq_msg(ctx, &mut buf[0 .. BLOCK_SIZE]) {
                 Ok(()) => {},
@@ -373,7 +416,7 @@ impl<InitEncryptor: KeyInit,InitDecryptor: KeyInit,Encryptor: KeyIvInit, Decrypt
     }
 }
 
-impl<InitEncryptor: KeyInit + BlockEncryptMut + 'static, InitDecryptor: KeyInit + BlockDecryptMut + 'static, Encryptor: KeyIvInit + BlockEncryptMut + 'static, Decryptor: KeyIvInit + BlockDecryptMut + 'static, const KEY_SIZE: usize, const BLOCK_SIZE: usize> LfdModFactory for LfdIvEncryptFactory<InitEncryptor,InitDecryptor,Encryptor,Decryptor,KEY_SIZE,BLOCK_SIZE> {
+impl<InitEncryptor: KeyInit + BlockEncryptMut + 'static, InitDecryptor: KeyInit + BlockDecryptMut + 'static, Encryptor: KeyIvInit + EncryptVec<BLOCK_SIZE> + 'static, Decryptor: KeyIvInit + DecryptVec<BLOCK_SIZE> + 'static, const KEY_SIZE: usize, const BLOCK_SIZE: usize> LfdModFactory for LfdIvEncryptFactory<InitEncryptor,InitDecryptor,Encryptor,Decryptor,KEY_SIZE,BLOCK_SIZE> {
     fn create(&self, ctx: &VtunContext, host: &mut VtunHost) -> Result<Box<dyn LfdMod>,i32> {
         let lfd = match LfdIvEncrypt::<InitEncryptor, InitDecryptor, Encryptor, Decryptor, KEY_SIZE, BLOCK_SIZE>::new(ctx, host) {
             Ok(lfd) => lfd,

@@ -87,6 +87,8 @@ mod challenge2;
 mod auth2;
 #[path = "main/lowpriv.rs"]
 mod lowpriv;
+#[path = "main/lfd_gcm_encrypt.rs"]
+mod lfd_gcm_encrypt;
 
 use std::io::Write;
 use std::{env};

@@ -636,6 +636,8 @@ impl ParsingContext for EncryptConfigParsingContext {
                     "aes256cbc" => lfd_mod::VTUN_ENC_AES256CBC,
                     "aes256cfb" => lfd_mod::VTUN_ENC_AES256CFB,
                     "aes256ofb" => lfd_mod::VTUN_ENC_AES256OFB,
+                    "aes128gcm" => lfd_mod::VTUN_ENC_AES128GCM,
+                    "aes256gcm" => lfd_mod::VTUN_ENC_AES256GCM,
 
                     "oldblowfish128ecb" => lfd_mod::VTUN_LEGACY_ENCRYPT,
 

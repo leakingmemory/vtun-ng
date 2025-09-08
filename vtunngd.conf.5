@@ -89,7 +89,7 @@ syslog facility specification, either numeric or name (from syslog (3)).
 experimental mode. To enable new protocol extensions that are not yet
 ready for general use.
 
-.IP \fBhardening\fR\ \fBdropcaps\fR \fBsetuid\fR \fBsetgid\fR (experimental)
+.IP \fBhardening\fR\ \fBdropcaps\fR\ \fBsetuid\fR\ \fBsetgid\fR\ (experimental)
 Enable hardening features such as dropcaps or setuid.
 
 Dropcaps will on supported platforms
@@ -112,12 +112,12 @@ positive side this helps protect against RCE vulnerabilities by
 restricting what capabilities an attacker is able to exploit if they
 gain access.
 
-.IP \fBsetuid\fR\ \fB<user>\fR (experimental)
+.IP \fBsetuid\fR\ \fB<user>\fR\ (experimental)
 Set the user id to change to when running network communication. Setting
 this option will enable the setuid hardening feature (see hardening above). This option
 accepts both a username and a user id.
 
-.IP \fBsetgid\fR\ \fB<group>\fR (experimental)
+.IP \fBsetgid\fR\ \fB<group>\fR\ (experimental)
 Set the group id to change to when running network communication. Setting
 this option will enable the setgid hardening feature (see hardening above). This
 option accepts both a group name and a group id.
@@ -271,6 +271,10 @@ AES cipher, 256 bit key, mode CBC
 AES cipher, 256 bit key, mode CFB
 .IP \fBaes256ofb\fR
 AES cipher, 256 bit key, mode OFB
+.IP \fBaes128gcm\fR
+AES cipher, 128 bit key, mode GCM (experimental)
+.IP \fBaes256gcm\fR
+AES cipher, 256 bit key, mode GCM (experimental)
 .RE
 .IP
 This option is ignored by the client.

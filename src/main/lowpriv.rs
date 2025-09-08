@@ -3,7 +3,7 @@ use std::io::{pipe, Read, Write, PipeWriter};
 use std::io::PipeReader;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use libc::WEXITSTATUS;
-use users::{Groups, Users, UsersCache};
+use uzers::{Groups, Users, UsersCache};
 use crate::exitcode::ExitCode;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::lfd_mod;

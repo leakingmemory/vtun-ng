@@ -16,10 +16,11 @@ use std::{fs};
 use std::rc::{Rc, Weak};
 use std::sync::Mutex;
 use logos::Logos;
-use crate::{lfd_mod, linkfd};
+use crate::{lfd_mod, linkfd, vtun_host};
 use crate::lexer::Token;
 #[cfg(test)]
 use crate::lfd_mod::VtunOpts;
+use crate::linkfd::VTUN_ENCRYPT;
 use crate::mainvtun::VtunContext;
 use crate::syslog::SyslogObject;
 use crate::tunnel::VtunCmd;
@@ -79,6 +80,40 @@ impl RootParsingContext {
                 host_ctx.apply(ctx, &mut host);
             }
             host_ctx.apply(ctx, &mut host);
+            if (host.flags & VTUN_ENCRYPT) != 0 {
+                if (host.requires & vtun_host::RequiresFlags::INTEGRITY_PROTECTION) != 0 &&
+                    (host.requires & vtun_host::RequiresFlags::CLIENT_ONLY) == 0 &&
+                    match host.cipher {
+                        lfd_mod::VTUN_ENC_AES128GCM => false,
+                        lfd_mod::VTUN_ENC_AES256GCM => false,
+                        _ => true
+                    } {
+                    let msg = format!("Host config {} requires integrity protection but configured with a cipher that does not check integrity. Not suitable for server. Setting client only.", match host.host {
+                        Some(ref str) => str.as_str(),
+                        None => ""
+                    });
+                    ctx.syslog(lfd_mod::LOG_WARNING, msg.as_str());
+                    let msg = format!("Host config {} is automatically client only.", match host.host {
+                        Some(ref str) => str.as_str(),
+                        None => ""
+                    });
+                    ctx.syslog(lfd_mod::LOG_WARNING, msg.as_str());
+                    host.requires = host.requires | vtun_host::RequiresFlags::CLIENT_ONLY;
+                }
+            } else if (host.requires & (vtun_host::RequiresFlags::ENCRYPTION | vtun_host::RequiresFlags::INTEGRITY_PROTECTION)) != 0 &&
+                (host.requires & vtun_host::RequiresFlags::CLIENT_ONLY) == 0 {
+                let msg = format!("Host config {} requires encryption and/or integrity protection but configured without appropriate type of encryption. Not suitable for server. Setting client only.", match host.host {
+                    Some(ref str) => str.as_str(),
+                    None => ""
+                });
+                ctx.syslog(lfd_mod::LOG_WARNING, msg.as_str());
+                let msg = format!("Host config {} is automatically client only.", match host.host {
+                    Some(ref str) => str.as_str(),
+                    None => ""
+                });
+                ctx.syslog(lfd_mod::LOG_WARNING, msg.as_str());
+                host.requires = host.requires | vtun_host::RequiresFlags::CLIENT_ONLY;
+            }
             vec.push(host);
         }
         vec
@@ -225,7 +260,8 @@ struct HostConfigParsingContext {
     pub persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     pub keep_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     pub stat_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
-    pub experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>
+    pub experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
+    pub requires_ctx: Option<Rc<Mutex<KwRequiresParsingContext>>>
 }
 
 impl HostConfigParsingContext {
@@ -247,7 +283,8 @@ impl HostConfigParsingContext {
             persist_ctx: None,
             keep_ctx: None,
             stat_ctx: None,
-            experimental_ctx: None
+            experimental_ctx: None,
+            requires_ctx: None
         }
     }
     pub fn apply(&self, ctx: &VtunContext, host: &mut VtunHost) {
@@ -359,6 +396,13 @@ impl HostConfigParsingContext {
                 host.experimental = experimental_ctx.value;
             }
         }
+        match self.requires_ctx {
+            None => {},
+            Some(ref requires_ctx) => {
+                let requires_ctx = requires_ctx.lock().unwrap();
+                host.requires = requires_ctx.flags.clone();
+            }
+        }
     }
 }
 
@@ -441,6 +485,17 @@ impl ParsingContext for HostConfigParsingContext {
                 let experimental_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "experimental")));
                 self.experimental_ctx = Some(experimental_ctx.clone());
                 Some(experimental_ctx)
+            },
+            Token::KwRequires => {
+                let requires_ctx = Rc::new(Mutex::new(KwRequiresParsingContext::new(Rc::clone(&ctx))));
+                if self.requires_ctx.is_none() {
+                    self.requires_ctx = Some(requires_ctx.clone());
+                    Some(requires_ctx)
+                } else {
+                    vtunctx.syslog(lfd_mod::LOG_ERR, "Duplicate requires statement");
+                    self.set_failed(vtunctx);
+                    None
+                }
             },
             Token::Ident(ident) => {
                 match ident.as_str() {
@@ -1967,6 +2022,76 @@ impl ParsingContext for CommandConfigParsingContext {
     }
 }
 
+struct KwRequiresParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    flags: vtun_host::RequiresFlags
+}
+
+impl KwRequiresParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            flags: vtun_host::RequiresFlags::NONE
+        }
+    }
+    fn handle_string(&mut self, vtunctx: &VtunContext, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match str {
+            "client" => {
+                self.flags = self.flags | vtun_host::RequiresFlags::CLIENT_ONLY;
+                None
+            },
+            "bidirauth" => {
+                self.flags = self.flags | vtun_host::RequiresFlags::BIDIRECTIONAL_AUTH;
+                None
+            },
+            "encryption" => {
+                self.flags = self.flags | vtun_host::RequiresFlags::ENCRYPTION;
+                None
+            },
+            "integrity" => {
+                self.flags = self.flags | vtun_host::RequiresFlags::INTEGRITY_PROTECTION;
+                None
+            },
+            "3.1" => {
+                self.flags = self.flags | vtun_host::RequiresFlags::BIDIRECTIONAL_AUTH;
+                None
+            },
+            _ => self.unexpected_token(vtunctx)
+        }
+    }
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after requires");
+        self.set_failed(ctx);
+        None
+    }
+}
+
+impl ParsingContext for KwRequiresParsingContext {
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in requires");
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
+            None => {}
+        }
+    }
+
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::Ident(str) => self.handle_string(vtunctx, str.as_str()),
+            Token::Quoted(str) => self.handle_string(vtunctx, str.as_str()),
+            Token::Semicolon => {
+                if self.flags == 0 {
+                    return self.unexpected_token(vtunctx);
+                }
+                self.parent.upgrade()
+            }
+            _ => {
+                self.unexpected_token(vtunctx)
+            }
+        }
+    }
+}
+
 struct IntegerOptionParsingContext {
     parent: Weak<Mutex<dyn ParsingContext>>,
     token_name: &'static str,
@@ -2407,4 +2532,105 @@ fn test_setgid_nobody() {
         lfd_mod::SetUidIdentifier::Name(name) => name == "nobody",
         _ => false
     });
+}
+
+#[cfg(test)]
+#[test]
+fn test_cfg_host_requires_client_encryption_bidirauth_integrity() {
+    let test_config = "hostconf {
+        requires client encryption bidirauth integrity;
+    };";
+    let mut ctx = test_context();
+    ctx.config = VtunConfigRoot::new_from_string(&mut ctx, test_config);
+    assert!(ctx.config.is_some());
+    let config = &ctx.config.unwrap();
+    let hostcfg = config.find_host("hostconf");
+    assert!(hostcfg.is_some());
+    let hostcfg = hostcfg.unwrap();
+    assert!((hostcfg.requires & vtun_host::RequiresFlags::CLIENT_ONLY) != 0);
+    assert!((hostcfg.requires & vtun_host::RequiresFlags::BIDIRECTIONAL_AUTH) != 0);
+    assert!((hostcfg.requires & vtun_host::RequiresFlags::ENCRYPTION) != 0);
+    assert!((hostcfg.requires & vtun_host::RequiresFlags::INTEGRITY_PROTECTION) != 0);
+}
+
+#[cfg(test)]
+#[test]
+fn test_cfg_host_requires_3_1() {
+    let test_config = "hostconf {
+        requires \"3.1\";
+    };";
+    let mut ctx = test_context();
+    ctx.config = VtunConfigRoot::new_from_string(&mut ctx, test_config);
+    assert!(ctx.config.is_some());
+    let config = &ctx.config.unwrap();
+    let hostcfg = config.find_host("hostconf");
+    assert!(hostcfg.is_some());
+    let hostcfg = hostcfg.unwrap();
+    assert!(hostcfg.requires == vtun_host::RequiresFlags::BIDIRECTIONAL_AUTH);
+}
+
+#[cfg(test)]
+#[test]
+fn test_cfg_host_requires_integrity_with_wrong_cipher() {
+    let test_config = "hostconf {
+        encrypt aes256cbc;
+        requires integrity;
+    };";
+    let mut ctx = test_context();
+    ctx.config = VtunConfigRoot::new_from_string(&mut ctx, test_config);
+    assert!(ctx.config.is_some());
+    let config = &ctx.config.unwrap();
+    let hostcfg = config.find_host("hostconf");
+    assert!(hostcfg.is_some());
+    let hostcfg = hostcfg.unwrap();
+    assert!(hostcfg.requires == (vtun_host::RequiresFlags::INTEGRITY_PROTECTION | vtun_host::RequiresFlags::CLIENT_ONLY));
+}
+
+
+#[cfg(test)]
+#[test]
+fn test_cfg_host_requires_integrity_without_cipher() {
+    let test_config = "hostconf {
+        requires integrity;
+    };";
+    let mut ctx = test_context();
+    ctx.config = VtunConfigRoot::new_from_string(&mut ctx, test_config);
+    assert!(ctx.config.is_some());
+    let config = &ctx.config.unwrap();
+    let hostcfg = config.find_host("hostconf");
+    assert!(hostcfg.is_some());
+    let hostcfg = hostcfg.unwrap();
+    assert!(hostcfg.requires == (vtun_host::RequiresFlags::INTEGRITY_PROTECTION | vtun_host::RequiresFlags::CLIENT_ONLY));
+}
+
+#[cfg(test)]
+#[test]
+fn test_cfg_host_requires_encryption_without_cipher() {
+    let test_config = "hostconf {
+        requires encryption;
+    };";
+    let mut ctx = test_context();
+    ctx.config = VtunConfigRoot::new_from_string(&mut ctx, test_config);
+    assert!(ctx.config.is_some());
+    let config = &ctx.config.unwrap();
+    let hostcfg = config.find_host("hostconf");
+    assert!(hostcfg.is_some());
+    let hostcfg = hostcfg.unwrap();
+    assert!(hostcfg.requires == (vtun_host::RequiresFlags::ENCRYPTION | vtun_host::RequiresFlags::CLIENT_ONLY));
+}
+
+#[cfg(test)]
+#[test]
+fn test_cfg_host_requires_encryption_and_integrity_without_cipher() {
+    let test_config = "hostconf {
+        requires encryption integrity;
+    };";
+    let mut ctx = test_context();
+    ctx.config = VtunConfigRoot::new_from_string(&mut ctx, test_config);
+    assert!(ctx.config.is_some());
+    let config = &ctx.config.unwrap();
+    let hostcfg = config.find_host("hostconf");
+    assert!(hostcfg.is_some());
+    let hostcfg = hostcfg.unwrap();
+    assert!(hostcfg.requires == (vtun_host::RequiresFlags::ENCRYPTION | vtun_host::RequiresFlags::INTEGRITY_PROTECTION | vtun_host::RequiresFlags::CLIENT_ONLY));
 }

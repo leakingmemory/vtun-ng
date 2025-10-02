@@ -22,6 +22,44 @@ use crate::filedes::FileDes;
 use crate::tunnel::VtunCmd;
 
 #[derive(Clone)]
+#[derive(Copy)]
+pub struct RequiresFlags(u32);
+
+impl RequiresFlags {
+    pub const NONE: Self = Self(0);
+    pub const ENCRYPTION: Self = Self(1);
+    pub const CLIENT_ONLY: Self = Self(2);
+    pub const BIDIRECTIONAL_AUTH: Self = Self(4);
+    pub const INTEGRITY_PROTECTION: Self = Self(8);
+}
+
+impl std::ops::BitAnd for RequiresFlags {
+    type Output = RequiresFlags;
+
+    fn bitand(self, rhs: RequiresFlags) -> RequiresFlags {
+        RequiresFlags(self.0 & rhs.0)
+    }
+}
+
+impl std::ops::BitOr for RequiresFlags {
+    type Output = RequiresFlags;
+    fn bitor(self, rhs: RequiresFlags) -> RequiresFlags {
+        RequiresFlags(self.0 | rhs.0)
+    }
+}
+
+impl PartialEq<RequiresFlags> for RequiresFlags {
+    fn eq(&self, other: &RequiresFlags) -> bool {
+        self.0 == other.0
+    }
+}
+impl PartialEq<u32> for RequiresFlags {
+    fn eq(&self, other: &u32) -> bool {
+        self.0 == *other
+    }
+}
+
+#[derive(Clone)]
 pub struct VtunSopt {
     pub dev: Option<String>,
     pub laddr: Option<String>,
@@ -84,6 +122,7 @@ pub struct VtunHost {
     pub ka_maxfail: libc::c_int,
     pub src_addr: VtunAddr,
     pub sopt: VtunSopt,
+    pub requires: RequiresFlags,
     pub experimental: bool,
 }
 
@@ -109,6 +148,7 @@ impl VtunHost {
             ka_maxfail: 4,
             src_addr: VtunAddr::new(),
             sopt: VtunSopt::new(),
+            requires: RequiresFlags::NONE,
             experimental: false,
         }
     }

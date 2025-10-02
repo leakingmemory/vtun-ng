@@ -32,6 +32,7 @@ use crate::exitcode::ExitCode;
 use crate::libfuncs::print_p;
 use crate::lowpriv::{run_lowpriv_section, LowprivReturnable};
 use crate::syslog::SyslogObject;
+use crate::vtun_host::RequiresFlags;
 
 trait ToWireForm {
     fn size_for_to_wire_form(&self) -> usize;
@@ -281,7 +282,19 @@ pub fn auth_server(ctx: &mut VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -
             let service_name = String::from_utf8_lossy(buf[6..len].as_ref());
             let host = {
                 let fhost = match ctx.config {
-                    Some(ref config) => config.find_host(service_name.as_ref()),
+                    Some(ref config) => {
+                        let host = config.find_host(service_name.as_ref());
+                        match host {
+                            None => None,
+                            Some(host) => {
+                                if (host.requires & vtun_host::RequiresFlags::CLIENT_ONLY) == 0u32 {
+                                    Some(host)
+                                } else {
+                                    None
+                                }
+                            }
+                        }
+                    },
                     None => None
                 };
                 match fhost {
@@ -299,7 +312,11 @@ pub fn auth_server(ctx: &mut VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -
                     Err(_) => Err(())
                 }
             } else {
-                auth::auth_server(ctx, linkfdctx, fd, &host)
+                if (host.requires & RequiresFlags::BIDIRECTIONAL_AUTH) == 0u32 {
+                    auth::auth_server(ctx, linkfdctx, fd, &host)
+                } else {
+                    Err(())
+                }
             };
             if let Err(_) = auth_result {
                 print_p(fd, "ERR\n".as_bytes());
@@ -462,30 +479,35 @@ pub fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, ho
             Err(_) => Err(())
         }
     } else {
-        ctx.syslog(lfd_mod::LOG_INFO, "Using vtun 3.0 authentication");
-        let mut msg: Vec<u8> = Vec::new();
-        msg.reserve(32);
-        msg.push(b'H');
-        msg.push(b'O');
-        msg.push(b'S');
-        msg.push(b'T');
-        msg.push(b':');
-        msg.push(b' ');
-        {
-            let host = match host.host {
-                Some(ref host) => host.as_bytes(),
-                None => {
-                    ctx.syslog(lfd_mod::LOG_ERR, "Host config is invalid, terminating connection");
-                    return Err(());
+        if (host.requires & RequiresFlags::BIDIRECTIONAL_AUTH) == 0u32 {
+            ctx.syslog(lfd_mod::LOG_INFO, "Using vtun 3.0 authentication");
+            let mut msg: Vec<u8> = Vec::new();
+            msg.reserve(32);
+            msg.push(b'H');
+            msg.push(b'O');
+            msg.push(b'S');
+            msg.push(b'T');
+            msg.push(b':');
+            msg.push(b' ');
+            {
+                let host = match host.host {
+                    Some(ref host) => host.as_bytes(),
+                    None => {
+                        ctx.syslog(lfd_mod::LOG_ERR, "Host config is invalid, terminating connection");
+                        return Err(());
+                    }
+                };
+                for i in 0..host.len() {
+                    msg.push(host[i]);
                 }
-            };
-            for i in 0..host.len() {
-                msg.push(host[i]);
             }
+            msg.push(b'\n');
+            print_p(fd, msg.as_slice());
+            auth::auth_client_rs(ctx, linkfdctx, fd, host)
+        } else {
+            ctx.syslog(lfd_mod::LOG_ERR, "Bidirectional auth is required by config, but the client or server does not support it");
+            Err(())
         }
-        msg.push(b'\n');
-        print_p(fd, msg.as_slice());
-        auth::auth_client_rs(ctx, linkfdctx, fd, host)
     }
 }
 

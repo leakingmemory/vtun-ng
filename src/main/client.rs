@@ -29,6 +29,7 @@ use crate::{auth2, challenge2, lfd_mod, linkfd, lowpriv, netlib, setproctitle, s
 use crate::exitcode::ExitCode;
 use crate::filedes::FileDes;
 use crate::lfd_mod::VtunOpts;
+use crate::linkfd::VTUN_ENCRYPT;
 use crate::mainvtun::VtunContext;
 use crate::syslog::SyslogObject;
 use crate::vtun_host::VtunSopt;
@@ -177,26 +178,54 @@ pub fn client_rs(ctx: &mut VtunContext, host: &mut vtun_host::VtunHost) -> Resul
             match lowpriv::run_lowpriv_section(ctx, "authentication", &mut is_forked, &mut |ctx: &mut VtunContext| {
                 match auth2::auth_client_rs(ctx, &linkfdctx, &s, host) {
                     Ok(_) => {
-                        Ok(auth2::ClientAuthDecision{
-                            values: auth2::ClientAuthValues {
-                                flags: host.flags,
-                                timeout: host.timeout,
-                                spd_in: host.spd_in,
-                                spd_out: host.spd_out,
-                                zlevel: host.zlevel,
-                                cipher: host.cipher
-                            },
-                            decision: auth2::AuthDecision {
-                                service_name: match host.host {
-                                    Some(ref name) => name.clone(),
-                                    None => "".to_string()
-                                },
-                                passwd_digest: challenge2::digest_passwd(&salt, match host.passwd {
-                                    Some(ref passwd) => passwd.as_str(),
-                                    None => ""
-                                })
+                        let mut requirements_met = true;
+                        if (host.requires & vtun_host::RequiresFlags::ENCRYPTION) != 0 {
+                            if (host.flags & VTUN_ENCRYPT) == 0 {
+                                ctx.syslog(lfd_mod::LOG_ERR, "Encryption requirement from config is not met, rejecting connection");
+                                requirements_met = false;
                             }
-                        })
+                        }
+                        if (host.requires & vtun_host::RequiresFlags::INTEGRITY_PROTECTION) != 0 {
+                            if (host.flags & VTUN_ENCRYPT) != 0 {
+                                let is_integrity_protected = match host.cipher {
+                                    lfd_mod::VTUN_ENC_AES128GCM => true,
+                                    lfd_mod::VTUN_ENC_AES256GCM => true,
+                                    _ => false
+                                };
+                                if !is_integrity_protected {
+                                    ctx.syslog(lfd_mod::LOG_ERR, "Integrity protection requirement from config is not met, rejecting connection");
+                                    ctx.syslog(lfd_mod::LOG_INFO, "AES-128-GCM or AES-256-GCM will provide integrity protection, please change algorithm in the server config");
+                                    requirements_met = false;
+                                }
+                            } else {
+                                ctx.syslog(lfd_mod::LOG_ERR, "Integrity protection requirement from config is not met (no encryption), rejecting connection");
+                                requirements_met = false;
+                            }
+                        }
+                        if requirements_met {
+                            Ok(auth2::ClientAuthDecision {
+                                values: auth2::ClientAuthValues {
+                                    flags: host.flags,
+                                    timeout: host.timeout,
+                                    spd_in: host.spd_in,
+                                    spd_out: host.spd_out,
+                                    zlevel: host.zlevel,
+                                    cipher: host.cipher
+                                },
+                                decision: auth2::AuthDecision {
+                                    service_name: match host.host {
+                                        Some(ref name) => name.clone(),
+                                        None => "".to_string()
+                                    },
+                                    passwd_digest: challenge2::digest_passwd(&salt, match host.passwd {
+                                        Some(ref passwd) => passwd.as_str(),
+                                        None => ""
+                                    })
+                                }
+                            })
+                        } else {
+                            Err(())
+                        }
                     },
                     Err(_) => Err(())
                 }

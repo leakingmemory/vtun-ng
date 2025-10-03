@@ -154,6 +154,34 @@ impl ParsingContext for RootParsingContext {
     }
 }
 
+fn cipher_from_string(str: &str) -> Result<i32,()> {
+    let cipher = match str {
+        "blowfish128ecb" => lfd_mod::VTUN_ENC_BF128ECB,
+        "blowfish128cbc" => lfd_mod::VTUN_ENC_BF128CBC,
+        "blowfish128cfb" => lfd_mod::VTUN_ENC_BF128CFB,
+        "blowfish128ofb" => lfd_mod::VTUN_ENC_BF128OFB,
+        "blowfish256ecb" => lfd_mod::VTUN_ENC_BF256ECB,
+        "blowfish256cbc" => lfd_mod::VTUN_ENC_BF256CBC,
+        "blowfish256cfb" => lfd_mod::VTUN_ENC_BF256CFB,
+        "blowfish256ofb" => lfd_mod::VTUN_ENC_BF256OFB,
+        "aes128ecb" => lfd_mod::VTUN_ENC_AES128ECB,
+        "aes128cbc" => lfd_mod::VTUN_ENC_AES128CBC,
+        "aes128cfb" => lfd_mod::VTUN_ENC_AES128CFB,
+        "aes128ofb" => lfd_mod::VTUN_ENC_AES128OFB,
+        "aes256ecb" => lfd_mod::VTUN_ENC_AES256ECB,
+        "aes256cbc" => lfd_mod::VTUN_ENC_AES256CBC,
+        "aes256cfb" => lfd_mod::VTUN_ENC_AES256CFB,
+        "aes256ofb" => lfd_mod::VTUN_ENC_AES256OFB,
+        "aes128gcm" => lfd_mod::VTUN_ENC_AES128GCM,
+        "aes256gcm" => lfd_mod::VTUN_ENC_AES256GCM,
+
+        "oldblowfish128ecb" => lfd_mod::VTUN_LEGACY_ENCRYPT,
+
+        _ => return Err(())
+    };
+    Ok(cipher)
+}
+
 struct KwDefaultParsingContext {
     parent: Weak<Mutex<dyn ParsingContext>>,
     pub host_ctx: Option<Rc<Mutex<HostConfigParsingContext>>>
@@ -261,7 +289,8 @@ struct HostConfigParsingContext {
     pub keep_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     pub stat_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     pub experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
-    pub requires_ctx: Option<Rc<Mutex<KwRequiresParsingContext>>>
+    pub requires_ctx: Option<Rc<Mutex<KwRequiresParsingContext>>>,
+    pub accept_encrypt_ctx: Vec<Rc<Mutex<KwAcceptEncryptParsingContext>>>
 }
 
 impl HostConfigParsingContext {
@@ -284,7 +313,8 @@ impl HostConfigParsingContext {
             keep_ctx: None,
             stat_ctx: None,
             experimental_ctx: None,
-            requires_ctx: None
+            requires_ctx: None,
+            accept_encrypt_ctx: Vec::new()
         }
     }
     pub fn apply(&self, ctx: &VtunContext, host: &mut VtunHost) {
@@ -403,6 +433,21 @@ impl HostConfigParsingContext {
                 host.requires = requires_ctx.flags.clone();
             }
         }
+        for accept_encrypt in self.accept_encrypt_ctx.iter() {
+            let accept_encrypt = accept_encrypt.lock().unwrap();
+            for cipher in accept_encrypt.ciphers.iter() {
+                match host.accepted_cipher {
+                    Some(ref mut accepted_cipher) => {
+                        if !accepted_cipher.contains(cipher) {
+                            accepted_cipher.push(cipher.clone());
+                        }
+                    },
+                    None => {
+                        host.accepted_cipher = Some(vec![cipher.clone()]);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -496,6 +541,11 @@ impl ParsingContext for HostConfigParsingContext {
                     self.set_failed(vtunctx);
                     None
                 }
+            },
+            Token::KwAcceptEncrypt => {
+                let accept_encrypt_ctx = Rc::new(Mutex::new(KwAcceptEncryptParsingContext::new(Rc::clone(&ctx))));
+                self.accept_encrypt_ctx.push(accept_encrypt_ctx.clone());
+                Some(accept_encrypt_ctx)
             },
             Token::Ident(ident) => {
                 match ident.as_str() {
@@ -674,29 +724,9 @@ impl ParsingContext for EncryptConfigParsingContext {
                 if self.encrypt_type != -1 {
                     return self.unexpected_token(ctx);
                 }
-                self.encrypt_type = match ident.as_str() {
-                    "blowfish128ecb" => lfd_mod::VTUN_ENC_BF128ECB,
-                    "blowfish128cbc" => lfd_mod::VTUN_ENC_BF128CBC,
-                    "blowfish128cfb" => lfd_mod::VTUN_ENC_BF128CFB,
-                    "blowfish128ofb" => lfd_mod::VTUN_ENC_BF128OFB,
-                    "blowfish256ecb" => lfd_mod::VTUN_ENC_BF256ECB,
-                    "blowfish256cbc" => lfd_mod::VTUN_ENC_BF256CBC,
-                    "blowfish256cfb" => lfd_mod::VTUN_ENC_BF256CFB,
-                    "blowfish256ofb" => lfd_mod::VTUN_ENC_BF256OFB,
-                    "aes128ecb" => lfd_mod::VTUN_ENC_AES128ECB,
-                    "aes128cbc" => lfd_mod::VTUN_ENC_AES128CBC,
-                    "aes128cfb" => lfd_mod::VTUN_ENC_AES128CFB,
-                    "aes128ofb" => lfd_mod::VTUN_ENC_AES128OFB,
-                    "aes256ecb" => lfd_mod::VTUN_ENC_AES256ECB,
-                    "aes256cbc" => lfd_mod::VTUN_ENC_AES256CBC,
-                    "aes256cfb" => lfd_mod::VTUN_ENC_AES256CFB,
-                    "aes256ofb" => lfd_mod::VTUN_ENC_AES256OFB,
-                    "aes128gcm" => lfd_mod::VTUN_ENC_AES128GCM,
-                    "aes256gcm" => lfd_mod::VTUN_ENC_AES256GCM,
-
-                    "oldblowfish128ecb" => lfd_mod::VTUN_LEGACY_ENCRYPT,
-
-                    _ => return self.unexpected_token(ctx)
+                self.encrypt_type = match cipher_from_string(ident.as_str()) {
+                    Ok(cipher) => cipher,
+                    Err(_) => return self.unexpected_token(ctx)
                 };
                 None
             }
@@ -2092,6 +2122,61 @@ impl ParsingContext for KwRequiresParsingContext {
     }
 }
 
+struct KwAcceptEncryptParsingContext {
+    parent: Weak<Mutex<dyn ParsingContext>>,
+    ciphers: Vec<i32>
+}
+
+impl KwAcceptEncryptParsingContext {
+    pub fn new(parent: Rc<Mutex<dyn ParsingContext>>) -> Self {
+        Self {
+            parent: Rc::downgrade(&parent),
+            ciphers: Vec::new()
+        }
+    }
+    fn handle_string(&mut self, vtunctx: &VtunContext, str: &str) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        let cipher = match cipher_from_string(str) {
+            Ok(cipher) => cipher,
+            Err(_) => return self.unexpected_token(vtunctx)
+        };
+        if !self.ciphers.contains(&cipher) {
+            self.ciphers.push(cipher);
+        }
+        None
+    }
+    fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after requires");
+        self.set_failed(ctx);
+        None
+    }
+}
+
+impl ParsingContext for KwAcceptEncryptParsingContext {
+    fn set_failed(&mut self, ctx: &VtunContext) {
+        ctx.syslog(lfd_mod::LOG_ERR, "Parse error in requires");
+        match self.parent.upgrade() {
+            Some(parent) => parent.lock().unwrap().set_failed(ctx),
+            None => {}
+        }
+    }
+
+    fn token(&mut self, vtunctx: &VtunContext, _ctx: &Rc<Mutex<dyn ParsingContext>>, token: Token) -> Option<Rc<Mutex<dyn ParsingContext>>> {
+        match token {
+            Token::Ident(str) => self.handle_string(vtunctx, str.as_str()),
+            Token::Quoted(str) => self.handle_string(vtunctx, str.as_str()),
+            Token::Semicolon => {
+                if self.ciphers.is_empty() {
+                    return self.unexpected_token(vtunctx);
+                }
+                self.parent.upgrade()
+            }
+            _ => {
+                self.unexpected_token(vtunctx)
+            }
+        }
+    }
+}
+
 struct IntegerOptionParsingContext {
     parent: Weak<Mutex<dyn ParsingContext>>,
     token_name: &'static str,
@@ -2633,4 +2718,51 @@ fn test_cfg_host_requires_encryption_and_integrity_without_cipher() {
     assert!(hostcfg.is_some());
     let hostcfg = hostcfg.unwrap();
     assert!(hostcfg.requires == (vtun_host::RequiresFlags::ENCRYPTION | vtun_host::RequiresFlags::INTEGRITY_PROTECTION | vtun_host::RequiresFlags::CLIENT_ONLY));
+}
+
+#[cfg(test)]
+#[test]
+fn test_cfg_no_accept_encrypt() {
+    let test_config = "hostconf {
+    };";
+    let mut ctx = test_context();
+    ctx.config = VtunConfigRoot::new_from_string(&mut ctx, test_config);
+    assert!(ctx.config.is_some());
+    let config = &ctx.config.unwrap();
+    let hostcfg = config.find_host("hostconf");
+    assert!(hostcfg.is_some());
+    let hostcfg = hostcfg.unwrap();
+    assert!(hostcfg.accepted_cipher.is_none());
+}
+
+#[cfg(test)]
+#[test]
+fn test_cfg_accept_encrypt() {
+    let test_config = "hostconf {
+        accept_encrypt aes128cbc;
+        accept_encrypt aes256cbc;
+        accept_encrypt aes128gcm aes256gcm;
+        accept_encrypt aes256ofb;
+        accept_encrypt aes256ofb;
+    };";
+    let mut ctx = test_context();
+    ctx.config = VtunConfigRoot::new_from_string(&mut ctx, test_config);
+    assert!(ctx.config.is_some());
+    let config = &ctx.config.unwrap();
+    let hostcfg = config.find_host("hostconf");
+    assert!(hostcfg.is_some());
+    let hostcfg = hostcfg.unwrap();
+    assert!(hostcfg.accepted_cipher.is_some());
+    let accepted_cipher = match hostcfg.accepted_cipher {
+        Some(ref accepted_cipher) => accepted_cipher,
+        None => panic!("accepted_cipher is None")
+    };
+    assert!(!accepted_cipher.is_empty());
+    assert!(!accepted_cipher.contains(&cipher_from_string("aes128ecb").unwrap()));
+    assert!(accepted_cipher.contains(&cipher_from_string("aes128cbc").unwrap()));
+    assert!(accepted_cipher.contains(&cipher_from_string("aes256cbc").unwrap()));
+    assert!(accepted_cipher.contains(&cipher_from_string("aes128gcm").unwrap()));
+    assert!(accepted_cipher.contains(&cipher_from_string("aes256gcm").unwrap()));
+    assert!(accepted_cipher.contains(&cipher_from_string("aes256ofb").unwrap()));
+    assert!(accepted_cipher.len() == 5);
 }

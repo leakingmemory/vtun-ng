@@ -202,6 +202,13 @@ pub fn client_rs(ctx: &mut VtunContext, host: &mut vtun_host::VtunHost) -> Resul
                                 requirements_met = false;
                             }
                         }
+                        if match host.accepted_cipher {
+                            None => false,
+                            Some(ref ciphers) => !ciphers.contains(&host.cipher)
+                        } {
+                            ctx.syslog(lfd_mod::LOG_ERR, "Encryption cipher allowlisting is enabled and the encryption cipher is not listed with accept_encrypt, rejecting connection");
+                            requirements_met = false;
+                        }
                         if requirements_met {
                             Ok(auth2::ClientAuthDecision {
                                 values: auth2::ClientAuthValues {

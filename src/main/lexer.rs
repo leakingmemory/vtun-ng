@@ -82,6 +82,7 @@ pub enum Token {
     #[token("firewall")]  KwFirewall,
     #[token("shaper")]    KwShaper,
     #[token("requires")]  KwRequires,
+    #[token("accept_encrypt")]   KwAcceptEncrypt,
 
     // ----------------------------------------------------------------
     // Literals

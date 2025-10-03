@@ -2114,6 +2114,7 @@ impl ParsingContext for KwRequiresParsingContext {
                 if self.flags == 0 {
                     return self.unexpected_token(vtunctx);
                 }
+                vtunctx.syslog(lfd_mod::LOG_WARNING, "'requires' configuration is experimental");
                 self.parent.upgrade()
             }
             _ => {
@@ -2169,6 +2170,7 @@ impl ParsingContext for KwAcceptEncryptParsingContext {
                 if self.ciphers.is_empty() {
                     return self.unexpected_token(vtunctx);
                 }
+                vtunctx.syslog(lfd_mod::LOG_WARNING, "'accept_encrypt' configuration is experimental");
                 self.parent.upgrade()
             }
             _ => {

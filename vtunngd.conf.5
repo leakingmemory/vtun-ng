@@ -278,6 +278,15 @@ AES cipher, 256 bit key, mode GCM (experimental)
 .RE
 .IP
 This option is ignored by the client.
+.IP \fBrequires\ \fBclient\fR \fBbidirauth\fR \fBencryption\fR \fBintegrity\fR \fB"3.1"\fR (experimental)
+set requirements for the connection. This is specifically for the client where
+you can set requirements for what configuration it will accept from the client.
+Multiple requirements can be specified. For now this is experimental.
+.IP \fBaccept_encrypt\ \fB<encryption-algo>\fR (experimental)
+This accepts the same algorithms as the 'encrypt' keyword. This can be used
+to set up an allowlist of encryption algorithms that the client will accept.
+Multiple algorithms can be specified, also multiple accept_encrypt statements
+is accepted. This setting is currently experimental.
 .IP \fBkeepalive\ \fByes\fR|\fBno\fR|\fIinterval\fB:\fIcount\fR
 enable or disable connection keep-alive. Time \fIinterval\fR is a period
 between connection checks, in seconds, and \fIcount\fR is the maximum number

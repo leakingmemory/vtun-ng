@@ -18,17 +18,20 @@
  */
 
 /* ZLIB compression module */
+#[cfg(feature = "zlib")]
 use std::io::Write;
 use crate::{lfd_mod, vtun_host};
 use crate::linkfd::{LfdMod, LfdModFactory};
 use crate::mainvtun::VtunContext;
 use crate::syslog::SyslogObject;
 
+#[cfg(feature = "zlib")]
 struct LfdZlib {
     pub encoder: flate2::write::ZlibEncoder<Vec<u8>>,
     pub decoder: flate2::write::ZlibDecoder<Vec<u8>>
 }
 
+#[cfg(feature = "zlib")]
 impl LfdZlib {
     pub fn new(ctx: &VtunContext, host: &vtun_host::VtunHost) -> LfdZlib {
         ctx.syslog(lfd_mod::LOG_INFO, "ZLIB compression initialized");
@@ -48,12 +51,22 @@ impl LfdZlibFactory {
         }
     }
 }
+#[cfg(feature = "zlib")]
 impl LfdModFactory for LfdZlibFactory {
     fn create(&self, ctx: &VtunContext, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
         Ok(Box::new(LfdZlib::new(ctx, host)))
     }
 }
 
+#[cfg(not(feature = "zlib"))]
+impl LfdModFactory for LfdZlibFactory {
+    fn create(&self, ctx: &VtunContext, _host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        ctx.syslog(lfd_mod::LOG_ERR, "ZLIB compression is not supported, rebuild with zlib enabled");
+        Err(2)
+    }
+}
+
+#[cfg(feature = "zlib")]
 impl LfdMod for LfdZlib {
     fn encode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         match self.encoder.write_all(buf) {

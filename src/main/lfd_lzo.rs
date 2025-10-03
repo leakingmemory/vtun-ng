@@ -20,16 +20,19 @@
 
 /* LZO compression module */
 
+#[cfg(feature = "lzo")]
 use rust_lzo::{worst_compress, LZOContext, LZOError};
 use crate::{lfd_mod, linkfd, vtun_host};
 use crate::linkfd::LfdMod;
 use crate::mainvtun::VtunContext;
 use crate::syslog::SyslogObject;
 
+#[cfg(feature = "lzo")]
 struct LfdLzo {
     pub compress_ctx: LZOContext,
 }
 
+#[cfg(feature = "lzo")]
 impl LfdLzo {
     pub fn new(ctx: &VtunContext, _host: &vtun_host::VtunHost) -> LfdLzo {
         ctx.syslog(lfd_mod::LOG_INFO, "LZO compression initialized");
@@ -49,12 +52,22 @@ impl LfdLzoFactory {
     }
 }
 
+#[cfg(feature = "lzo")]
 impl linkfd::LfdModFactory for LfdLzoFactory {
     fn create(&self, ctx: &VtunContext, host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
         Ok(Box::new(LfdLzo::new(ctx, host)))
     }
 }
 
+#[cfg(not(feature = "lzo"))]
+impl linkfd::LfdModFactory for LfdLzoFactory {
+    fn create(&self, ctx: &VtunContext, _host: &mut vtun_host::VtunHost) -> Result<Box<dyn LfdMod>,i32> {
+        ctx.syslog(lfd_mod::LOG_ERR, "LZO compression is not supported, rebuild with lzo enabled");
+        Err(2)
+    }
+}
+
+#[cfg(feature = "lzo")]
 impl LfdMod for LfdLzo {
     fn encode(&mut self, ctx: &VtunContext, buf: &mut Vec<u8>) -> Result<(),()> {
         let mut compressed: Vec<u8> = Vec::new();

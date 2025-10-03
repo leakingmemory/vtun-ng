@@ -282,6 +282,19 @@ This option is ignored by the client.
 set requirements for the connection. This is specifically for the client where
 you can set requirements for what configuration it will accept from the client.
 Multiple requirements can be specified. For now this is experimental.
+.RS
+.IP \fBclient\fR
+The configuration is for client only, will not be used in server mode.
+.IP \fBbidirauth\fR
+Client requires the server to authenticate as well as the client. Authentication in both directions.
+.IP \fBencryption\fR
+Requires the connection to be encrypted.
+.IP \fBintegrity\fR
+Requires the integrity of the data to be protected. Some encryption algorithms do this, like aes128gcm and aes256gcm.
+.IP \fB"3.1"\fR
+Version 3.1 modes. Alias for bidirauth.
+.RE
+
 .IP \fBaccept_encrypt\ \fB<encryption-algo>\ (experimental)\fR
 This accepts the same algorithms as the 'encrypt' keyword. This can be used
 to set up an allowlist of encryption algorithms that the client will accept.

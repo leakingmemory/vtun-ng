@@ -438,6 +438,7 @@ impl HostConfigParsingContext {
             for cipher in accept_encrypt.ciphers.iter() {
                 match host.accepted_cipher {
                     Some(ref mut accepted_cipher) => {
+                        host.requires = host.requires | vtun_host::RequiresFlags::ENCRYPTION;
                         if !accepted_cipher.contains(cipher) {
                             accepted_cipher.push(cipher.clone());
                         }
@@ -2765,4 +2766,5 @@ fn test_cfg_accept_encrypt() {
     assert!(accepted_cipher.contains(&cipher_from_string("aes256gcm").unwrap()));
     assert!(accepted_cipher.contains(&cipher_from_string("aes256ofb").unwrap()));
     assert!(accepted_cipher.len() == 5);
+    assert!((hostcfg.requires & vtun_host::RequiresFlags::ENCRYPTION) != 0);
 }

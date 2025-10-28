@@ -2462,6 +2462,7 @@ fn test_context() -> VtunContext {
             timeout: 0,
             persist: 0,
             cfg_file: None,
+            pid_file: None,
             shell: None,
             ppp: None,
             ifcfg: None,

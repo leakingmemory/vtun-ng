@@ -40,6 +40,7 @@ pub struct VtunOpts {
     pub persist: libc::c_int,
 
     pub cfg_file: Option<String>,
+    pub pid_file: Option<String>,
 
     pub shell: Option<String>, /* Shell */
     pub ppp: Option<String>, /* Command to configure ppp devices */
@@ -69,6 +70,7 @@ impl VtunOpts {
             timeout: -1,
             persist: -1,
             cfg_file: None,
+            pid_file: None,
             shell: None,
             ppp: None,
             ifcfg: None,

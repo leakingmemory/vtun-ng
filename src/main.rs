@@ -146,6 +146,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
     opts.optopt("P", "port", "listen port", "PORT");
     opts.optopt("L", "local", "local address", "ADDR");
     opts.optopt("f", "config", "config file", "FILE");
+    opts.optopt("z", "pid-file", "pid file", "FILE");
     opts.optopt("t", "timeout", "timeout", "SEC");
     opts.optflag("n", "no-daemon", "don't daemonize");
     opts.optflag("p", "persist", "persist mode");
@@ -193,6 +194,12 @@ fn main() -> Result<(), exitcode::ErrorCode>
         Some(str) => {
             ctx.vtun.cfg_file = Some(str);
         },
+        None => {}
+    }
+    match matches.opt_str("z") {
+        Some(str) => {
+            ctx.vtun.pid_file = Some(str);
+        }
         None => {}
     }
     match matches.opt_str("t") {
@@ -336,7 +343,7 @@ fn main() -> Result<(), exitcode::ErrorCode>
  */
 fn write_pid(ctx: &VtunContext)
 {
-    let mut f = match std::fs::File::create(VTUN_PID_FILE) {
+    let mut f = match std::fs::File::create(match ctx.vtun.pid_file {Some(ref pidfile) => pidfile.as_str(), None => VTUN_PID_FILE}) {
         Ok(f) => f,
         Err(_) => {
             ctx.syslog(lfd_mod::LOG_ERR,"Can't write PID file");

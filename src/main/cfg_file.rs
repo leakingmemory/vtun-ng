@@ -20,7 +20,7 @@ use crate::{lfd_mod, linkfd, vtun_host};
 use crate::lexer::Token;
 #[cfg(test)]
 use crate::lfd_mod::VtunOpts;
-use crate::linkfd::VTUN_ENCRYPT;
+use crate::linkfd::{VTUN_ENCRYPT, VTUN_KEEP_ALIVE};
 use crate::mainvtun::VtunContext;
 use crate::syslog::SyslogObject;
 use crate::tunnel::VtunCmd;
@@ -901,8 +901,13 @@ impl KeepaliveConfigParsingContext {
         }
     }
     pub fn apply(&self, host: &mut VtunHost) {
-        host.ka_interval = self.keepalive_interval;
-        host.ka_maxfail = self.keepalive_count;
+        if self.interval_set {
+            host.flags = host.flags | VTUN_KEEP_ALIVE;
+            host.ka_interval = self.keepalive_interval;
+            host.ka_maxfail = if self.count_set { self.keepalive_count } else { 4 };
+        } else {
+            host.flags = host.flags & (!VTUN_KEEP_ALIVE);
+        }
     }
     fn unexpected_token(&mut self, ctx: &VtunContext) -> Option<Rc<Mutex<dyn ParsingContext>>> {
         ctx.syslog(lfd_mod::LOG_ERR, "Unexpected token after keepalive");

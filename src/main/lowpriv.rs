@@ -399,12 +399,16 @@ fn setgid(ctx: &VtunContext) -> Result<(),()> {
         let msg = format!("Setting gid of pid {} to {}", pid, gid);
         ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
+    if unsafe { libc::setgroups(0, std::ptr::null()) } != 0 {
+        ctx.syslog(lfd_mod::LOG_ERR, "Failed to drop additional groups (hardening setgid)");
+        return Err(())
+    }
     if unsafe { libc::setgid(gid) } != 0 {
-        ctx.syslog(lfd_mod::LOG_ERR, "Failed to set user id (hardening setuid)");
+        ctx.syslog(lfd_mod::LOG_ERR, "Failed to set group id (hardening setgid)");
         return Err(())
     }
     if unsafe { libc::setegid(gid) } != 0 {
-        ctx.syslog(lfd_mod::LOG_ERR, "Failed to set effective user id (hardening setuid)");
+        ctx.syslog(lfd_mod::LOG_ERR, "Failed to set effective group id (hardening setgid)");
         return Err(())
     }
     Ok(())

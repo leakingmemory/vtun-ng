@@ -190,6 +190,8 @@ pub fn client_rs(ctx: &mut VtunContext, host: &mut vtun_host::VtunHost) -> Resul
                                 let is_integrity_protected = match host.cipher {
                                     lfd_mod::VTUN_ENC_AES128GCM => true,
                                     lfd_mod::VTUN_ENC_AES256GCM => true,
+                                    lfd_mod::VTUN_ENC_AES128GCMSIV => true,
+                                    lfd_mod::VTUN_ENC_AES256GCMSIV => true,
                                     _ => false
                                 };
                                 if !is_integrity_protected {

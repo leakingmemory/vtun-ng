@@ -44,6 +44,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aes-gcm-siv"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae0784134ba9375416d469ec31e7c5f9fa94405049cf08c5ce5b4698be673e0d"
+dependencies = [
+ "aead",
+ "aes",
+ "cipher",
+ "ctr",
+ "polyval",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -671,6 +686,7 @@ version = "3.0.21"
 dependencies = [
  "aes",
  "aes-gcm",
+ "aes-gcm-siv",
  "blowfish",
  "cbc",
  "cfb-mode",
@@ -971,3 +987,9 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"

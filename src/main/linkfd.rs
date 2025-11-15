@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use aes::{Aes128, Aes256};
 use aes_gcm::{Aes128Gcm, Aes256Gcm};
+use aes_gcm_siv::{Aes128GcmSiv, Aes256GcmSiv};
 use blowfish::Blowfish;
 use cipher::consts::{U16, U32};
 use ecb::{Decryptor, Encryptor};
@@ -349,6 +350,14 @@ pub fn linkfd(ctx: &mut VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun
             lfd_mod::VTUN_ENC_AES256GCM => {
                 ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-mode is experimental");
                 Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes256Gcm,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes256Gcm,16>, 32, 16>::new())
+            },
+            lfd_mod::VTUN_ENC_AES128GCMSIV => {
+                ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-SIV-mode is experimental");
+                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>,Decryptor<Aes128>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes128GcmSiv,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes128GcmSiv,16>, 16, 16>::new())
+            },
+            lfd_mod::VTUN_ENC_AES256GCMSIV => {
+                ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-SIV-mode is experimental");
+                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes256GcmSiv,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes256GcmSiv,16>, 32, 16>::new())
             },
             _ => {
                 ctx.syslog(lfd_mod::LOG_ERR, "Unknown encryption algorithm");

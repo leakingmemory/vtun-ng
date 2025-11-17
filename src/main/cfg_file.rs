@@ -88,6 +88,7 @@ impl RootParsingContext {
                         lfd_mod::VTUN_ENC_AES256GCM => false,
                         lfd_mod::VTUN_ENC_AES128GCMSIV => false,
                         lfd_mod::VTUN_ENC_AES256GCMSIV => false,
+                        lfd_mod::VTUN_ENC_CHACHA20POLY1305 => false,
                         _ => true
                     } {
                     let msg = format!("Host config {} requires integrity protection but configured with a cipher that does not check integrity. Not suitable for server. Setting client only.", match host.host {
@@ -178,6 +179,7 @@ fn cipher_from_string(str: &str) -> Result<i32,()> {
         "aes256gcm" => lfd_mod::VTUN_ENC_AES256GCM,
         "aes128gcmsiv" => lfd_mod::VTUN_ENC_AES128GCMSIV,
         "aes256gcmsiv" => lfd_mod::VTUN_ENC_AES256GCMSIV,
+        "chacha20poly1305" => lfd_mod::VTUN_ENC_CHACHA20POLY1305,
 
         "oldblowfish128ecb" => lfd_mod::VTUN_LEGACY_ENCRYPT,
 

@@ -192,6 +192,7 @@ pub fn client_rs(ctx: &mut VtunContext, host: &mut vtun_host::VtunHost) -> Resul
                                     lfd_mod::VTUN_ENC_AES256GCM => true,
                                     lfd_mod::VTUN_ENC_AES128GCMSIV => true,
                                     lfd_mod::VTUN_ENC_AES256GCMSIV => true,
+                                    lfd_mod::VTUN_ENC_CHACHA20POLY1305 => true,
                                     _ => false
                                 };
                                 if !is_integrity_protected {

@@ -7,6 +7,7 @@ use aes::{Aes128, Aes256};
 use aes_gcm::{Aes128Gcm, Aes256Gcm};
 use aes_gcm_siv::{Aes128GcmSiv, Aes256GcmSiv};
 use blowfish::Blowfish;
+use chacha20poly1305::ChaCha20Poly1305;
 use cipher::consts::{U16, U32};
 use ecb::{Decryptor, Encryptor};
 use errno::{errno, set_errno};
@@ -358,6 +359,10 @@ pub fn linkfd(ctx: &mut VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun
             lfd_mod::VTUN_ENC_AES256GCMSIV => {
                 ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-SIV-mode is experimental");
                 Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes256GcmSiv,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes256GcmSiv,16>, 32, 16>::new())
+            },
+            lfd_mod::VTUN_ENC_CHACHA20POLY1305 => {
+                ctx.syslog(lfd_mod::LOG_WARNING, "CHACHA20POLY1305-mode is experimental");
+                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<ChaCha20Poly1305,16>, lfd_gcm_encrypt::LfdGcmDecrypt<ChaCha20Poly1305,16>, 32, 16>::new())
             },
             _ => {
                 ctx.syslog(lfd_mod::LOG_ERR, "Unknown encryption algorithm");

@@ -116,6 +116,7 @@ pub const VTUN_ENC_AES128GCM: libc::c_int = 17;
 pub const VTUN_ENC_AES256GCM: libc::c_int = 18;
 pub const VTUN_ENC_AES128GCMSIV: libc::c_int = 19;
 pub const VTUN_ENC_AES256GCMSIV: libc::c_int = 20;
+pub const VTUN_ENC_CHACHA20POLY1305: libc::c_int = 21;
 
 pub const VTUN_LEGACY_ENCRYPT: libc::c_int = 999;
 

@@ -54,6 +54,19 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/aes-gcm-siv/aes-gcm-siv-0.11.1.crate",
+        "sha256": "ae0784134ba9375416d469ec31e7c5f9fa94405049cf08c5ce5b4698be673e0d",
+        "dest": "cargo/vendor/aes-gcm-siv-0.11.1"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"ae0784134ba9375416d469ec31e7c5f9fa94405049cf08c5ce5b4698be673e0d\", \"files\": {}}",
+        "dest": "cargo/vendor/aes-gcm-siv-0.11.1",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/beef/beef-0.5.2.crate",
         "sha256": "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1",
         "dest": "cargo/vendor/beef-0.5.2"
@@ -166,6 +179,32 @@
         "type": "inline",
         "contents": "{\"package\": \"9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268\", \"files\": {}}",
         "dest": "cargo/vendor/cfg-if-1.0.1",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/chacha20/chacha20-0.9.1.crate",
+        "sha256": "c3613f74bd2eac03dad61bd53dbe620703d4371614fe0bc3b9f04dd36fe4e818",
+        "dest": "cargo/vendor/chacha20-0.9.1"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"c3613f74bd2eac03dad61bd53dbe620703d4371614fe0bc3b9f04dd36fe4e818\", \"files\": {}}",
+        "dest": "cargo/vendor/chacha20-0.9.1",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/chacha20poly1305/chacha20poly1305-0.10.1.crate",
+        "sha256": "10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35",
+        "dest": "cargo/vendor/chacha20poly1305-0.10.1"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35\", \"files\": {}}",
+        "dest": "cargo/vendor/chacha20poly1305-0.10.1",
         "dest-filename": ".cargo-checksum.json"
     },
     {
@@ -556,6 +595,19 @@
         "type": "inline",
         "contents": "{\"package\": \"c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381\", \"files\": {}}",
         "dest": "cargo/vendor/opaque-debug-0.3.1",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/poly1305/poly1305-0.8.0.crate",
+        "sha256": "8159bd90725d2df49889a078b54f4f79e87f1f8a8444194cdca81d38f5393abf",
+        "dest": "cargo/vendor/poly1305-0.8.0"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"8159bd90725d2df49889a078b54f4f79e87f1f8a8444194cdca81d38f5393abf\", \"files\": {}}",
+        "dest": "cargo/vendor/poly1305-0.8.0",
         "dest-filename": ".cargo-checksum.json"
     },
     {
@@ -1453,6 +1505,19 @@
         "type": "inline",
         "contents": "{\"package\": \"9ecf5b4cc5364572d7f4c329661bcc82724222973f2cab6f050a4e5c22f75181\", \"files\": {}}",
         "dest": "cargo/vendor/zerocopy-derive-0.8.26",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/zeroize/zeroize-1.8.2.crate",
+        "sha256": "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0",
+        "dest": "cargo/vendor/zeroize-1.8.2"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0\", \"files\": {}}",
+        "dest": "cargo/vendor/zeroize-1.8.2",
         "dest-filename": ".cargo-checksum.json"
     },
     {

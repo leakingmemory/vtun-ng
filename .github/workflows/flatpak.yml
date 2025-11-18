@@ -1,8 +1,9 @@
 name: Build & Upload Flatpak
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'flatp*'
 
 permissions:
   contents: write
@@ -13,7 +14,7 @@ jobs:
 
     env:
       APP_ID: org.radiotube.vtun-ng
-      VERSION: ${{ github.event.release.tag_name }}
+      VERSION: 3.0.22
       MANIFEST: flatpak/flatpak.json
       ARCH: x86_64
       RUNTIME_VER: 23.08
@@ -21,8 +22,6 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name }}
 
       - name: Install Flatpak tooling
         run: |
@@ -49,5 +48,6 @@ jobs:
       - name: Upload .flatpak to release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: "v${{ env.VERSION}}"
           files: |
             ${{ env.APP_ID }}-${{ env.VERSION }}.flatpak

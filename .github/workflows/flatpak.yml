@@ -14,7 +14,7 @@ jobs:
 
     env:
       APP_ID: org.radiotube.vtun-ng
-      VERSION: 3.0.22
+      VERSION: 3.0.23
       MANIFEST: flatpak/flatpak.json
       ARCH: x86_64
       RUNTIME_VER: 23.08

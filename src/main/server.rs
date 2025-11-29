@@ -95,17 +95,15 @@ fn connection(ctx: &mut VtunContext, sock: FileDes) -> Result<(),ExitCode> {
             let linkfdctx = Arc::new(linkfdctx);
             let result = tunnel::tunnel(ctx, &linkfdctx, &mut host, sock);
 
-            {
-                let msg = format!("Session {} closed", match host.host {Some(ref h) => h.as_str(), None => "<none>"});
-                ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
-            }
-
             /* Unlock host. (locked in auth_server) */
             lock::unlock_host(ctx, &host);
 
             match result {
-                Ok(_) => {},
-                Err(_) => return Err(ExitCode::from_code(1))
+                Ok(_) => {
+                    let msg = format!("Session {} closed", match host.host {Some(ref h) => h.as_str(), None => "<none>"});
+                    ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
+                },
+                Err(exit_code) => return Err(exit_code)
             }
         }
         Err(exitcode) => {

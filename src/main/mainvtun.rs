@@ -58,7 +58,6 @@ pub fn get_test_context() -> VtunContext {
             quiet: 0,
             set_uid_user: lfd_mod::SetUidIdentifier::Default,
             set_gid_user: lfd_mod::SetUidIdentifier::Default,
-            experimental: false,
             dropcaps: false,
             setuid: false,
             setgid: false,

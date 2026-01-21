@@ -344,26 +344,11 @@ pub fn linkfd(ctx: &mut VtunContext, linkfdctx: &Arc<LinkfdCtx>, host: &mut vtun
             lfd_mod::VTUN_ENC_BF256OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Blowfish>, Decryptor<Blowfish>, ofb::Ofb<lfd_iv_stream_encrypt::FixedSizeForVariableKeySizeWrapper<Blowfish,U32>>, 32, 8>::new()),
             lfd_mod::VTUN_ENC_AES128OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Aes128>, Decryptor<Aes128>, ofb::Ofb<Aes128>, 16, 16>::new()),
             lfd_mod::VTUN_ENC_AES256OFB => Box::new(lfd_iv_stream_encrypt::LfdIvStreamEncryptFactory::<Encryptor<Aes256>, Decryptor<Aes256>, ofb::Ofb<Aes256>, 32, 16>::new()),
-            lfd_mod::VTUN_ENC_AES128GCM => {
-                ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-mode is experimental");
-                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>,Decryptor<Aes128>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes128Gcm,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes128Gcm,16>, 16, 16>::new())
-            },
-            lfd_mod::VTUN_ENC_AES256GCM => {
-                ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-mode is experimental");
-                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes256Gcm,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes256Gcm,16>, 32, 16>::new())
-            },
-            lfd_mod::VTUN_ENC_AES128GCMSIV => {
-                ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-SIV-mode is experimental");
-                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>,Decryptor<Aes128>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes128GcmSiv,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes128GcmSiv,16>, 16, 16>::new())
-            },
-            lfd_mod::VTUN_ENC_AES256GCMSIV => {
-                ctx.syslog(lfd_mod::LOG_WARNING, "AES-GCM-SIV-mode is experimental");
-                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes256GcmSiv,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes256GcmSiv,16>, 32, 16>::new())
-            },
-            lfd_mod::VTUN_ENC_CHACHA20POLY1305 => {
-                ctx.syslog(lfd_mod::LOG_WARNING, "CHACHA20POLY1305-mode is experimental");
-                Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<ChaCha20Poly1305,16>, lfd_gcm_encrypt::LfdGcmDecrypt<ChaCha20Poly1305,16>, 32, 16>::new())
-            },
+            lfd_mod::VTUN_ENC_AES128GCM => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>,Decryptor<Aes128>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes128Gcm,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes128Gcm,16>, 16, 16>::new()),
+            lfd_mod::VTUN_ENC_AES256GCM => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes256Gcm,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes256Gcm,16>, 32, 16>::new()),
+            lfd_mod::VTUN_ENC_AES128GCMSIV => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes128>,Decryptor<Aes128>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes128GcmSiv,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes128GcmSiv,16>, 16, 16>::new()),
+            lfd_mod::VTUN_ENC_AES256GCMSIV => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<Aes256GcmSiv,16>, lfd_gcm_encrypt::LfdGcmDecrypt<Aes256GcmSiv,16>, 32, 16>::new()),
+            lfd_mod::VTUN_ENC_CHACHA20POLY1305 => Box::new(lfd_iv_encrypt::LfdIvEncryptFactory::<Encryptor<Aes256>,Decryptor<Aes256>, lfd_gcm_encrypt::LfdGcmEncrypt<ChaCha20Poly1305,16>, lfd_gcm_encrypt::LfdGcmDecrypt<ChaCha20Poly1305,16>, 32, 16>::new()),
             _ => {
                 ctx.syslog(lfd_mod::LOG_ERR, "Unknown encryption algorithm");
                 return Err(());

@@ -85,11 +85,7 @@ This option is ignored by the server.
 .IP \fBsyslog\fR\ \fBnumber\fR|\fBname\fR
 syslog facility specification, either numeric or name (from syslog (3)).
 
-.IP \fBexperimental\fR\ \fByes\fR|\fBno\fR
-experimental mode. To enable new protocol extensions that are not yet
-ready for general use.
-
-.IP \fBhardening\fR\ \fBdropcaps\fR\ \fBsetuid\fR\ \fBsetgid\fR\ (experimental)
+.IP \fBhardening\fR\ \fBdropcaps\fR\ \fBsetuid\fR\ \fBsetgid\fR
 Enable hardening features such as dropcaps or setuid.
 
 Dropcaps will on supported platforms
@@ -112,12 +108,12 @@ positive side this helps protect against RCE vulnerabilities by
 restricting what capabilities an attacker is able to exploit if they
 gain access.
 
-.IP \fBsetuid\fR\ \fB<user>\fR\ (experimental)
+.IP \fBsetuid\fR\ \fB<user>\fR
 Set the user id to change to when running network communication. Setting
 this option will enable the setuid hardening feature (see hardening above). This option
 accepts both a username and a user id.
 
-.IP \fBsetgid\fR\ \fB<group>\fR\ (experimental)
+.IP \fBsetgid\fR\ \fB<group>\fR
 Set the group id to change to when running network communication. Setting
 this option will enable the setgid hardening feature (see hardening above). This
 option accepts both a group name and a group id.
@@ -272,22 +268,22 @@ AES cipher, 256 bit key, mode CFB
 .IP \fBaes256ofb\fR
 AES cipher, 256 bit key, mode OFB
 .IP \fBaes128gcm\fR
-AES cipher, 128 bit key, mode GCM (experimental)
+AES cipher, 128 bit key, mode GCM
 .IP \fBaes256gcm\fR
-AES cipher, 256 bit key, mode GCM (experimental)
+AES cipher, 256 bit key, mode GCM
 .IP \fBaes128gcmsiv\fR
-AES cipher, 128 bit key, mode GCM-SIV (experimental)
+AES cipher, 128 bit key, mode GCM-SIV
 .IP \fBaes256gcmsiv\fR
-AES cipher, 256 bit key, mode GCM-SIV (experimental)
+AES cipher, 256 bit key, mode GCM-SIV
 .IP \fBchacha20poly1305\fR
-Chacha20 cipher (Aes256 for initialization), 256 bit key, poly1305 message authentication (experimental)
+Chacha20 cipher (Aes256 for initialization), 256 bit key, poly1305 message authentication.
 .RE
 .IP
 This option is ignored by the client.
-.IP \fBrequires\ \fBclient\ \fBbidirauth\ \fBencryption\ \fBintegrity\ \fB"3.1"\ (experimental)\fR
+.IP \fBrequires\ \fBclient\ \fBbidirauth\ \fBencryption\ \fBintegrity\ \fB"3.1"\fR
 set requirements for the connection. This is specifically for the client where
 you can set requirements for what configuration it will accept from the client.
-Multiple requirements can be specified. For now this is experimental.
+Multiple requirements can be specified.
 .RS
 .IP \fBclient\fR
 The configuration is for client only, will not be used in server mode.
@@ -301,11 +297,11 @@ Requires the integrity of the data to be protected. Some encryption algorithms d
 Version 3.1 modes. Alias for bidirauth.
 .RE
 
-.IP \fBaccept_encrypt\ \fB<encryption-algo>\ (experimental)\fR
+.IP \fBaccept_encrypt\ \fB<encryption-algo>\fR
 This accepts the same algorithms as the 'encrypt' keyword. This can be used
 to set up an allowlist of encryption algorithms that the client will accept.
 Multiple algorithms can be specified, also multiple accept_encrypt statements
-is accepted. This setting is currently experimental.
+is accepted.
 .IP \fBkeepalive\ \fByes\fR|\fBno\fR|\fIinterval\fB:\fIcount\fR
 enable or disable connection keep-alive. Time \fIinterval\fR is a period
 between connection checks, in seconds, and \fIcount\fR is the maximum number
@@ -348,10 +344,6 @@ control multiple connections.  \fIvalue\fR can be
 \fBno\fR or \fBdeny\fR to deny them or
 \fBkillold\fR to allow new connection and kill old one.
 Ignored by the client.
-
-.IP \fBexperimental\fR\ \fByes\fR|\fBno\fR
-experimental mode. To enable new protocol extensions that are not yet
-ready for general use.
 
 .IP \fBup\ \fIlist\fR
 list of programs to run after connection has been established.

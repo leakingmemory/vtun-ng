@@ -235,14 +235,8 @@ impl LowprivReturnable<AuthDecision> for AuthDecision {
 
 pub fn auth_server(ctx: &mut VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -> Result<vtun_host::VtunHost,ExitCode> {
     setproctitle::set_title("protocol negotiation");
-    let experimental_enabled = ctx.vtun.experimental;
     let greeting;
-    if experimental_enabled {
-        greeting = format!("VTUN server ver {}\n", lfd_mod::VTUN_EXPERIMENTAL_VER);
-        ctx.syslog(lfd_mod::LOG_WARNING, "Experimental mode enabled, compatibility is not guaranteed");
-    } else {
-        greeting = format!("VTUN server ver {}\n", lfd_mod::VTUN_VER);
-    }
+    greeting = format!("VTUN server ver {}\n", lfd_mod::VTUN_VER);
     let salt = challenge2::gen_digest_salt();
     let mut is_forked = false;
     let decision: Result<AuthDecision,ExitCode> = run_lowpriv_section(ctx, "authentication", &mut is_forked, &mut |ctx: &mut VtunContext| -> Result<AuthDecision,()> {
@@ -268,10 +262,6 @@ pub fn auth_server(ctx: &mut VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes) -
         };
 
         if buf[0] == b'H' && buf[1] == b'O' && buf[2] == b'S' && buf[3] == b'T' && buf[4] == b':' && buf[5] == b' ' {
-            if auth2_enabled && !experimental_enabled {
-                ctx.syslog(lfd_mod::LOG_ERR, "Client requested features that are experimental and disabled by default");
-                return Err(());
-            }
             let mut len = VTUN_MESG_SIZE;
             for i in 6..VTUN_MESG_SIZE {
                 if buf[i] == b'\n' || buf[i] == b'\0' {
@@ -450,7 +440,7 @@ pub fn auth_client_rs(ctx: &VtunContext, linkfdctx: &LinkfdCtx, fd: &FileDes, ho
         let msg = format!("Server version read as {}.{}", version_major, version_minor);
         ctx.syslog(lfd_mod::LOG_INFO, msg.as_str());
     }
-    if host.experimental && (version_major > 3 || (version_major == 3 && version_minor > 0)) {
+    if version_major > 3 || (version_major == 3 && version_minor > 0) {
         ctx.syslog(lfd_mod::LOG_INFO, "Using vtun-ng 3.1 authentication");
         let mut msg: Vec<u8> = Vec::new();
         msg.reserve(32);

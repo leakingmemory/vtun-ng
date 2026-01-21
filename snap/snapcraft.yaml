@@ -1,6 +1,6 @@
 name: vtun-ng
 base: core22
-version: '3.0.23'
+version: '3.1.0'
 summary: vtun-ng simple IP-tunneling solution
 description: vtun-ng is a simple IP-tunneling solution compatible with vtun
 

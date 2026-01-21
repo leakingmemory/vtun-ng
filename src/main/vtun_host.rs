@@ -115,7 +115,6 @@ pub struct VtunHost {
     pub zlevel: i32,
     pub cipher: i32,
     pub accepted_cipher: Option<Vec<i32>>,
-    //pub rmt_fd: libc::c_int,
     pub loc_fd: FileDes,
     pub persist: libc::c_int,
     pub multi: libc::c_int,
@@ -124,7 +123,6 @@ pub struct VtunHost {
     pub src_addr: VtunAddr,
     pub sopt: VtunSopt,
     pub requires: RequiresFlags,
-    pub experimental: bool,
 }
 
 impl VtunHost {
@@ -151,7 +149,6 @@ impl VtunHost {
             src_addr: VtunAddr::new(),
             sopt: VtunSopt::new(),
             requires: RequiresFlags::NONE,
-            experimental: false,
         }
     }
     pub fn clear_nat_hack_server(&mut self)

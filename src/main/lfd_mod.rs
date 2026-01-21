@@ -58,7 +58,6 @@ pub struct VtunOpts {
     pub quiet: libc::c_int, /* Be quiet about common errors */
     pub set_uid_user: SetUidIdentifier,
     pub set_gid_user: SetUidIdentifier,
-    pub experimental: bool, /* Server setting for experimental features */
     pub dropcaps: bool,
     pub setuid: bool,
     pub setgid: bool,
@@ -87,7 +86,6 @@ impl VtunOpts {
             quiet: 0,
             set_uid_user: SetUidIdentifier::Default,
             set_gid_user: SetUidIdentifier::Default,
-            experimental: false,
             dropcaps: false,
             setuid: false,
             setgid: false,
@@ -142,8 +140,7 @@ pub const VTUN_NAT_HACK_MASK: libc::c_int =	VTUN_NAT_HACK_CLIENT | VTUN_NAT_HACK
 
 pub const VTUN_CONNECT_TIMEOUT: libc::c_int = 30;
 
-pub const VTUN_VER: &str = "3.X 07/24/2025";
-pub const VTUN_EXPERIMENTAL_VER: &str = "3.1 08/10/2025";
+pub const VTUN_VER: &str = "3.1 08/10/2025";
 
 pub const _LOG_EMERG: libc::c_int = 0;
 pub const _LOG_ALERT: libc::c_int = 1;

@@ -294,7 +294,6 @@ struct HostConfigParsingContext {
     pub persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     pub keep_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     pub stat_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
-    pub experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     pub requires_ctx: Option<Rc<Mutex<KwRequiresParsingContext>>>,
     pub accept_encrypt_ctx: Vec<Rc<Mutex<KwAcceptEncryptParsingContext>>>
 }
@@ -318,7 +317,6 @@ impl HostConfigParsingContext {
             persist_ctx: None,
             keep_ctx: None,
             stat_ctx: None,
-            experimental_ctx: None,
             requires_ctx: None,
             accept_encrypt_ctx: Vec::new()
         }
@@ -425,13 +423,6 @@ impl HostConfigParsingContext {
                 }
             }
         }
-        match self.experimental_ctx {
-            None => {},
-            Some(ref experimental_ctx) => {
-                let experimental_ctx = experimental_ctx.lock().unwrap();
-                host.experimental = experimental_ctx.value;
-            }
-        }
         match self.requires_ctx {
             None => {},
             Some(ref requires_ctx) => {
@@ -532,11 +523,6 @@ impl ParsingContext for HostConfigParsingContext {
                 let stat_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "stat")));
                 self.stat_ctx = Some(stat_ctx.clone());
                 Some(stat_ctx)
-            },
-            Token::KwExperimental => {
-                let experimental_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "experimental")));
-                self.experimental_ctx = Some(experimental_ctx.clone());
-                Some(experimental_ctx)
             },
             Token::KwRequires => {
                 let requires_ctx = Rc::new(Mutex::new(KwRequiresParsingContext::new(Rc::clone(&ctx))));
@@ -1142,7 +1128,6 @@ struct OptionsConfigParsingContext {
     bindaddr_ctx: Option<Rc<Mutex<KwBindaddrConfigParsingContext>>>,
     persist_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     syslog_ctx: Option<Rc<Mutex<SyslogOptionParsingContext>>>,
-    experimental_ctx: Option<Rc<Mutex<BoolOptionParsingContext>>>,
     hardening_ctx: Vec<Rc<Mutex<HardeningOptionParsingContext>>>,
     setuid_ctx: Option<Rc<Mutex<KwSetuidSetgidConfigParsingContext>>>,
     setgid_ctx: Option<Rc<Mutex<KwSetuidSetgidConfigParsingContext>>>,
@@ -1163,7 +1148,6 @@ impl OptionsConfigParsingContext {
             bindaddr_ctx: None,
             persist_ctx: None,
             syslog_ctx: None,
-            experimental_ctx: None,
             hardening_ctx: Vec::new(),
             setuid_ctx: None,
             setgid_ctx: None,
@@ -1237,12 +1221,6 @@ impl OptionsConfigParsingContext {
             None => {},
             Some(ref syslog_ctx) => {
                 ctx.vtun.syslog = syslog_ctx.lock().unwrap().value;
-            }
-        }
-        match self.experimental_ctx {
-            None => {},
-            Some(ref experimental_ctx) => {
-                ctx.vtun.experimental = experimental_ctx.lock().unwrap().value;
             }
         }
         for hardening_ctx in &self.hardening_ctx {
@@ -1330,11 +1308,6 @@ impl ParsingContext for OptionsConfigParsingContext {
                 let syslog_ctx = Rc::new(Mutex::new(SyslogOptionParsingContext::new(Rc::clone(&ctx))));
                 self.syslog_ctx = Some(syslog_ctx.clone());
                 Some(syslog_ctx)
-            },
-            Token::KwExperimental => {
-                let experimental_ctx = Rc::new(Mutex::new(BoolOptionParsingContext::new(Rc::clone(&ctx), "experimental")));
-                self.experimental_ctx = Some(experimental_ctx.clone());
-                Some(experimental_ctx)
             },
             Token::KwHardening => {
                 let hardening_ctx = Rc::new(Mutex::new(HardeningOptionParsingContext::new(Rc::clone(&ctx))));
@@ -2125,7 +2098,6 @@ impl ParsingContext for KwRequiresParsingContext {
                 if self.flags == 0 {
                     return self.unexpected_token(vtunctx);
                 }
-                vtunctx.syslog(lfd_mod::LOG_WARNING, "'requires' configuration is experimental");
                 self.parent.upgrade()
             }
             _ => {
@@ -2181,7 +2153,6 @@ impl ParsingContext for KwAcceptEncryptParsingContext {
                 if self.ciphers.is_empty() {
                     return self.unexpected_token(vtunctx);
                 }
-                vtunctx.syslog(lfd_mod::LOG_WARNING, "'accept_encrypt' configuration is experimental");
                 self.parent.upgrade()
             }
             _ => {
@@ -2494,7 +2465,6 @@ fn test_context() -> VtunContext {
             quiet: 0,
             set_uid_user: lfd_mod::SetUidIdentifier::Default,
             set_gid_user: lfd_mod::SetUidIdentifier::Default,
-            experimental: false,
             dropcaps: false,
             setuid: false,
             setgid: false,

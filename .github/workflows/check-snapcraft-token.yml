@@ -1,0 +1,25 @@
+name: Check Snapcraft Token
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Snapcraft
+        run: sudo snap install snapcraft --classic
+
+      - name: Check Snapcraft Token Validity
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_LOGIN }}
+        run: |
+          if [ -z "$SNAPCRAFT_STORE_CREDENTIALS" ]; then
+            echo "::error::SNAPCRAFT_LOGIN secret is not set!"
+            exit 1
+          fi
+          echo "Checking snapcraft login status..."
+          snapcraft whoami

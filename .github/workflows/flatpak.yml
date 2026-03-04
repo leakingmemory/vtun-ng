@@ -18,20 +18,22 @@ jobs:
       APP_ID: org.radiotube.vtun-ng
       MANIFEST: flatpak/flatpak.json
       ARCH: x86_64
-      RUNTIME_VER: 23.08
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
 
       - name: Set VERSION from tag
         run: |
-          TAG="${{ github.event.workflow_run.head_branch }}"
+          # Use git describe to securely extract the tag name from the repository state,
+          # avoiding direct use of untrusted event properties in shell scripts.
+          TAG=$(git describe --tags --exact-match)
           VERSION="${TAG#v}"
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "TAG=${TAG}" >> $GITHUB_ENV
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
       - name: Install Flatpak tooling
         run: |

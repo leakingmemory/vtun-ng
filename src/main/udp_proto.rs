@@ -16,7 +16,6 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-use std::ptr::null_mut;
 use crate::{driver, lfd_mod, linkfd, mainvtun};
 use crate::filedes::FileDes;
 use crate::syslog::SyslogObject;
@@ -80,7 +79,6 @@ impl driver::NetworkDriver for UdpProto {
 
     fn read(&mut self, ctx: &mut mainvtun::VtunContext, buf: &mut Vec<u8>) -> Option<u16> {
         let mut hdrbuf: [u8; 2] = [0u8; 2];
-        let mut iv: [libc::iovec; 2] = [libc::iovec { iov_base: null_mut(), iov_len: 0 }; 2];
         let mut from: libc::sockaddr_in = UdpProto::create_sockaddr_in();
 
         /* Late connect (NAT hack enabled) */
@@ -104,10 +102,6 @@ impl driver::NetworkDriver for UdpProto {
 
         /* Read frame */
         buf.resize(linkfd::VTUN_FRAME_SIZE + linkfd::VTUN_FRAME_OVERHEAD, 0u8);
-        iv[0].iov_len  = size_of::<libc::c_short>();
-        iv[0].iov_base = &mut hdrbuf as *mut u8 as *mut libc::c_void;
-        iv[1].iov_len  = linkfd::VTUN_FRAME_SIZE + linkfd::VTUN_FRAME_OVERHEAD;
-        iv[1].iov_base = buf.as_mut_ptr() as *mut libc::c_void;
 
         let mut hdr: u16;
         loop {

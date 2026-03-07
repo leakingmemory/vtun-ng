@@ -1,6 +1,6 @@
 [package]
 name = "vtun-ng"
-version = "3.0.21"
+version = "3.1.1"
 edition = "2021"
 
 [[bin]]

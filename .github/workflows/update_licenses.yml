@@ -33,6 +33,7 @@ jobs:
             ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
+            ~/.cargo/registry/src/
             ~/.cargo/git/db/
             target/
             cratelist-tool/target/
@@ -41,6 +42,9 @@ jobs:
       - name: Build cratelist tool
         run: cargo build -r
         working-directory: cratelist-tool
+
+      - name: Fetch project dependencies
+        run: cargo fetch
 
       - name: Generate DEPENDENCIES_LICENSE
         run: |

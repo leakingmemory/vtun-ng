@@ -1,0 +1,59 @@
+name: Check Versions
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  check-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract versions
+        id: extract_versions
+        run: |
+          CARGO_VERSION=$(grep '^version =' Cargo.toml | cut -d '"' -f 2)
+          SNAP_VERSION=$(grep '^version:' snap/snapcraft.yaml | cut -d "'" -f 2)
+          FLATPAK_VERSION=$(grep '"version":' flatpak/flatpak.json | cut -d '"' -f 4)
+          
+          echo "Cargo version: $CARGO_VERSION"
+          echo "Snap version: $SNAP_VERSION"
+          echo "Flatpak version: $FLATPAK_VERSION"
+          
+          if [ -z "$CARGO_VERSION" ]; then echo "::error::Could not extract version from Cargo.toml"; exit 1; fi
+          if [ -z "$SNAP_VERSION" ]; then echo "::error::Could not extract version from snap/snapcraft.yaml"; exit 1; fi
+          if [ -z "$FLATPAK_VERSION" ]; then echo "::error::Could not extract version from flatpak/flatpak.json"; exit 1; fi
+          
+          echo "cargo_version=$CARGO_VERSION" >> $GITHUB_OUTPUT
+          echo "snap_version=$SNAP_VERSION" >> $GITHUB_OUTPUT
+          echo "flatpak_version=$FLATPAK_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Compare versions
+        run: |
+          CARGO="${{ steps.extract_versions.outputs.cargo_version }}"
+          SNAP="${{ steps.extract_versions.outputs.snap_version }}"
+          FLATPAK="${{ steps.extract_versions.outputs.flatpak_version }}"
+          
+          FAILED=0
+          if [ "$CARGO" != "$SNAP" ]; then
+            echo "::error::Cargo version ($CARGO) does not match Snap version ($SNAP)"
+            FAILED=1
+          fi
+          if [ "$CARGO" != "$FLATPAK" ]; then
+            echo "::error::Cargo version ($CARGO) does not match Flatpak version ($FLATPAK)"
+            FAILED=1
+          fi
+          
+          if [ $FAILED -ne 0 ]; then
+            exit 1
+          fi
+          echo "All versions match: $CARGO"

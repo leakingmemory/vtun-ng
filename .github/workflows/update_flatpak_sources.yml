@@ -1,0 +1,90 @@
+name: Update Flatpak Sources
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Cargo.lock'
+  workflow_dispatch:
+
+jobs:
+  generate-flatpak-sources:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout cratelist tool
+        uses: actions/checkout@v4
+        with:
+          repository: leakingmemory/cratelist
+          path: cratelist-tool
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+            cratelist-tool/target/
+          key: ${{ runner.os }}-cargo-flatpak-${{ hashFiles('**/Cargo.lock', 'cratelist-tool/Cargo.lock') }}
+
+      - name: Build cratelist tool
+        run: cargo build -r
+        working-directory: cratelist-tool
+
+      - name: Generate cargo-sources.json
+        run: |
+          mkdir -p flatpak
+          ./cratelist-tool/target/release/cratelist Cargo.lock --flatpak > flatpak/cargo-sources.json
+
+      - name: Upload cargo-sources.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-sources
+          path: flatpak/cargo-sources.json
+          retention-days: 1
+
+  commit-flatpak-sources:
+    needs: generate-flatpak-sources
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download cargo-sources.json
+        uses: actions/download-artifact@v4
+        with:
+          name: flatpak-sources
+          path: flatpak/
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add flatpak/cargo-sources.json
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: update flatpak cargo-sources.json"
+            for i in {1..5}; do
+              git pull --rebase origin master
+              if git push origin master; then
+                exit 0
+              fi
+              echo "Push failed, retrying in 5 seconds... (attempt $i)"
+              sleep 5
+            done
+            exit 1
+          else
+            echo "No changes to commit"
+          fi

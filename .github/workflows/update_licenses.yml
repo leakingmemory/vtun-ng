@@ -1,0 +1,103 @@
+name: Update Dependency Licenses
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Cargo.lock'
+  workflow_dispatch:
+
+jobs:
+  generate-license:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout cratelist tool
+        uses: actions/checkout@v4
+        with:
+          repository: leakingmemory/cratelist
+          path: cratelist-tool
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+            cratelist-tool/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', 'cratelist-tool/Cargo.lock') }}
+
+      - name: Build cratelist tool
+        run: cargo build -r
+        working-directory: cratelist-tool
+
+      - name: Generate DEPENDENCIES_LICENSE
+        run: |
+          # The registry source directory name is non-deterministic (includes a hash)
+          CRATES_DIR=$(ls -d "${HOME}/.cargo/registry/src/index.crates.io-"* 2>/dev/null | head -n 1)
+          
+          if [ -z "$CRATES_DIR" ]; then
+              echo "Error: Could not find Cargo registry source directory" >&2
+              exit 1
+          fi
+          
+          echo "Using crates directory: $CRATES_DIR"
+          ./cratelist-tool/target/release/cratelist Cargo.lock --license-contents "$CRATES_DIR" > DEPENDENCIES_LICENSE
+          
+          # Compress the license file to reduce binary size when embedded
+          # We keep both the plain text and compressed files
+          gzip -fk DEPENDENCIES_LICENSE
+
+      - name: Upload DEPENDENCIES_LICENSE
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-file
+          path: |
+            DEPENDENCIES_LICENSE
+            DEPENDENCIES_LICENSE.gz
+          retention-days: 1
+
+  commit-license:
+    needs: generate-license
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download DEPENDENCIES_LICENSE
+        uses: actions/download-artifact@v4
+        with:
+          name: license-file
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add DEPENDENCIES_LICENSE DEPENDENCIES_LICENSE.gz
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: update dependency licenses"
+            for i in {1..5}; do
+              git pull --rebase origin master
+              if git push origin master; then
+                exit 0
+              fi
+              echo "Push failed, retrying in 5 seconds... (attempt $i)"
+              sleep 5
+            done
+            exit 1
+          else
+            echo "No changes to commit"
+          fi

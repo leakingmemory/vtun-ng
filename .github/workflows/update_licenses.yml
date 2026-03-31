@@ -91,7 +91,7 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add DEPENDENCIES_LICENSE DEPENDENCIES_LICENSE.gz
-          if ! git diff-index --quiet HEAD; then
+          if ! git diff-index --quiet HEAD DEPENDENCIES_LICENSE; then
             git commit -m "chore: update dependency licenses"
             for i in {1..5}; do
               git pull --rebase origin master

@@ -2,7 +2,7 @@ VTun-ng - Fork of VTun, forked in 2025
 VTun - Virtual Tunnel over TCP/IP network.
 
 Copyright (C) 1998-2016  Maxim Krasnyansky <max_mk@yahoo.com>
-Copyright (C) 2025       Jan-Espen Oversand <sigsegv@radiotube.org>
+Copyright (C) 2025-2026       Jan-Espen Oversand <sigsegv@radiotube.org>
 
 VTun has been derived from VPPP package by Maxim Krasnyansky.
 

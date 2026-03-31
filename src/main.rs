@@ -90,7 +90,7 @@ mod lowpriv;
 #[path = "main/lfd_gcm_encrypt.rs"]
 mod lfd_gcm_encrypt;
 
-use std::io::Write;
+use std::io::{Write, Read};
 use std::{env};
 use getopts::Options;
 use crate::filedes::FileDes;
@@ -151,16 +151,43 @@ fn main() -> Result<(), exitcode::ErrorCode>
     opts.optflag("n", "no-daemon", "don't daemonize");
     opts.optflag("p", "persist", "persist mode");
     opts.optflag("q", "quiet", "quiet mode");
+    opts.optflag("", "license", "print license");
+    opts.optflag("", "dependency-licenses", "print dependency licenses");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(_) => {
+            unsafe { libc::closelog(); }
             print_usage(&program, opts);
             return exitcode::ExitCode::from_code(1).get_exit_code();
         }
     };
     if matches.opt_present("h") {
+        unsafe { libc::closelog(); }
         print_usage(&program, opts);
         return Ok(());
+    }
+    if matches.opt_present("license") {
+        let license = include_str!("../license.txt");
+        unsafe { libc::closelog(); }
+        println!("{}", license);
+        return Ok(());
+    }
+    if matches.opt_present("dependency-licenses") {
+        let compressed_licenses = include_bytes!("../DEPENDENCIES_LICENSE.gz");
+        let mut decoder = flate2::read::GzDecoder::new(&compressed_licenses[..]);
+        let mut s = String::new();
+        match decoder.read_to_string(&mut s) {
+            Ok(_) => {
+                unsafe { libc::closelog(); }
+                println!("{}", s);
+                return Ok(());
+            },
+            Err(e) => {
+                unsafe { libc::closelog(); }
+                eprintln!("Error decompressing licenses: {}", e);
+                return exitcode::ExitCode::from_code(1).get_exit_code();
+            }
+        }
     }
     if matches.opt_present("m") {
         unsafe {

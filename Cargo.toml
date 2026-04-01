@@ -8,10 +8,9 @@ name = "vtunngd"
 path = "src/main.rs"
 
 [features]
-default = ["lzo", "zlib"]
+default = ["lzo"]
 
 lzo=["dep:rust-lzo"]
-zlib=[]
 
 [dependencies]
 libc = "0.2"

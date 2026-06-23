@@ -43,22 +43,30 @@ jobs:
         run: cargo build -r
         working-directory: cratelist-tool
 
-      - name: Fetch project dependencies
-        run: cargo fetch
+      - name: Vendor all dependencies
+        run: |
+          # `cargo build`/`cargo fetch` only extracts sources for the host
+          # target, so platform-specific dependencies (e.g. Windows-only crates)
+          # are listed in Cargo.lock but never appear in ~/.cargo/registry/src/,
+          # producing bogus "No license file found" entries. `cargo vendor`
+          # materialises the full source (Cargo.toml + license files) of *every*
+          # crate in Cargo.lock, for all platforms, into a single directory.
+          # --versioned-dirs forces "<name>-<version>" naming, which matches the
+          # directory layout cratelist expects.
+          cargo vendor --versioned-dirs --locked vendor
 
       - name: Generate DEPENDENCIES_LICENSE
         run: |
-          # The registry source directory name is non-deterministic (includes a hash)
-          CRATES_DIR=$(ls -d "${HOME}/.cargo/registry/src/index.crates.io-"* 2>/dev/null | head -n 1)
-          
-          if [ -z "$CRATES_DIR" ]; then
-              echo "Error: Could not find Cargo registry source directory" >&2
-              exit 1
+          echo "Using crates directory: vendor"
+          ./cratelist-tool/target/release/cratelist Cargo.lock --license-contents vendor > DEPENDENCIES_LICENSE
+
+          # Some crates legitimately ship without standard license files; those
+          # are reported as "No license file found" but are not fatal.
+          if grep -q "No license file found" DEPENDENCIES_LICENSE; then
+              echo "Note: some dependencies lack standard license files:" >&2
+              grep "No license file found" DEPENDENCIES_LICENSE >&2
           fi
-          
-          echo "Using crates directory: $CRATES_DIR"
-          ./cratelist-tool/target/release/cratelist Cargo.lock --license-contents "$CRATES_DIR" > DEPENDENCIES_LICENSE
-          
+
           # Compress the license file to reduce binary size when embedded
           # We keep both the plain text and compressed files
           gzip -fk DEPENDENCIES_LICENSE

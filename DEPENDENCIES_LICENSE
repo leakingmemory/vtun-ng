@@ -10884,7 +10884,7 @@ AUTHORS: (ordered alphabetically)
 ================================================================================
 
 ================================================================================
-rand@0.9.2: MIT OR Apache-2.0 (LICENSE-MIT)
+rand@0.9.3: MIT OR Apache-2.0 (LICENSE-MIT)
 --------------------------------------------------------------------------------
 Copyright 2018 Developers of the Rand project
 Copyright (c) 2014 The Rust Project Developers
@@ -10915,7 +10915,7 @@ DEALINGS IN THE SOFTWARE.
 ================================================================================
 
 ================================================================================
-rand@0.9.2: MIT OR Apache-2.0 (LICENSE-APACHE)
+rand@0.9.3: MIT OR Apache-2.0 (LICENSE-APACHE)
 --------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -11096,7 +11096,7 @@ END OF TERMS AND CONDITIONS
 ================================================================================
 
 ================================================================================
-rand@0.9.2: MIT OR Apache-2.0 (COPYRIGHT)
+rand@0.9.3: MIT OR Apache-2.0 (COPYRIGHT)
 --------------------------------------------------------------------------------
 Copyrights in the Rand project are retained by their contributors. No
 copyright assignment is required to contribute to the Rand project.

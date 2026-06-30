@@ -1,6 +1,6 @@
 name: vtun-ng
 base: core24
-version: '3.1.1'
+version: '3.1.2'
 license: GPL-2.0-or-later
 title: simple network tunneling service
 summary: vtun-ng simple IP-tunneling solution

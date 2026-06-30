@@ -1,0 +1,20 @@
+name: Snapcraft Test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'snap/snapcraft.yaml'
+  pull_request:
+    paths:
+      - 'snap/snapcraft.yaml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build snap
+        uses: snapcore/action-build@v1
